@@ -61,6 +61,27 @@ def c():
     assert case.tables["branch"][0][3] == 0.5
     assert '"Inf"' in case.dumps("json")
 
+def test_py_return_dict_literal():
+    """A case function may return the case dict directly (issue #5)"""
+    text = """
+from numpy import array
+def c():
+    return {
+      'version': 2,
+      'baseMVA': 100.0,
+      'bus': array([[1, 3, 0, 0, 0, 0, 1, 1, 0, 345, 1, 1.1, 0.9],
+                    [2, 1, 10, 5, 0, 0, 1, 1, 0, 345, 1, 1.1, 0.9]]),
+      'gen': array([[1, 0, 0, 100, -100, 1, 100, 1, 250, 10, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]]),
+      'branch': array([[1, 2, 0, 0.1, 0, 0, 0, 0, 0, 0, 1, -360, 360]]),
+      'gencost': array([[2, 0, 0, 3, 0.01, 20, 0]]),
+    }
+"""
+    case = Case.load("c.py",text)
+    assert case.baseMVA == 100.0
+    assert case.size() == {"bus":2,"gen":1,"branch":1,"gencost":1}
+    assert case.tables["bus"][1][2] == 10
+    assert case.tables["gencost"][0][4] == "0.01,20,0"
+
 def test_glm_import():
     """GLM objects, references, keyword/numeric enums, and notes"""
     case = Case.load(os.path.join(DATA,"case3.glm"))
