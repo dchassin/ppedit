@@ -5,6 +5,8 @@ The `Case` class holds one PYPOWER case (`version`, `baseMVA`, `bus`, `gen`,
 row by row and sent to a browser as JSON. It reads and writes:
 
   - PYPOWER case files (`.py`), parsed with `ast` (the file is never run);
+    the case may be built up in a variable (`ppc = {...}`) or returned as a
+    dict literal (`return {...}`);
   - PYPOWER JSON (`.json`), the same keys as a `ppc` dict with list arrays;
   - Arras Energy GridLAB-D models (`.glm`) that use `module pypower`
     (`bus`, `gen`, `branch` and `gencost` objects).
@@ -951,8 +953,17 @@ def _eval(node,env):
             return float(val) if func == "float" else int(val)
     raise CaseError(f"unsupported expression at line {getattr(node,'lineno','?')}")
 
+def _is_case(data):
+    """Check that a dict has the required PYPOWER case keys"""
+    return all(k in data for k in ("baseMVA","bus","gen","branch"))
+
 def _parse_py(text,name):
-    """Extract the ppc dict from a PYPOWER case file without running it"""
+    """Extract the ppc dict from a PYPOWER case file without running it
+
+    The case is either assigned to a variable (`ppc = {...}`, optionally
+    followed by `ppc[key] = ...`) or returned as a dict literal
+    (`return {...}`).
+    """
     try:
         tree = ast.parse(text)
     except SyntaxError as err:
@@ -977,7 +988,15 @@ def _parse_py(text,name):
                         data[key] = _eval(stmt.value,env) # pylint: disable=unsupported-assignment-operation
                 except CaseError as err:
                     _logger.debug("skipping statement at line %s: %s",stmt.lineno,err)
-        if data and all(k in data for k in ("baseMVA","bus","gen","branch")):
+            elif isinstance(stmt,ast.Return) and stmt.value is not None:
+                try:
+                    value = _eval(stmt.value,env)
+                except CaseError as err:
+                    _logger.debug("skipping statement at line %s: %s",stmt.lineno,err)
+                    continue
+                if isinstance(value,dict) and _is_case(value):
+                    return value
+        if data and _is_case(data):
             return data
     raise CaseError("no PYPOWER case (a dict with baseMVA, bus, gen, branch) found")
 
