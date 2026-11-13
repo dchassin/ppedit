@@ -22,3 +22,24 @@ def test_check_errors(tmp_path,capsys):
 def test_bad_input(capsys):
     assert main(["convert","missing.py"]) == 1
     assert "ERROR [ppedit]" in capsys.readouterr().err
+
+def test_serve_exit(capsys):
+    import json,socket,threading,time,urllib.request # pylint: disable=import-outside-toplevel
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1",0))
+        port = sock.getsockname()[1]
+    out = {}
+    thread = threading.Thread(target=lambda: out.update(code=main(["serve","--no-browser","-p",str(port)])))
+    thread.start()
+    req = urllib.request.Request(f"http://localhost:{port}/api/exit",data=b"{}",method="POST",
+        headers={"Content-Type":"application/json","X-PPEdit":"1"})
+    for _ in range(50):
+        try:
+            with urllib.request.urlopen(req,timeout=2) as res:
+                assert json.load(res) == {"exit":True}
+            break
+        except OSError:
+            time.sleep(0.1)
+    thread.join(5)
+    assert not thread.is_alive() and out["code"] == 0
+    assert "server stopped" in capsys.readouterr().out

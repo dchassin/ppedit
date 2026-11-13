@@ -78,6 +78,7 @@ def main(argv:list[str]|None=None) -> int:
             return 1 if any(x["level"] == "error" for x in issues) else 0
         # serve
         from ppedit.server import create_app # pylint: disable=import-outside-toplevel
+        from werkzeug.serving import make_server # pylint: disable=import-outside-toplevel
         if len(args.files) > 1:
             raise ValueError("serve takes at most one FILE")
         case,path = None,None
@@ -90,12 +91,20 @@ def main(argv:list[str]|None=None) -> int:
         if args.geodata:
             case = case or Case(name="untitled")
             case.load_geodata(args.geodata)
-        app = create_app(case,path,allow_remote=args.host not in ("127.0.0.1","localhost","::1"))
+        server = None
+        app = create_app(case,path,allow_remote=args.host not in ("127.0.0.1","localhost","::1"),
+            shutdown=lambda: server.shutdown())
+        server = make_server(args.host,args.port,app,threaded=True)
         url = f"http://{'localhost' if args.host in ('127.0.0.1','0.0.0.0') else args.host}:{args.port}/"
         print(f"ppedit: editing {path or 'new case'} at {url} (Ctrl-C to stop)")
         if not args.no_browser:
             threading.Timer(1.0,lambda: webbrowser.open(url)).start()
-        app.run(host=args.host,port=args.port,debug=False,use_reloader=False)
+        try:
+            server.serve_forever()
+        except KeyboardInterrupt:
+            pass
+        finally:
+            server.server_close()
         print("ppedit: server stopped")
         return 0
     except Exception as err: # pylint: disable=broad-exception-caught
