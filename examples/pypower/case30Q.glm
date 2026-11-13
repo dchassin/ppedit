@@ -1574,4 +1574,4 @@ object pypower.gencost
     costs "0.025,0,0";
 }
 
-// 3 areas row(s) not written: module pypower has no area objects (bus area numbers are kept)
+// 3 areas row(s) not written: module pypower has no area objects (bus area numbers are kept; reading this file rebuilds the rows with default price reference buses)

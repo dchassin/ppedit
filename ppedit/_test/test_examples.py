@@ -25,7 +25,8 @@ def test_glm_matches_py(name):
     """The GLM form of each example holds the same case data as its .py file"""
     py = Case.load(os.path.join(EXAMPLES,f"{name}.py"))
     glm = Case.load(os.path.join(EXAMPLES,f"{name}.glm"))
-    assert glm.tables["areas"] == [] # module pypower has no areas objects
+    # module pypower has no areas objects: rebuilt from the bus areas on reading
+    assert [r[0] for r in glm.tables["areas"]] == [r[0] for r in py.tables["areas"]]
     assert {k:v for k,v in glm.tables.items() if k != "areas"} \
         == {k:v for k,v in py.tables.items() if k != "areas"}
     assert glm.baseMVA == py.baseMVA

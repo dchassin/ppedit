@@ -86,12 +86,16 @@ In the editor:
       `longitude`. **Map ▸ Download CSV** exports the geodata.
 
     The **Areas** check box (enabled when the case has more than one area)
-    draws a dashed, labeled outline around the buses of each area and marks
-    price reference buses with ★; bus colors don't change. The force layout
-    then groups each area's buses together, and the one-line style gives
-    each area its own strip of columns (areas left to right in number
-    order). In the geodata layout the outlines follow the bus locations, so
-    a widely spread area can enclose another area's buses.
+    draws a labeled region around the buses of each area and marks price
+    reference buses with ★; bus colors don't change. Regions never overlap:
+    each bus claims the space nearer to it than to any bus of another area
+    (out to a radius set by the typical line length), and points along the
+    lines inside an area join its buses into one region. The force layout
+    groups each area's buses together; in the geodata layout an area whose
+    buses are far apart shows as separate patches. The one-line style gives
+    each area its own box of columns (areas left to right in number order);
+    a line between two areas is drawn with a jog from its column in one box
+    to its column in the other, so every bus bar stays inside its area.
   - **Buses / Generators / Branches / Gen costs / DC lines / DC line
     costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines
@@ -118,11 +122,16 @@ GridLAB-D has no DC line cost objects, so `dclinecost` is kept only in
 
 Areas follow the PYPOWER `areas` format (`area`, `price_ref_bus`; see
 `pypower.caseformat`) and list the areas named by the bus `area` column.
+A case opened without an `areas` table (every `.glm` file, and PYPOWER
+cases such as `case39`) gets one row per bus area, with the area's REF bus,
+else its bus with the most generating capacity, else its first bus as price
+reference bus.
 After a solve, Results shows each area's generation, load, shunt
 consumption, internal losses, net export over AC and DC ties, and, for OPF,
 the price (λP) at its price reference bus. The `areas` table is not passed
 to PYPOWER and is kept only in `.py` and `.json`: GridLAB-D has no area
-objects (each GLM bus keeps its `area`).
+objects (each GLM bus keeps its `area`, and the rows are rebuilt when the
+file is opened).
 
 The server listens on `127.0.0.1` only and has no authentication; it is a
 single-user desktop tool.

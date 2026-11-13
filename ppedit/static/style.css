@@ -161,7 +161,7 @@ td.bad input { color: var(--err); }
 .net-check:has(:disabled) { opacity: .45; cursor: default; }
 /* areas */
 #net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
-#net .area-region { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+#net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 #net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
 .res-block.wide { grid-column: 1 / -1; }
 .dropdown.left { left: 0; right: auto; }

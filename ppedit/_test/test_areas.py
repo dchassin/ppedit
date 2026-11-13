@@ -20,7 +20,29 @@ def test_load(case):
     assert [c["name"] for c in COLUMNS["areas"]] == ["area","price_ref_bus"]
     assert case.tables["areas"] == [[1,8],[2,23],[3,26]]
     assert case.validate() == []
-    assert Case.builtin("case14").tables["areas"] == []
+
+def test_rebuilt_from_bus_areas():
+    """A case without an areas table gets one row per bus area"""
+    case = Case.builtin("case39") # 3 bus areas, no areas table
+    assert [r[0] for r in case.tables["areas"]] == [1,2,3]
+    assert case.validate() == []
+    ref = [r[0] for r in case.tables["bus"] if r[1] == 3][0]
+    assert [ref] == [r[1] for r in case.tables["areas"]
+        if r[0] == case.tables["bus"][[b[0] for b in case.tables["bus"]].index(ref)][6]]
+    assert Case.builtin("case14").tables["areas"] == [[1,1]]
+    assert Case().tables["areas"] == []
+
+def test_default_price_ref_bus():
+    """REF bus, else the most in-service generating capacity, else the first bus"""
+    case = Case.builtin("case9") # bus 1 REF; gens at 1 (250), 2 (300), 3 (270)
+    case.set_value("bus",1,"area",2)
+    case.set_value("bus",2,"area",2)
+    case.set_value("bus",3,"area",3)
+    assert case._price_ref(1) == 1
+    assert case._price_ref(2) == 2
+    case.set_value("gen",1,"status",0)
+    assert case._price_ref(2) == 3
+    assert case._price_ref(3) == 4
 
 @pytest.mark.parametrize("fmt,ext",[("py",".py"),("json",".json")])
 def test_round_trip(case,fmt,ext):
@@ -31,18 +53,20 @@ def test_round_trip(case,fmt,ext):
     assert again.tables == case.tables
 
 def test_glm_drops_areas(case):
-    """areas is not written to GLM (no class for it); bus areas are kept"""
+    """areas is not written to GLM (no class for it); bus areas are kept and
+    the rows are rebuilt on reading, with default price reference buses"""
     text = case.dumps("glm")
     assert "3 areas row(s) not written" in text
     again = Case.load("x.glm",text)
-    assert again.tables["areas"] == []
+    assert again.tables["areas"] == [[1,1],[2,13],[3,27]] # REF bus; most generating capacity
     assert [r[6] for r in again.tables["bus"]] == [r[6] for r in case.tables["bus"]]
+    assert "areas row(s) not written" not in again.dumps("glm") # nothing lost
 
 def test_not_passed_to_solver(case):
     """areas is in the case dict but not in the solver arrays"""
     assert case.to_ppc()["areas"] == [[1,8],[2,23],[3,26]]
     assert "areas" not in case.to_ppc(arrays=True)
-    assert "areas" not in Case.builtin("case14").to_ppc()
+    assert "areas" not in Case().to_ppc()
 
 def test_renumber_bus(case):
     """Renumbering a price reference bus updates its areas row"""
@@ -130,14 +154,14 @@ def test_solve(case,kind):
         assert a["lam_P"] == (lam[a["price_ref_bus"]] if kind == "opf" else None)
     assert "Areas" in result["log"]
 
-def test_solve_without_areas_table():
-    """Bus areas are summed even when the case has no areas rows; shunts count"""
+def test_solve_unlisted_area():
+    """Bus areas are summed even when they have no areas row; shunts count"""
     case = Case.builtin("case14")
     for n in range(7,14):
         case.set_value("bus",n,"area",2)
     result = case.solve("pf")
     _check_balance(result)
-    assert [a["price_ref_bus"] for a in result["areas"]] == [None,None]
+    assert [a["price_ref_bus"] for a in result["areas"]] == [1,None]
     assert sum(a["shunt_MW"] for a in result["areas"]) == 0.0
     case.set_value("bus",8,"Gs",5)
     _check_balance(case.solve("pf"))

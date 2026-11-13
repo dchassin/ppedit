@@ -101,12 +101,18 @@ Nothing needs network or credentials.
   units under one transform (so it scales with zoom, unlike the other
   styles); buses are not draggable. Branches skipping rows cross bus bars
   (drawn with a white halo gap); dense on case118/case300.
-- Areas check box (`S.areas`, `showAreas()` in `app.js`): outlines each
-  area (convex hull of padded bus points, `areaRegions`) without changing
-  bus colors. Turning it on re-runs the force layout with area cohesion and
-  gives each area its own column strip in the one-line layout (part of the
-  `olCache` signature); geodata positions are fixed, so hulls may enclose
-  other areas' buses there.
+- Areas check box (`S.areas`, `showAreas()` in `app.js`): draws each area
+  as the union of per-site discs clipped to the half-planes nearer than any
+  other area's site (`areaRegions`; sites are buses plus points along
+  internal lines), so regions never overlap; bus colors don't change.
+  Turning it on re-runs the force layout with area cohesion and gives each
+  area its own column strip (box) in the one-line layout (part of the
+  `olCache` signature), where ties get a column in each box and a jog
+  (`route` in `renderOneline`). Geodata positions are fixed, so an area may
+  show as several patches there.
+- A case without an `areas` table gets default rows from the bus areas on
+  load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
+  written" comment only when the rows differ from those defaults.
 
 ## Working rules
 

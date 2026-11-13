@@ -20,7 +20,10 @@ format) price the flow `Pf` for OPF. `Case.solve` models them as in
 
 Areas (`areas`, columns as in `pypower.caseformat`) list the control areas
 named by the bus `area` column, each with a price reference bus
-(`price_ref_bus`). They are not passed to the solver; `Case.solve` sums the
+(`price_ref_bus`). A case read without an `areas` table (every GLM file,
+and PYPOWER cases such as `case39`) gets one row per bus area, with the
+area's REF bus, else its bus with the most in-service generating capacity,
+else its first bus as price reference bus. They are not passed to the solver; `Case.solve` sums the
 solution by bus area and reports each area's generation, load, losses, net
 export and, for OPF, the price at its price reference bus.
 
@@ -62,7 +65,9 @@ Caveats
 
   - GridLAB-D `module pypower` has no areas object, so `areas` is not
     written to GLM (each bus keeps its `area`); a comment in the output says
-    how many rows were left out.
+    how many rows were left out when they differ from the default rows.
+    Reading the GLM file back rebuilds the rows from the bus areas, with
+    default price reference buses.
 
   - GLM `dcline` objects: `Sfrom` holds `Pf + j Pt` and `Sto` holds
     `Qf + j Qt`. This is how GridLAB-D passes these properties to PYPOWER
@@ -380,7 +385,27 @@ class Case:
             self.tables[table] = rows
         for table in COST_TABLES:
             self.tables[table] = _cost_rows(table,data.get(table,[]))
+        if not self.tables["areas"]:
+            self.tables["areas"] = self._default_areas()
         self.geodata,self.geotags = _geo_from_ppc(data)
+
+    def _default_areas(self):
+        """Areas rows rebuilt from the bus areas (see `_price_ref`)"""
+        return [[a,self._price_ref(a)] for a in sorted({r[6] for r in self.tables["bus"]})]
+
+    def _price_ref(self,area):
+        """Default price reference bus of an area: its REF bus, else the bus with
+        the most in-service generating capacity, else its first bus (0 if none)"""
+        inside = [r for r in self.tables["bus"] if r[6] == area]
+        ref = [r[0] for r in inside if r[1] == 3]
+        if ref:
+            return ref[0]
+        cap = {}
+        for g in self.tables["gen"]:
+            if g[7] == 1:
+                cap[g[0]] = cap.get(g[0],0.0) + g[8]
+        best = max(inside,key=lambda r:cap.get(r[0],-1.0),default=None)
+        return best[0] if best is not None else (self.tables["bus"][0][0] if self.tables["bus"] else 0)
 
     @classmethod
     def builtin(cls,name:str) -> "Case":
@@ -599,9 +624,10 @@ def {name}():
         if self.tables["dclinecost"]:
             out.write(f"\n// {len(self.tables['dclinecost'])} dclinecost row(s) not written: "
                 "module pypower has no DC line cost objects\n")
-        if self.tables["areas"]:
+        if self.tables["areas"] != self._default_areas():
             out.write(f"\n// {len(self.tables['areas'])} areas row(s) not written: "
-                "module pypower has no area objects (bus area numbers are kept)\n")
+                "module pypower has no area objects (bus area numbers are kept; "
+                "reading this file rebuilds the rows with default price reference buses)\n")
         return out.getvalue()
 
     # ----- editing -----
@@ -733,9 +759,7 @@ def {name}():
             listed = {r[0] for r in self.tables["areas"]}
             unlisted = sorted({r[6] for r in buses} - listed)
             row[0] = unlisted[0] if unlisted else max(listed,default=0) + 1
-            inside = [r for r in buses if r[6] == row[0]]
-            ref = [r for r in inside if r[1] == 3] or inside or buses
-            row[1] = ref[0][0] if ref else 0
+            row[1] = self._price_ref(row[0])
         return row
 
     def add_row(self,table:str,values:list|dict|None=None,after:int|None=None) -> int:
@@ -755,7 +779,8 @@ def {name}():
         one, or zero polynomial costs) when the case has `gencost`
         (`dclinecost`) rows, so the cost table stays aligned with its table.
         A new area row does not move any buses: by default it lists the
-        lowest bus area that has no row, with its REF bus (or its first bus)
+        lowest bus area that has no row, with its REF bus (else the bus
+        with the most in-service generating capacity, else its first bus)
         as the price reference bus.
         """
         self._check(table)
