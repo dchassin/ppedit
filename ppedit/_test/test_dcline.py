@@ -21,7 +21,7 @@ def fixture_case():
 
 def test_load(case):
     """dcline rows keep the 17 input columns; dclinecost rows read like gencost"""
-    assert case.size() == {"bus":9,"gen":3,"branch":9,"gencost":3,"dcline":4,"dclinecost":4}
+    assert case.size() == {"bus":9,"gen":3,"branch":9,"gencost":3,"dcline":4,"dclinecost":4,"areas":1}
     assert all(len(r) == len(COLUMNS["dcline"]) == 17 for r in case.tables["dcline"])
     assert case.tables["dcline"][0] == [30,4,1,10.0,8.9,0.0,0.0,1.01,1.0,1.0,10.0,
         -10.0,10.0,-10.0,10.0,1.0,0.01]

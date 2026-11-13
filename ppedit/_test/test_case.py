@@ -15,6 +15,9 @@ def test_round_trip(name,fmt,ext):
     """Every built-in case survives a write/read in every format"""
     case = Case.builtin(name)
     again = Case.load(f"x{ext}",case.dumps(fmt))
+    if fmt == "glm": # GLM has no areas objects
+        assert again.tables["areas"] == []
+        again.tables["areas"] = case.tables["areas"]
     assert again.tables == case.tables
     assert again.baseMVA == case.baseMVA
 
@@ -23,7 +26,7 @@ def test_shapes():
     case = Case.builtin("case14")
     for table,rows in case.tables.items():
         assert all(len(r) == len(COLUMNS[table]) for r in rows)
-    assert case.size() == {"bus":14,"gen":5,"branch":20,"gencost":5,"dcline":0,"dclinecost":0}
+    assert case.size() == {"bus":14,"gen":5,"branch":20,"gencost":5,"dcline":0,"dclinecost":0,"areas":0}
 
 def test_py_not_executed(tmp_path):
     """A .py case is parsed, never run"""
@@ -78,7 +81,7 @@ def c():
 """
     case = Case.load("c.py",text)
     assert case.baseMVA == 100.0
-    assert case.size() == {"bus":2,"gen":1,"branch":1,"gencost":1,"dcline":0,"dclinecost":0}
+    assert case.size() == {"bus":2,"gen":1,"branch":1,"gencost":1,"dcline":0,"dclinecost":0,"areas":0}
     assert case.tables["bus"][1][2] == 10
     assert case.tables["gencost"][0][4] == "0.01,20,0"
 
@@ -142,7 +145,7 @@ def test_delete_bus_requires_cascade():
     with pytest.raises(CaseError):
         case.delete_rows("bus",[0])
     removed = case.delete_rows("bus",[0],cascade=True)
-    assert removed == {"bus":1,"gen":1,"branch":1,"gencost":1,"dcline":0,"dclinecost":0}
+    assert removed == {"bus":1,"gen":1,"branch":1,"gencost":1,"dcline":0,"dclinecost":0,"areas":0}
     numbers = {r[0] for r in case.tables["bus"]}
     assert all(g[0] in numbers for g in case.tables["gen"])
     assert all(b[0] in numbers and b[1] in numbers for b in case.tables["branch"])

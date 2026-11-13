@@ -34,10 +34,11 @@ GLM property names, units and keywords; `converters/py2glm.py` for the
   `dclinecost` rows are `[model, startup, shutdown, ncost, costs]` with
   `costs` a comma-separated string (as in the GLM `costs` property).
   `COST_TABLES` maps each cost table to the table it follows row by row.
+  `areas` rows are `[area, price_ref_bus]`.
 - Every edit goes through `Case.set_value`, `add_row`, `delete_rows`,
   `set_global`, or `apply_result`, which keep references valid (bus
   renumber cascades, bus delete needs `cascade`, gencost follows gen,
-  dclinecost follows dcline). The
+  dclinecost follows dcline, area renumber moves its buses). The
   server wraps each in `Editor.edit()` for undo and rollback on error.
 - `.py` cases are parsed with `ast` and never executed (`_parse_py`,
   `_eval`). Do not replace this with `import`/`exec`.
@@ -75,7 +76,9 @@ Nothing needs network or credentials.
 - GLM `dcline`: `Sfrom` = `Pf + j Pt`, `Sto` = `Qf + j Qt` (GridLAB-D's
   positional mapping in `pypower.cpp` and `py2glm.py`, not the meaning in
   the `dcline.cpp` property descriptions). `dclinecost` has no GLM object
-  and is dropped on GLM output (with a comment).
+  and is dropped on GLM output (with a comment); so is `areas`, which
+  module pypower also lacks (bus `area` is kept). `areas` is not passed to
+  the solver; per-area results are computed in `Case._area_summary`.
 - GLM import keeps only `bus`, `gen`, `branch`, `gencost`, `dcline`; everything else
   is listed in `Case.notes`, and saving over the source file needs `force`.
 - GLM bus names are `pp_bus_<bus_i>`, unlike `py2glm.py` (`pp_bus_<row>`).

@@ -5,13 +5,14 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
-  selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set() },
+  selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch"|"dcline", index}
   style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
   layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
+  areas: (() => { try { return localStorage.getItem("ppedit.areas") === "1"; } catch (_) { return false; } })(), // color buses by area
   map: (() => {
     const def = { imagery: false, roads: false, states: true, stateNames: true, counties: false, countyNames: false };
     try { return { ...def, ...JSON.parse(localStorage.getItem("ppedit.map") || "{}") }; } catch (_) { return def; }
@@ -37,7 +38,7 @@ const sv = (tag, attrs = {}) => {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el;
 };
-const TABLE_TITLES = { bus: "bus", gen: "generator", branch: "branch", gencost: "generator cost", dcline: "DC line", dclinecost: "DC line cost" };
+const TABLE_TITLES = { bus: "bus", gen: "generator", branch: "branch", gencost: "generator cost", dcline: "DC line", dclinecost: "DC line cost", areas: "area" };
 const fmt = (v, d = 3) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : v);
 
 // ---------------------------------------------------------------- server
@@ -246,7 +247,8 @@ async function commitCell(el) {
   try {
     const st = await act("/api/cell", { table, row, column, value: el.value });
     if (st.cascade) {
-      const msg = table === "bus" && column === "bus_i" ? "Bus renumbered; generators, branches and DC lines updated" :
+      const msg = table === "bus" && column === "bus_i" ? "Bus renumbered; generators, branches, DC lines and areas updated" :
+        table === "areas" && column === "area" ? "Area renumbered; its buses moved with it" :
         table === "gencost" || table === "dclinecost" ? "ncost updated to match the cost data" : "Related values updated";
       toast(msg);
     }
@@ -271,7 +273,7 @@ async function duplicateRows() {
   let last = null;
   for (const i of rows) {
     const values = [...S.state.case.tables[table][i]];
-    if (table === "bus") values[0] = Math.max(0, ...S.state.case.tables.bus.map(r => r[0])) + 1;
+    if (table === "bus" || table === "areas") values[0] = Math.max(0, ...S.state.case.tables[table].map(r => r[0])) + 1;
     const st = await act("/api/rows", { table, values, after: S.state.case.tables[table].length - 1 });
     last = st.row;
   }
@@ -288,8 +290,10 @@ async function deleteRows() {
     const ng = S.state.case.tables.gen.filter(g => nums.has(g[0])).length;
     const nb = S.state.case.tables.branch.filter(b => nums.has(b[0]) || nums.has(b[1])).length;
     const nd = S.state.case.tables.dcline.filter(b => nums.has(b[0]) || nums.has(b[1])).length;
-    if (ng || nb || nd) {
-      if (!confirm(`Deleting ${rows.length} bus(es) also deletes ${ng} generator(s), ${nb} branch(es) and ${nd} DC line(s) connected to them. Continue?`)) return;
+    const na = S.state.case.tables.areas.filter(a => nums.has(a[1])).length;
+    if (ng || nb || nd || na) {
+      if (!confirm(`Deleting ${rows.length} bus(es) also deletes ${ng} generator(s), ${nb} branch(es) and ${nd} DC line(s) connected to them` +
+        (na ? `, and ${na} area row(s) that use them as price reference bus` : "") + ". Continue?")) return;
       cascade = true;
     }
   }
@@ -396,6 +400,33 @@ function vColorClassic(vm) { return vColor(2 - vm); }
 function loadColor(L) { return vColor(1 - (Math.min(L, 150) - 50) / 50 * 0.06); }
 const NEUTRAL_LINE = "#8d9792";
 const DC_COLOR = "#7b4fa0"; // matches --dc in style.css
+const AREA_COLORS = ["#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#edc948", "#b07aa1", "#9c755f", "#ff9da7", "#8cd17d"];
+
+function areaList() {
+  // area numbers used by buses or listed in the areas table, in order
+  const c = S.state.case;
+  return [...new Set([...c.tables.bus.map(b => b[6]), ...c.tables.areas.map(a => a[0])])].sort((a, b) => a - b);
+}
+function areaColors() {
+  // area number -> color when area coloring is on and there is more than one area, else null
+  const list = areaList();
+  if (!S.areas || list.length < 2) return null;
+  return new Map(list.map((a, i) => [a, AREA_COLORS[i % AREA_COLORS.length]]));
+}
+function areaLegend(colors) {
+  if (!colors) return;
+  const refs = new Map(S.state.case.tables.areas.map(a => [a[0], a[1]]));
+  const L = $("#legend");
+  L.append(h("div", {}, "Areas (halo color; ★ price reference bus)"),
+    h("div", { class: "row wrap" }, [...colors].map(([a, col]) =>
+      h("span", { class: "area-key", title: refs.has(a) ? `area ${a}, price reference bus ${refs.get(a)}` : `area ${a} (no areas row)` },
+        h("span", { class: "sw", style: `background:${col}` }), `${a}`))));
+}
+function setAreas(on) {
+  S.areas = on;
+  try { localStorage.setItem("ppedit.areas", on ? "1" : "0"); } catch (_) { /* storage unavailable */ }
+  renderNetwork();
+}
 
 function busSummary() {
   // per-bus generation, load, voltage and connectivity for labels and shapes
@@ -434,6 +465,7 @@ function renderNetwork() {
   const ids = new Set(c.tables.bus.map(b => b[0]));
   const sum = busSummary();
   const errBus = new Set(S.state.issues.filter(i => i.table === "bus" && i.level === "error" && i.row !== null).map(i => i.row));
+  const areaCol = areaColors(), priceRef = new Set(c.tables.areas.map(a => a[1]));
   const labels = sv("g"); // line labels drawn above lines, below nodes
   // classic style: arrow in the direction of real power flow and |MW| label at mid-line
   const flowMark = (p, q, mw, color) => {
@@ -535,6 +567,14 @@ function renderNetwork() {
     const node = sv("g", { class: cls.join(" "), transform: `translate(${p.x},${p.y})`, "data-bus": b[0] });
     const v = sum.volt.get(b[0]);
     const hasGen = sum.ngen.get(b[0]) > 0, hasLoad = b[2] !== 0 || b[3] !== 0;
+    if (areaCol) {
+      node.append(sv("circle", { r: 15, class: "area-halo", fill: areaCol.get(b[6]) }));
+      if (priceRef.has(b[0])) {
+        const star = sv("text", { x: -15, y: -9, class: "area-star", "text-anchor": "middle" });
+        star.textContent = "★";
+        node.append(star);
+      }
+    }
     let r;
     if (classic) {
       const isolated = b[1] === 4 || (c.tables.bus.length > 1 && !sum.conn.has(b[0]));
@@ -567,7 +607,7 @@ function renderNetwork() {
       node.append(label);
     }
     const title = sv("title");
-    title.textContent = `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]})\nPd ${b[2]} MW, Qd ${b[3]} MVAr\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`;
+    title.textContent = `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), area ${b[6]}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nPd ${b[2]} MW, Qd ${b[3]} MVAr\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`;
     node.append(title);
     node.addEventListener("pointerdown", e => startDrag(e, b[0], i));
     g.append(node);
@@ -575,6 +615,7 @@ function renderNetwork() {
   svg.classList.remove("oneline");
   svg.replaceChildren(...(geo ? [renderMap(svg.clientWidth, svg.clientHeight)] : []), g);
   renderLegend(!!res, classic);
+  areaLegend(areaCol);
   if (G && (G.estimated.size || G.missing)) {
     const L = $("#legend");
     if (G.estimated.size) L.append(h("div", {}, `Dashed: ${G.estimated.size} bus(es) without geodata, placed near neighbors`));
@@ -861,21 +902,23 @@ function renderOneline() {
       (rd ? `\nPf ${fmt(rd.Pf, 1)} MW, Pt ${fmt(rd.Pt, 1)} MW, loss ${fmt(rd.loss_MW, 2)} MW` : ""));
     lines.append(hit);
   });
-  // bus bars with number and voltage at the left end
+  // bus bars with number and voltage at the left end (on an area-colored band when areas are shown)
+  const areaCol = areaColors(), priceRef = new Set(T.areas.map(a => a[1]));
   T.bus.forEach((b, i) => {
     const B = L.bar.get(b[0]), v = sum.volt.get(b[0]);
+    if (areaCol) bars.append(sv("rect", { x: B.x0 - 6, y: B.y - 9, width: B.x1 - B.x0 + 12, height: 18, rx: 4, class: "area-band", fill: areaCol.get(b[6]) }));
     const cls = ["ol-bar"];
     if (b[1] === 4 || (T.bus.length > 1 && !sum.conn.has(b[0]))) cls.push("isolated");
     if (errBus.has(i)) cls.push("err");
     if (S.pick && S.pick.kind === "bus" && S.pick.index === i) cls.push("sel");
     bars.append(sv("line", { x1: B.x0, y1: B.y, x2: B.x1, y2: B.y, class: cls.join(" ") }));
     const hit = onPick(sv("rect", { x: B.x0 - 4, y: B.y - 7, width: B.x1 - B.x0 + 8, height: 14, class: "ol-bar-hit" }), "bus", i);
-    tip(hit, `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]})\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`);
+    tip(hit, `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), area ${b[6]}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`);
     bars.append(hit);
     if (showText) {
       const t = sv("text", { x: B.x0 - 6, y: B.y - 3, class: "ol-bus", "text-anchor": "end" });
       const t1 = sv("tspan", { x: B.x0 - 6, class: "num" });
-      t1.textContent = `${b[1] === 3 ? "REF " : ""}${b[0]}`;
+      t1.textContent = `${areaCol && priceRef.has(b[0]) ? "★ " : ""}${b[1] === 3 ? "REF " : ""}${b[0]}`;
       const t2 = sv("tspan", { x: B.x0 - 6, dy: "1.2em" });
       t2.textContent = `${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`;
       t.append(t1, t2);
@@ -885,6 +928,7 @@ function renderOneline() {
   g.append(wires, bars, lines, text);
   svg.replaceChildren(g);
   renderLegend(!!res, false, true);
+  areaLegend(areaCol);
   renderInspector();
   if (!T.bus.length) {
     const t = sv("text", { x: svg.clientWidth / 2, y: svg.clientHeight / 2, "text-anchor": "middle", fill: "#69726e" });
@@ -1038,6 +1082,10 @@ function updateNetTools() {
   sel.title = oneline ? "The one-line style computes its own layout"
     : has ? "Bus positions" : "Geodata layout: load a CSV of bus locations (Map ▾) or open a case with geodata";
   $("[data-action=relayout]").disabled = useGeo();
+  const na = areaList().length, ab = $("#net-areas");
+  ab.checked = S.areas;
+  ab.disabled = na < 2;
+  ab.closest("label").title = na < 2 ? "Color buses by area: the case has only one area" : `Color buses by area (${na} areas)`;
   $("#geodata-export").disabled = !has;
   $("#geodata-clear").disabled = !has;
   for (const cb of $$("#map-menu [data-layer]")) {
@@ -1262,6 +1310,12 @@ function renderInspector() {
       if (rb) kids.push(h("div", { class: "sub" }, `Solution: Vm ${fmt(rb.Vm, 4)} pu, Va ${fmt(rb.Va, 2)}°` + (rb.lam_P !== null ? `, λP ${fmt(rb.lam_P, 2)} $/MWh` : "")));
     }
     kids.push(h("dl", {}, [1, 2, 3, 4, 5, 9, 7, 8, 11, 12, 6, 10].flatMap(field)));
+    const ai = c.tables.areas.findIndex(a => a[0] === row[6]);
+    const refOf = c.tables.areas.map((a, i) => [a, i]).filter(([a], i) => a[1] === num && i !== ai);
+    kids.push(h("div", { class: "sub" }, ai < 0 ? `Area ${row[6]} has no row in the areas table` :
+      h("span", {}, h("a", { onclick: () => goto("areas", ai) }, `Area ${row[6]}`),
+        c.tables.areas[ai][1] === num ? " · this bus is its price reference bus" : ` · price reference bus ${c.tables.areas[ai][1]}`),
+      ...refOf.map(([a, i]) => h("span", {}, " · ", h("a", { onclick: () => goto("areas", i) }, `price reference bus of area ${a[0]}`)))));
     if (hasGeo()) {
       const geo = c.geodata.find(r => r[0] === num);
       kids.push(h("h4", {}, "Location"));
@@ -1449,7 +1503,11 @@ function renderResults() {
         .concat(r.kind === "opf" ? ["μPmax $/MWh"] : []),
         r.dcline.map((d, i) => [i + 1, d.fbus, d.tbus].concat(d.solved
           ? [fmt(d.Pf, 2), fmt(d.Pt, 2), fmt(d.loss_MW, 2), fmt(d.Qf, 2), fmt(d.Qt, 2)].concat(r.kind === "opf" ? [fmt(d.mu_Pmax, 3)] : [])
-          : ["–", "–", "–", "–", "–"].concat(r.kind === "opf" ? ["–"] : [])))) : null));
+          : ["–", "–", "–", "–", "–"].concat(r.kind === "opf" ? ["–"] : [])))) : null,
+      r.areas && (r.areas.length > 1 || c.tables.areas.length) ? block("Areas", ["area", "buses", "Pg MW", "Pd MW", "shunt MW", "loss MW", "export MW", "ref bus"]
+        .concat(r.kind === "opf" ? ["price $/MWh"] : []),
+        r.areas.map(a => [a.area, a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
+          .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null));
   }
   kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"), h("pre", { class: "log" }, r.log || "(no output)")));
   box.replaceChildren(...kids);
@@ -1460,8 +1518,8 @@ function loadCell(L) {
   const span = h("span", {}, h("span", { class: "loadbar", style: `width:${Math.min(L, 120) * 0.5}px;background:${L > 100 ? "#b42318" : L > 80 ? "#c27c0e" : "#5f8f80"}` }), `${fmt(L, 0)}%`);
   return span;
 }
-function block(title, head, rows, cls = []) {
-  return h("div", { class: "res-block" }, h("h3", {}, title), h("div", { class: "scroll" },
+function block(title, head, rows, cls = [], extra = "") {
+  return h("div", { class: "res-block" + (extra ? ` ${extra}` : "") }, h("h3", {}, title), h("div", { class: "scroll" },
     h("table", {}, h("thead", {}, h("tr", {}, head.map(x => h("th", {}, x)))),
       h("tbody", {}, rows.map((r, i) => h("tr", {}, r.map((v, j) => h("td", { class: (cls[i] || [])[j] || null }, v))))))));
 }
@@ -1583,6 +1641,7 @@ async function init() {
   });
   $("#net-style").addEventListener("change", e => setStyle(e.target.value));
   $("#net-layout").addEventListener("change", e => setLayout(e.target.value));
+  $("#net-areas").addEventListener("change", e => setAreas(e.target.checked));
   $("#map-menu").addEventListener("change", e => { if (e.target.dataset.layer) setMapLayer(e.target.dataset.layer, e.target.checked); });
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";

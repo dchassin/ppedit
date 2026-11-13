@@ -1,7 +1,7 @@
 """PYPOWER case model
 
 The `Case` class holds one PYPOWER case (`version`, `baseMVA`, `bus`, `gen`,
-`branch`, and optional `gencost`, `dcline` and `dclinecost`) as plain Python
+`branch`, and optional `gencost`, `dcline`, `dclinecost` and `areas`) as plain Python
 lists so it can be edited row by row and sent to a browser as JSON. It reads
 and writes:
 
@@ -18,6 +18,12 @@ loss1*Pf`; optional `dclinecost` rows (one per DC line, in the `gencost`
 format) price the flow `Pf` for OPF. `Case.solve` models them as in
 `pypower.toggle_dcline`.
 
+Areas (`areas`, columns as in `pypower.caseformat`) list the control areas
+named by the bus `area` column, each with a price reference bus
+(`price_ref_bus`). They are not passed to the solver; `Case.solve` sums the
+solution by bus area and reports each area's generation, load, losses, net
+export and, for OPF, the price at its price reference bus.
+
 A case may also carry bus locations (`Case.geodata`): rows of `[BUS_I, LAT,
 LON, ...]` in decimal degrees (WGS84), where any further values are
 auxiliary data named by `Case.geotags`. Geodata is read from the case's
@@ -32,7 +38,7 @@ Examples
     >>> from ppedit import Case
     >>> case = Case.builtin("case9")
     >>> case.size()
-    {'bus': 9, 'gen': 3, 'branch': 9, 'gencost': 3, 'dcline': 0, 'dclinecost': 0}
+    {'bus': 9, 'gen': 3, 'branch': 9, 'gencost': 3, 'dcline': 0, 'dclinecost': 0, 'areas': 1}
     >>> case.set_value("bus", 4, "Pd", 95)  # True would mean other cells changed
     False
     >>> [issue["message"] for issue in case.validate()]
@@ -52,7 +58,11 @@ Caveats
     objects in a GLM file (`load`, `powerplant`, `powerline`, `relay`,
     `shunt`, `transformer`, `scada`, `weather`, `geodata`, ...) are counted
     and reported by `Case.load()` but are not kept, so saving to GLM drops
-    them. `areas` data is not supported.
+    them.
+
+  - GridLAB-D `module pypower` has no areas object, so `areas` is not
+    written to GLM (each bus keeps its `area`); a comment in the output says
+    how many rows were left out.
 
   - GLM `dcline` objects: `Sfrom` holds `Pf + j Pt` and `Sto` holds
     `Qf + j Qt`. This is how GridLAB-D passes these properties to PYPOWER
@@ -209,6 +219,10 @@ COLUMNS = {
         _col("loss1","MW/MW",desc="linear term of the loss function (loss = loss0 + loss1*Pf)"),
     ],
     "dclinecost": _cost_columns("MW of DC line flow Pf"),
+    "areas": [
+        _col("area","","int",1,"area number (the bus area column)"),
+        _col("price_ref_bus","","int",0,"price reference bus number"),
+    ],
 }
 """Editable columns of each table (name, unit, kind, default, description)"""
 
@@ -355,14 +369,15 @@ class Case:
                         f"expected at least {len(spec)}")
                 rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
             self.tables[table] = rows
-        spec = COLUMNS["dcline"]
-        rows = []
-        for n,row in enumerate(_tolist(data.get("dcline",[]))):
-            if len(row) < len(spec):
-                raise CaseError(f"dcline row {n+1} has {len(row)} columns, "
-                    f"expected at least {len(spec)}")
-            rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
-        self.tables["dcline"] = rows
+        for table in ("dcline","areas"):
+            spec = COLUMNS[table]
+            rows = []
+            for n,row in enumerate(_tolist(data.get(table,[]))):
+                if len(row) < len(spec):
+                    raise CaseError(f"{table} row {n+1} has {len(row)} columns, "
+                        f"expected at least {len(spec)}")
+                rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
+            self.tables[table] = rows
         for table in COST_TABLES:
             self.tables[table] = _cost_rows(table,data.get(table,[]))
         self.geodata,self.geotags = _geo_from_ppc(data)
@@ -431,13 +446,15 @@ class Case:
         ---------
 
           - `arrays`: return numpy arrays (for the solver) instead of lists;
-            geodata is left out
+            geodata and `areas` are left out
 
-        `gencost`, `dcline` and `dclinecost` are included only when they
-        have rows.
+        `gencost`, `dcline`, `dclinecost` and `areas` are included only when
+        they have rows.
         """
         data = {"version":self.version,"baseMVA":self.baseMVA}
-        for table in ("bus","gen","branch","gencost","dcline","dclinecost"):
+        for table in ("bus","gen","branch","gencost","dcline","dclinecost","areas"):
+            if table == "areas" and arrays:
+                continue
             if table in COST_TABLES:
                 if self.tables[table]:
                     costs = []
@@ -511,7 +528,7 @@ def {name}():
     ppc["baseMVA"] = {_fmt(self.baseMVA)}
 ''')
         data = self.to_ppc()
-        for table in ("bus","gen","branch","gencost","dcline","dclinecost"):
+        for table in ("bus","gen","branch","gencost","dcline","dclinecost","areas"):
             if table not in data:
                 continue
             header = " ".join(c["name"] for c in COLUMNS[table]) if table not in COST_TABLES \
@@ -582,6 +599,9 @@ def {name}():
         if self.tables["dclinecost"]:
             out.write(f"\n// {len(self.tables['dclinecost'])} dclinecost row(s) not written: "
                 "module pypower has no DC line cost objects\n")
+        if self.tables["areas"]:
+            out.write(f"\n// {len(self.tables['areas'])} areas row(s) not written: "
+                "module pypower has no area objects (bus area numbers are kept)\n")
         return out.getvalue()
 
     # ----- editing -----
@@ -617,14 +637,20 @@ def {name}():
         """Set one cell
 
         Changing a bus number also renumbers the generators, branches, DC
-        lines and geodata that refer to it. Changing a cost model or cost
-        data (`gencost` or `dclinecost`) updates `ncost` to match.
+        lines, area price reference buses and geodata that refer to it.
+        Changing an area number (`areas` table) also renumbers the `area` of
+        the buses in that area. Changing a cost model or cost data
+        (`gencost` or `dclinecost`) updates `ncost` to match.
 
         Returns
         -------
 
           - `bool`: `True` if other cells or tables changed as a result
         """
+        return self._set_value(table,row,column,value)
+
+    def _set_value(self,table,row,column,value,renumber=True):
+        # renumber=False: a new areas row takes its number without moving buses
         self._check(table,row)
         names = [c["name"] for c in COLUMNS[table]]
         if column not in names:
@@ -659,11 +685,25 @@ def {name}():
                         if branch[j] == old:
                             branch[j] = value
                             cascade = True
+            for area in self.tables["areas"]:
+                if area[1] == old and value != old:
+                    area[1] = value
+                    cascade = True
             for geo in self.geodata:
                 if geo[0] == old and value != old:
                     geo[0] = value
                     cascade = True
-        if table in ("gen","branch","dcline") and column in ("bus","fbus","tbus"):
+        if table == "areas" and column == "area":
+            old = record[0]
+            if value != old and any(r[0] == value for r in self.tables["areas"]):
+                raise CaseError(f"area {value} already exists")
+            if renumber and value != old:
+                for bus in self.tables["bus"]:
+                    if bus[6] == old:
+                        bus[6] = value
+                        cascade = True
+        if (table in ("gen","branch","dcline") and column in ("bus","fbus","tbus")) \
+                or (table == "areas" and column == "price_ref_bus"):
             if not any(r[0] == value for r in self.tables["bus"]):
                 raise CaseError(f"bus {value} does not exist")
         if table in COST_TABLES and column == "model" and value != record[0]:
@@ -689,6 +729,13 @@ def {name}():
         elif table in ("branch","dcline"):
             row[0] = buses[0][0] if buses else 0
             row[1] = buses[1][0] if len(buses) > 1 else row[0]
+        elif table == "areas":
+            listed = {r[0] for r in self.tables["areas"]}
+            unlisted = sorted({r[6] for r in buses} - listed)
+            row[0] = unlisted[0] if unlisted else max(listed,default=0) + 1
+            inside = [r for r in buses if r[6] == row[0]]
+            ref = [r for r in inside if r[1] == 3] or inside or buses
+            row[1] = ref[0][0] if ref else 0
         return row
 
     def add_row(self,table:str,values:list|dict|None=None,after:int|None=None) -> int:
@@ -707,6 +754,9 @@ def {name}():
         Adding a generator (DC line) also adds a cost row (a copy of the last
         one, or zero polynomial costs) when the case has `gencost`
         (`dclinecost`) rows, so the cost table stays aligned with its table.
+        A new area row does not move any buses: by default it lists the
+        lowest bus area that has no row, with its REF bus (or its first bus)
+        as the price reference bus.
         """
         self._check(table)
         rows = self.tables[table]
@@ -720,12 +770,13 @@ def {name}():
         try:
             if isinstance(values,(list,tuple)):
                 for col,val in zip(COLUMNS[table],values):
-                    self.set_value(table,index,col["name"],val)
+                    self._set_value(table,index,col["name"],val,renumber=False)
             elif isinstance(values,dict):
                 for key,val in values.items():
-                    self.set_value(table,index,key,val)
-            if table == "bus" and sum(1 for r in rows if r[0] == rows[index][0]) > 1:
-                raise CaseError(f"bus {rows[index][0]} already exists")
+                    self._set_value(table,index,key,val,renumber=False)
+            if table in ("bus","areas") and sum(1 for r in rows if r[0] == rows[index][0]) > 1:
+                what = "bus" if table == "bus" else "area"
+                raise CaseError(f"{what} {rows[index][0]} already exists")
         except CaseError:
             del rows[index]
             raise
@@ -749,8 +800,9 @@ def {name}():
           - `rows`: row indexes to delete
 
           - `cascade`: when deleting buses, also delete the generators,
-            branches and DC lines connected to them; otherwise refuse if any
-            exist. Geodata rows of deleted buses are always removed.
+            branches and DC lines connected to them and the areas rows that
+            use them as price reference bus; otherwise refuse if any exist.
+            Geodata rows of deleted buses are always removed.
 
         Deleting generators (DC lines) also deletes their `gencost`
         (`dclinecost`) rows.
@@ -772,11 +824,13 @@ def {name}():
                 if b[0] in numbers or b[1] in numbers]
             dclines = [n for n,b in enumerate(self.tables["dcline"])
                 if b[0] in numbers or b[1] in numbers]
-            if (gens or branches or dclines) and not cascade:
+            areas = [n for n,a in enumerate(self.tables["areas"]) if a[1] in numbers]
+            if (gens or branches or dclines or areas) and not cascade:
                 raise CaseError(f"bus(es) {sorted(numbers)} have {len(gens)} "
                     f"generator(s), {len(branches)} branch(es) and {len(dclines)} "
-                    "DC line(s) connected")
-            for sub,index in (("gen",gens),("branch",branches),("dcline",dclines)):
+                    "DC line(s) connected" + (f", and are the price reference bus "
+                    f"of {len(areas)} area(s)" if areas else ""))
+            for sub,index in (("gen",gens),("branch",branches),("dcline",dclines),("areas",areas)):
                 for k,v in self.delete_rows(sub,index).items():
                     removed[k] += v
             self.geodata = [g for g in self.geodata if g[0] not in numbers]
@@ -1003,6 +1057,25 @@ def {name}():
                         add("error",table,n,"costs","piecewise MW points must increase")
                 if startup < 0 or shutdown < 0:
                     add("error",table,n,"startup","startup/shutdown cost is negative")
+        if self.tables["areas"]:
+            used = {}
+            for row in bus:
+                used[row[6]] = used.get(row[6],0) + 1
+            listed = {}
+            for n,(area,ref) in enumerate(self.tables["areas"]):
+                if area in listed:
+                    add("error","areas",n,"area",f"area {area} duplicates row {listed[area]+1}")
+                listed.setdefault(area,n)
+                if ref not in numbers:
+                    add("error","areas",n,"price_ref_bus",f"bus {ref} does not exist")
+                elif bus[numbers[ref]][6] != area:
+                    add("warning","areas",n,"price_ref_bus",
+                        f"price reference bus {ref} is in area {bus[numbers[ref]][6]}, not {area}")
+                if area not in used:
+                    add("warning","areas",n,"area",f"area {area} has no buses")
+            for area in sorted(set(used) - set(listed)):
+                add("warning","areas",None,None,
+                    f"area {area} ({used[area]} bus(es)) has no areas row")
         if self.geodata:
             seen = {}
             for n,row in enumerate(self.geodata):
@@ -1040,7 +1113,8 @@ def {name}():
             (`fbus`, `tbus`, `solved`, `Pf`, `Pt`, `Qf`, `Qt`, `Vf`, `Vt`,
             `loss_MW`, and for OPF the multipliers `mu_Pmin`, `mu_Pmax`
             in $/MWh). `losses_MW` includes the DC line losses, which are
-            also given alone as `dcline_losses_MW`.
+            also given alone as `dcline_losses_MW`. `areas` has a row for
+            each bus area (see below).
 
         Buses with no in-service branch are solved as isolated (type NONE)
         without changing the case; `log` names them. DC lines are modeled
@@ -1051,6 +1125,18 @@ def {name}():
         `dclinecost` cost (zero if there is none). DC lines that are out of
         service or touch an isolated bus are not solved (`solved` is
         false, flows 0).
+
+        Each `areas` result row sums the buses with that `area` number:
+        `area`, `buses` (count), in-service generation `Pg` and `Qg`, load
+        `Pd` and `Qd`, `shunt_MW` (`Gs*Vm^2`), `losses_MW` (AC and DC lines
+        with both ends in the area), `export_MW` (net real power leaving the
+        area over AC and DC ties, measured at its own end of each tie, so
+        `Pg = Pd + shunt_MW + losses_MW + export_MW`), `price_ref_bus` (from
+        the `areas` table, or `None`), and for OPF `lam_P`, the price
+        ($/MWh) at the price reference bus. Losses on ties belong to no
+        area: they are the sum of all `export_MW`. Buses that are not
+        solved (type NONE or isolated) count only toward `buses`: their
+        load, shunts and generators are left out of the sums.
 
         Exceptions
         ----------
@@ -1104,7 +1190,7 @@ def {name}():
             except Exception as err: # pylint: disable=broad-exception-caught
                 _logger.debug("solver failed: %s",err)
                 return {"success":False,"kind":kind,"log":log.getvalue()+f"\n{err}",
-                    "bus":[],"gen":[],"branch":[],"dcline":[]}
+                    "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
         try:
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
             with warnings.catch_warnings():
@@ -1154,7 +1240,63 @@ def {name}():
                 "loading_pct":100*smax/rate if rate > 0 else None})
         result["dcline_losses_MW"] = sum(d["loss_MW"] for d in dclines)
         result["losses_MW"] = losses + result["dcline_losses_MW"]
+        result["areas"] = self._area_summary(result,
+            {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated))
+        if result["success"] and (self.tables["areas"] or len(result["areas"]) > 1):
+            log = io.StringIO()
+            log.write("\nAreas\n  area  buses      Pg MW      Pd MW"
+                "   shunt MW    loss MW  export MW" + ("  price $/MWh" if kind == "opf" else "") + "\n")
+            for a in result["areas"]:
+                log.write(f"{a['area']:6d} {a['buses']:6d} " + "".join(f"{a[k]:11.2f}"
+                    for k in ("Pg","Pd","shunt_MW","losses_MW","export_MW"))
+                    + (f"{a['lam_P']:13.2f}" if kind == "opf" and a["lam_P"] is not None else "")
+                    + "\n")
+            result["log"] += log.getvalue()
         return _jsonsafe(result)
+
+    def _area_summary(self,result,dead):
+        """Per-area sums of a solution (see `solve`); `dead`: unsolved bus numbers"""
+        if not result["success"]:
+            return []
+        buses = self.tables["bus"]
+        area = {row[0]:row[6] for row in buses}
+        refs = {}
+        for a,ref in self.tables["areas"]:
+            refs.setdefault(a,ref)
+        out = {}
+        for a in sorted(set(area.values())):
+            out[a] = {"area":a,"buses":0,"Pg":0.0,"Qg":0.0,"Pd":0.0,"Qd":0.0,
+                "shunt_MW":0.0,"losses_MW":0.0,"export_MW":0.0,
+                "price_ref_bus":refs.get(a),"lam_P":None}
+        lam = {}
+        for row,res in zip(buses,result["bus"]):
+            x = out[row[6]]
+            x["buses"] += 1
+            lam[row[0]] = res["lam_P"]
+            if row[0] in dead:
+                continue
+            x["Pd"] += row[2]
+            x["Qd"] += row[3]
+            x["shunt_MW"] += row[4]*res["Vm"]**2
+        for row,res in zip(self.tables["gen"],result["gen"]):
+            if row[7] == 1 and row[0] in area and row[0] not in dead:
+                out[area[row[0]]]["Pg"] += res["Pg"]
+                out[area[row[0]]]["Qg"] += res["Qg"]
+        ties = [(b[0],b[1],r["PF"],r["PT"]) for b,r in zip(self.tables["branch"],result["branch"])
+            if b[10] == 1]
+        ties += [(d["fbus"],d["tbus"],d["Pf"],-d["Pt"]) for d in result["dcline"] if d["solved"]]
+        for f,t,pf,pt in ties:
+            if f not in area or t not in area:
+                continue
+            if area[f] == area[t]:
+                out[area[f]]["losses_MW"] += pf + pt
+            else:
+                out[area[f]]["export_MW"] += pf
+                out[area[t]]["export_MW"] += pt
+        for x in out.values():
+            if x["price_ref_bus"] in lam:
+                x["lam_P"] = lam[x["price_ref_bus"]]
+        return list(out.values())
 
 # ---------------------------------------------------------------------------
 # module helpers
