@@ -1,0 +1,1909 @@
+// case39: written by ppedit
+module pypower
+{
+    version 2;
+    baseMVA 100;
+}
+
+//
+// bus
+//
+object pypower.bus
+{
+    name "pp_bus_1";
+    bus_i 1;
+    type PQ;
+    Pd 97.6 MW;
+    Qd 44.2 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0393836 pu.kV;
+    Va -13.536602 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_2";
+    bus_i 2;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0484941 pu.kV;
+    Va -9.7852666 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_3";
+    bus_i 3;
+    type PQ;
+    Pd 322 MW;
+    Qd 2.4 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0307077 pu.kV;
+    Va -12.276384 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_4";
+    bus_i 4;
+    type PQ;
+    Pd 500 MW;
+    Qd 184 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.00446 pu.kV;
+    Va -12.626734 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_5";
+    bus_i 5;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.0060063 pu.kV;
+    Va -11.192339 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_6";
+    bus_i 6;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.0082256 pu.kV;
+    Va -10.40833 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_7";
+    bus_i 7;
+    type PQ;
+    Pd 233.8 MW;
+    Qd 84 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 0.99839728 pu.kV;
+    Va -12.755626 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_8";
+    bus_i 8;
+    type PQ;
+    Pd 522 MW;
+    Qd 176.6 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 0.99787232 pu.kV;
+    Va -13.335844 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_9";
+    bus_i 9;
+    type PQ;
+    Pd 6.5 MW;
+    Qd -66.6 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.038332 pu.kV;
+    Va -14.178442 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_10";
+    bus_i 10;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.0178431 pu.kV;
+    Va -8.170875 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_11";
+    bus_i 11;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.0133858 pu.kV;
+    Va -8.9369663 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_12";
+    bus_i 12;
+    type PQ;
+    Pd 8.53 MW;
+    Qd 88 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.000815 pu.kV;
+    Va -8.9988236 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_13";
+    bus_i 13;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.014923 pu.kV;
+    Va -8.9299272 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_14";
+    bus_i 14;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.012319 pu.kV;
+    Va -10.715295 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_15";
+    bus_i 15;
+    type PQ;
+    Pd 320 MW;
+    Qd 153 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0161854 pu.kV;
+    Va -11.345399 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_16";
+    bus_i 16;
+    type PQ;
+    Pd 329 MW;
+    Qd 32.3 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0325203 pu.kV;
+    Va -10.033348 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_17";
+    bus_i 17;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0342365 pu.kV;
+    Va -11.116436 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_18";
+    bus_i 18;
+    type PQ;
+    Pd 158 MW;
+    Qd 30 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0315726 pu.kV;
+    Va -11.986168 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_19";
+    bus_i 19;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0501068 pu.kV;
+    Va -5.4100729 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_20";
+    bus_i 20;
+    type PQ;
+    Pd 680 MW;
+    Qd 103 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 0.99101054 pu.kV;
+    Va -6.8211783 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_21";
+    bus_i 21;
+    type PQ;
+    Pd 274 MW;
+    Qd 115 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0323192 pu.kV;
+    Va -7.6287461 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_22";
+    bus_i 22;
+    type PQ;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0501427 pu.kV;
+    Va -3.1831199 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_23";
+    bus_i 23;
+    type PQ;
+    Pd 247.5 MW;
+    Qd 84.6 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0451451 pu.kV;
+    Va -3.3812763 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_24";
+    bus_i 24;
+    type PQ;
+    Pd 308.6 MW;
+    Qd -92.2 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.038001 pu.kV;
+    Va -9.9137585 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_25";
+    bus_i 25;
+    type PQ;
+    Pd 224 MW;
+    Qd 47.2 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0576827 pu.kV;
+    Va -8.3692354 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_26";
+    bus_i 26;
+    type PQ;
+    Pd 139 MW;
+    Qd 17 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0525613 pu.kV;
+    Va -9.4387696 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_27";
+    bus_i 27;
+    type PQ;
+    Pd 281 MW;
+    Qd 75.5 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0383449 pu.kV;
+    Va -11.362152 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_28";
+    bus_i 28;
+    type PQ;
+    Pd 206 MW;
+    Qd 27.6 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0503737 pu.kV;
+    Va -5.9283592 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_29";
+    bus_i 29;
+    type PQ;
+    Pd 283.5 MW;
+    Qd 26.9 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0501149 pu.kV;
+    Va -3.1698741 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_30";
+    bus_i 30;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0499 pu.kV;
+    Va -7.3704746 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_31";
+    bus_i 31;
+    type REF;
+    Pd 9.2 MW;
+    Qd 4.6 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 0.982 pu.kV;
+    Va 0 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_32";
+    bus_i 32;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 0.9841 pu.kV;
+    Va -0.1884374 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_33";
+    bus_i 33;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 0.9972 pu.kV;
+    Va -0.19317445 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_34";
+    bus_i 34;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0123 pu.kV;
+    Va -1.631119 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_35";
+    bus_i 35;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0494 pu.kV;
+    Va 1.7765069 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_36";
+    bus_i 36;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0636 pu.kV;
+    Va 4.4684374 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_37";
+    bus_i 37;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 2;
+    Vm 1.0275 pu.kV;
+    Va -1.5828988 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_38";
+    bus_i 38;
+    type PV;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 3;
+    Vm 1.0265 pu.kV;
+    Va 3.8928177 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_39";
+    bus_i 39;
+    type PV;
+    Pd 1104 MW;
+    Qd 250 MVAr;
+    Gs 0 MW;
+    Bs 0 MVAr;
+    area 1;
+    Vm 1.03 pu.kV;
+    Va -14.535256 deg;
+    baseKV 345 kV;
+    zone 1;
+    Vmax 1.06 pu.kV;
+    Vmin 0.94 pu.kV;
+}
+
+//
+// gen
+//
+object pypower.gen
+{
+    name "pp_gen_1";
+    parent "pp_bus_30";
+    bus 30;
+    Pg 250 MW;
+    Qg 161.762 MVAr;
+    Qmax 400 MVAr;
+    Qmin 140 MVAr;
+    Vg 1.0499 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 1040 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_2";
+    parent "pp_bus_31";
+    bus 31;
+    Pg 677.871 MW;
+    Qg 221.574 MVAr;
+    Qmax 300 MVAr;
+    Qmin -100 MVAr;
+    Vg 0.982 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 646 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_3";
+    parent "pp_bus_32";
+    bus 32;
+    Pg 650 MW;
+    Qg 206.965 MVAr;
+    Qmax 300 MVAr;
+    Qmin 150 MVAr;
+    Vg 0.9841 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 725 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_4";
+    parent "pp_bus_33";
+    bus 33;
+    Pg 632 MW;
+    Qg 108.293 MVAr;
+    Qmax 250 MVAr;
+    Qmin 0 MVAr;
+    Vg 0.9972 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 652 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_5";
+    parent "pp_bus_34";
+    bus 34;
+    Pg 508 MW;
+    Qg 166.688 MVAr;
+    Qmax 167 MVAr;
+    Qmin 0 MVAr;
+    Vg 1.0123 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 508 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_6";
+    parent "pp_bus_35";
+    bus 35;
+    Pg 650 MW;
+    Qg 210.661 MVAr;
+    Qmax 300 MVAr;
+    Qmin -100 MVAr;
+    Vg 1.0494 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 687 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_7";
+    parent "pp_bus_36";
+    bus 36;
+    Pg 560 MW;
+    Qg 100.165 MVAr;
+    Qmax 240 MVAr;
+    Qmin 0 MVAr;
+    Vg 1.0636 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 580 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_8";
+    parent "pp_bus_37";
+    bus 37;
+    Pg 540 MW;
+    Qg -1.36945 MVAr;
+    Qmax 250 MVAr;
+    Qmin 0 MVAr;
+    Vg 1.0275 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 564 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_9";
+    parent "pp_bus_38";
+    bus 38;
+    Pg 830 MW;
+    Qg 21.7327 MVAr;
+    Qmax 300 MVAr;
+    Qmin -150 MVAr;
+    Vg 1.0265 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 865 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+object pypower.gen
+{
+    name "pp_gen_10";
+    parent "pp_bus_39";
+    bus 39;
+    Pg 1000 MW;
+    Qg 78.4674 MVAr;
+    Qmax 300 MVAr;
+    Qmin -100 MVAr;
+    Vg 1.03 pu.kV;
+    mBase 100 MVA;
+    status IN_SERVICE;
+    Pmax 1100 MW;
+    Pmin 0 MW;
+    Pc1 0 MW;
+    Pc2 0 MW;
+    Qc1min 0 MVAr;
+    Qc1max 0 MVAr;
+    Qc2min 0 MVAr;
+    Qc2max 0 MVAr;
+    ramp_agc 0 MW/min;
+    ramp_10 0 MW;
+    ramp_30 0 MW;
+    ramp_q 0 MVAr/min;
+    apf 0 pu;
+}
+
+//
+// branch
+//
+object pypower.branch
+{
+    name "pp_branch_1";
+    from "pp_bus_1";
+    to "pp_bus_2";
+    fbus 1;
+    tbus 2;
+    r 0.0035 pu.Ohm;
+    x 0.0411 pu.Ohm;
+    b 0.6987 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_2";
+    from "pp_bus_1";
+    to "pp_bus_39";
+    fbus 1;
+    tbus 39;
+    r 0.001 pu.Ohm;
+    x 0.025 pu.Ohm;
+    b 0.75 pu.S;
+    rateA 1000 MVA;
+    rateB 1000 MVA;
+    rateC 1000 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_3";
+    from "pp_bus_2";
+    to "pp_bus_3";
+    fbus 2;
+    tbus 3;
+    r 0.0013 pu.Ohm;
+    x 0.0151 pu.Ohm;
+    b 0.2572 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_4";
+    from "pp_bus_2";
+    to "pp_bus_25";
+    fbus 2;
+    tbus 25;
+    r 0.007 pu.Ohm;
+    x 0.0086 pu.Ohm;
+    b 0.146 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_5";
+    from "pp_bus_2";
+    to "pp_bus_30";
+    fbus 2;
+    tbus 30;
+    r 0 pu.Ohm;
+    x 0.0181 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.025 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_6";
+    from "pp_bus_3";
+    to "pp_bus_4";
+    fbus 3;
+    tbus 4;
+    r 0.0013 pu.Ohm;
+    x 0.0213 pu.Ohm;
+    b 0.2214 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_7";
+    from "pp_bus_3";
+    to "pp_bus_18";
+    fbus 3;
+    tbus 18;
+    r 0.0011 pu.Ohm;
+    x 0.0133 pu.Ohm;
+    b 0.2138 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_8";
+    from "pp_bus_4";
+    to "pp_bus_5";
+    fbus 4;
+    tbus 5;
+    r 0.0008 pu.Ohm;
+    x 0.0128 pu.Ohm;
+    b 0.1342 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_9";
+    from "pp_bus_4";
+    to "pp_bus_14";
+    fbus 4;
+    tbus 14;
+    r 0.0008 pu.Ohm;
+    x 0.0129 pu.Ohm;
+    b 0.1382 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_10";
+    from "pp_bus_5";
+    to "pp_bus_6";
+    fbus 5;
+    tbus 6;
+    r 0.0002 pu.Ohm;
+    x 0.0026 pu.Ohm;
+    b 0.0434 pu.S;
+    rateA 1200 MVA;
+    rateB 1200 MVA;
+    rateC 1200 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_11";
+    from "pp_bus_5";
+    to "pp_bus_8";
+    fbus 5;
+    tbus 8;
+    r 0.0008 pu.Ohm;
+    x 0.0112 pu.Ohm;
+    b 0.1476 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_12";
+    from "pp_bus_6";
+    to "pp_bus_7";
+    fbus 6;
+    tbus 7;
+    r 0.0006 pu.Ohm;
+    x 0.0092 pu.Ohm;
+    b 0.113 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_13";
+    from "pp_bus_6";
+    to "pp_bus_11";
+    fbus 6;
+    tbus 11;
+    r 0.0007 pu.Ohm;
+    x 0.0082 pu.Ohm;
+    b 0.1389 pu.S;
+    rateA 480 MVA;
+    rateB 480 MVA;
+    rateC 480 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_14";
+    from "pp_bus_6";
+    to "pp_bus_31";
+    fbus 6;
+    tbus 31;
+    r 0 pu.Ohm;
+    x 0.025 pu.Ohm;
+    b 0 pu.S;
+    rateA 1800 MVA;
+    rateB 1800 MVA;
+    rateC 1800 MVA;
+    ratio 1.07 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_15";
+    from "pp_bus_7";
+    to "pp_bus_8";
+    fbus 7;
+    tbus 8;
+    r 0.0004 pu.Ohm;
+    x 0.0046 pu.Ohm;
+    b 0.078 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_16";
+    from "pp_bus_8";
+    to "pp_bus_9";
+    fbus 8;
+    tbus 9;
+    r 0.0023 pu.Ohm;
+    x 0.0363 pu.Ohm;
+    b 0.3804 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_17";
+    from "pp_bus_9";
+    to "pp_bus_39";
+    fbus 9;
+    tbus 39;
+    r 0.001 pu.Ohm;
+    x 0.025 pu.Ohm;
+    b 1.2 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_18";
+    from "pp_bus_10";
+    to "pp_bus_11";
+    fbus 10;
+    tbus 11;
+    r 0.0004 pu.Ohm;
+    x 0.0043 pu.Ohm;
+    b 0.0729 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_19";
+    from "pp_bus_10";
+    to "pp_bus_13";
+    fbus 10;
+    tbus 13;
+    r 0.0004 pu.Ohm;
+    x 0.0043 pu.Ohm;
+    b 0.0729 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_20";
+    from "pp_bus_10";
+    to "pp_bus_32";
+    fbus 10;
+    tbus 32;
+    r 0 pu.Ohm;
+    x 0.02 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.07 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_21";
+    from "pp_bus_12";
+    to "pp_bus_11";
+    fbus 12;
+    tbus 11;
+    r 0.0016 pu.Ohm;
+    x 0.0435 pu.Ohm;
+    b 0 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 1.006 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_22";
+    from "pp_bus_12";
+    to "pp_bus_13";
+    fbus 12;
+    tbus 13;
+    r 0.0016 pu.Ohm;
+    x 0.0435 pu.Ohm;
+    b 0 pu.S;
+    rateA 500 MVA;
+    rateB 500 MVA;
+    rateC 500 MVA;
+    ratio 1.006 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_23";
+    from "pp_bus_13";
+    to "pp_bus_14";
+    fbus 13;
+    tbus 14;
+    r 0.0009 pu.Ohm;
+    x 0.0101 pu.Ohm;
+    b 0.1723 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_24";
+    from "pp_bus_14";
+    to "pp_bus_15";
+    fbus 14;
+    tbus 15;
+    r 0.0018 pu.Ohm;
+    x 0.0217 pu.Ohm;
+    b 0.366 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_25";
+    from "pp_bus_15";
+    to "pp_bus_16";
+    fbus 15;
+    tbus 16;
+    r 0.0009 pu.Ohm;
+    x 0.0094 pu.Ohm;
+    b 0.171 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_26";
+    from "pp_bus_16";
+    to "pp_bus_17";
+    fbus 16;
+    tbus 17;
+    r 0.0007 pu.Ohm;
+    x 0.0089 pu.Ohm;
+    b 0.1342 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_27";
+    from "pp_bus_16";
+    to "pp_bus_19";
+    fbus 16;
+    tbus 19;
+    r 0.0016 pu.Ohm;
+    x 0.0195 pu.Ohm;
+    b 0.304 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 2500 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_28";
+    from "pp_bus_16";
+    to "pp_bus_21";
+    fbus 16;
+    tbus 21;
+    r 0.0008 pu.Ohm;
+    x 0.0135 pu.Ohm;
+    b 0.2548 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_29";
+    from "pp_bus_16";
+    to "pp_bus_24";
+    fbus 16;
+    tbus 24;
+    r 0.0003 pu.Ohm;
+    x 0.0059 pu.Ohm;
+    b 0.068 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_30";
+    from "pp_bus_17";
+    to "pp_bus_18";
+    fbus 17;
+    tbus 18;
+    r 0.0007 pu.Ohm;
+    x 0.0082 pu.Ohm;
+    b 0.1319 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_31";
+    from "pp_bus_17";
+    to "pp_bus_27";
+    fbus 17;
+    tbus 27;
+    r 0.0013 pu.Ohm;
+    x 0.0173 pu.Ohm;
+    b 0.3216 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_32";
+    from "pp_bus_19";
+    to "pp_bus_20";
+    fbus 19;
+    tbus 20;
+    r 0.0007 pu.Ohm;
+    x 0.0138 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.06 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_33";
+    from "pp_bus_19";
+    to "pp_bus_33";
+    fbus 19;
+    tbus 33;
+    r 0.0007 pu.Ohm;
+    x 0.0142 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.07 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_34";
+    from "pp_bus_20";
+    to "pp_bus_34";
+    fbus 20;
+    tbus 34;
+    r 0.0009 pu.Ohm;
+    x 0.018 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.009 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_35";
+    from "pp_bus_21";
+    to "pp_bus_22";
+    fbus 21;
+    tbus 22;
+    r 0.0008 pu.Ohm;
+    x 0.014 pu.Ohm;
+    b 0.2565 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 900 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_36";
+    from "pp_bus_22";
+    to "pp_bus_23";
+    fbus 22;
+    tbus 23;
+    r 0.0006 pu.Ohm;
+    x 0.0096 pu.Ohm;
+    b 0.1846 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_37";
+    from "pp_bus_22";
+    to "pp_bus_35";
+    fbus 22;
+    tbus 35;
+    r 0 pu.Ohm;
+    x 0.0143 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.025 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_38";
+    from "pp_bus_23";
+    to "pp_bus_24";
+    fbus 23;
+    tbus 24;
+    r 0.0022 pu.Ohm;
+    x 0.035 pu.Ohm;
+    b 0.361 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_39";
+    from "pp_bus_23";
+    to "pp_bus_36";
+    fbus 23;
+    tbus 36;
+    r 0.0005 pu.Ohm;
+    x 0.0272 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_40";
+    from "pp_bus_25";
+    to "pp_bus_26";
+    fbus 25;
+    tbus 26;
+    r 0.0032 pu.Ohm;
+    x 0.0323 pu.Ohm;
+    b 0.531 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_41";
+    from "pp_bus_25";
+    to "pp_bus_37";
+    fbus 25;
+    tbus 37;
+    r 0.0006 pu.Ohm;
+    x 0.0232 pu.Ohm;
+    b 0 pu.S;
+    rateA 900 MVA;
+    rateB 900 MVA;
+    rateC 2500 MVA;
+    ratio 1.025 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_42";
+    from "pp_bus_26";
+    to "pp_bus_27";
+    fbus 26;
+    tbus 27;
+    r 0.0014 pu.Ohm;
+    x 0.0147 pu.Ohm;
+    b 0.2396 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_43";
+    from "pp_bus_26";
+    to "pp_bus_28";
+    fbus 26;
+    tbus 28;
+    r 0.0043 pu.Ohm;
+    x 0.0474 pu.Ohm;
+    b 0.7802 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_44";
+    from "pp_bus_26";
+    to "pp_bus_29";
+    fbus 26;
+    tbus 29;
+    r 0.0057 pu.Ohm;
+    x 0.0625 pu.Ohm;
+    b 1.029 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_45";
+    from "pp_bus_28";
+    to "pp_bus_29";
+    fbus 28;
+    tbus 29;
+    r 0.0014 pu.Ohm;
+    x 0.0151 pu.Ohm;
+    b 0.249 pu.S;
+    rateA 600 MVA;
+    rateB 600 MVA;
+    rateC 600 MVA;
+    ratio 0 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+object pypower.branch
+{
+    name "pp_branch_46";
+    from "pp_bus_29";
+    to "pp_bus_38";
+    fbus 29;
+    tbus 38;
+    r 0.0008 pu.Ohm;
+    x 0.0156 pu.Ohm;
+    b 0 pu.S;
+    rateA 1200 MVA;
+    rateB 1200 MVA;
+    rateC 2500 MVA;
+    ratio 1.025 pu;
+    angle 0 deg;
+    status IN;
+    angmin -360 deg;
+    angmax 360 deg;
+}
+
+//
+// gencost
+//
+object pypower.gencost
+{
+    name "pp_gencost_1";
+    parent "pp_gen_1";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_2";
+    parent "pp_gen_2";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_3";
+    parent "pp_gen_3";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_4";
+    parent "pp_gen_4";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_5";
+    parent "pp_gen_5";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_6";
+    parent "pp_gen_6";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_7";
+    parent "pp_gen_7";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_8";
+    parent "pp_gen_8";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_9";
+    parent "pp_gen_9";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
+object pypower.gencost
+{
+    name "pp_gencost_10";
+    parent "pp_gen_10";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.01,0.3,0.2";
+}
