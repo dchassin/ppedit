@@ -38,7 +38,7 @@ In the editor:
 
   - **Network**: drag buses, scroll to zoom, click a bus or branch to edit
     it in the side panel; add a generator, a branch, or a new linked bus from
-    the panel. Two styles:
+    the panel. Three styles:
     - *Simple*: buses colored by type; after a solve, by voltage.
     - *Classic* (utility one-line diagram conventions): generator buses
       are circles, load buses triangles, other buses squares, and
@@ -49,6 +49,21 @@ In the editor:
       percentage of `rateA` (blue light, red at or over the rating) and
       labeled with their MW flow, with an arrow in the direction of flow.
       Before a solve, the case's own Vm, Va and Pg values are shown.
+    - *One-line* (utility one-line diagram layout): buses are horizontal
+      bus bars and branches vertical lines, with power sources at the top
+      and loads at the bottom (rows follow the distance from the nearest
+      generator bus). Generators (circle with a sine wave) and loads
+      (arrow) connect to their bus bar through dashed pseudo-lines with a
+      disconnect switch showing their status (generator `status`; a load's
+      switch is open when its bus is type NONE). Branches have a circuit
+      breaker at each end (red filled closed, green hollow open) and
+      transformers show as interlocking circles. Branches, generators and
+      loads are labeled with MW and MVAr, positive downward (from the upper
+      bus to the lower one, into a bus from a generator, out of a bus to a
+      load), with an arrow in the direction of real power; branch flows
+      and loading colors appear after a solve. This style computes its own
+      layout (buses can't be dragged) and scales as a whole when zooming;
+      labels are hidden when zoomed far out.
   - **Buses / Generators / Branches / Gen costs**: spreadsheet-style
     editing; Enter or Tab commits, Escape cancels. Renumbering a bus updates
     the generators and branches that use it; deleting a bus asks before

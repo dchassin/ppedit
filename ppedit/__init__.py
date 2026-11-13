@@ -74,7 +74,10 @@ What is not promised
 
   - The network diagram is a force-directed layout, not geography; positions
     are not saved. In the classic style a bus with both generation and load
-    is drawn as a generator (circle); its label shows both MW values.
+    is drawn as a generator (circle); its label shows both MW values. The
+    one-line style computes its own layered layout from the topology (it
+    is not dragged); on large meshed cases its bus bars get long and
+    branches cross many of them.
 
   - Buses with no in-service branch are solved as isolated (type NONE)
     without changing the case.
