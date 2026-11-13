@@ -101,6 +101,12 @@ Nothing needs network or credentials.
   units under one transform (so it scales with zoom, unlike the other
   styles); buses are not draggable. Branches skipping rows cross bus bars
   (drawn with a white halo gap); dense on case118/case300.
+- Areas check box (`S.areas`, `showAreas()` in `app.js`): outlines each
+  area (convex hull of padded bus points, `areaRegions`) without changing
+  bus colors. Turning it on re-runs the force layout with area cohesion and
+  gives each area its own column strip in the one-line layout (part of the
+  `olCache` signature); geodata positions are fixed, so hulls may enclose
+  other areas' buses there.
 
 ## Working rules
 

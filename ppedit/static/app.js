@@ -354,6 +354,9 @@ function layout(force = false) {
   const idx = new Map(buses.map((b, i) => [b, i]));
   const E = edges.map(([a, b]) => [idx.get(a), idx.get(b)]);
   const k = 55, iters = n > 200 ? 220 : 400;
+  // with areas shown, buses are pulled toward their area's center and pushed harder
+  // away from other areas' buses, so each area occupies its own region
+  const area = showAreas() ? c.tables.bus.map(b => b[6]) : null;
   let temp = R / 4;
   for (let it = 0; it < iters; it++) {
     const D = P.map(() => ({ x: 0, y: 0 }));
@@ -362,13 +365,18 @@ function layout(force = false) {
       let d2 = dx * dx + dy * dy;
       if (d2 < 0.01) { dx = Math.random(); dy = Math.random(); d2 = 1; }
       if (d2 > 160000) continue;
-      const f = k * k / d2;
+      const f = k * k / d2 * (area && area[i] !== area[j] ? 2.5 : 1);
       D[i].x += dx * f; D[i].y += dy * f; D[j].x -= dx * f; D[j].y -= dy * f;
     }
     for (const [a, b] of E) {
       const dx = P[a].x - P[b].x, dy = P[a].y - P[b].y;
       const d = Math.sqrt(dx * dx + dy * dy) || 0.01, f = d / k;
       D[a].x -= dx * f; D[a].y -= dy * f; D[b].x += dx * f; D[b].y += dy * f;
+    }
+    if (area) {
+      const ctr = new Map();
+      P.forEach((p, i) => { const q = ctr.get(area[i]) || { x: 0, y: 0, n: 0 }; q.x += p.x; q.y += p.y; q.n++; ctr.set(area[i], q); });
+      P.forEach((p, i) => { const q = ctr.get(area[i]); D[i].x += (q.x / q.n - p.x) * 0.08; D[i].y += (q.y / q.n - p.y) * 0.08; });
     }
     for (let i = 0; i < n; i++) {
       if (!moving.has(buses[i])) continue;
@@ -390,8 +398,8 @@ function fitView() {
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const W = svg.clientWidth - (S.pick ? 330 : 0), H = svg.clientHeight;
   const kmax = useGeo() ? 0.05 : 4; // geodata: metres, at most 20 m per pixel
-  const k = Math.min(kmax, Math.min((W - 80) / Math.max(1, x1 - x0), (H - 80) / Math.max(1, y1 - y0)));
-  S.zoom = { k, x: W / 2 - k * (x0 + x1) / 2, y: H / 2 - k * (y0 + y1) / 2 };
+  const k = Math.min(kmax, Math.min((W - 80) / Math.max(1, x1 - x0), (H - 100) / Math.max(1, y1 - y0)));
+  S.zoom = { k, x: W / 2 - k * (x0 + x1) / 2, y: (H + 20) / 2 - k * (y0 + y1) / 2 }; // 60 px at the top clears the toolbar
 }
 
 let needFit = true;
@@ -407,24 +415,62 @@ function areaList() {
   const c = S.state.case;
   return [...new Set([...c.tables.bus.map(b => b[6]), ...c.tables.areas.map(a => a[0])])].sort((a, b) => a - b);
 }
-function areaColors() {
-  // area number -> color when area coloring is on and there is more than one area, else null
-  const list = areaList();
-  if (!S.areas || list.length < 2) return null;
-  return new Map(list.map((a, i) => [a, AREA_COLORS[i % AREA_COLORS.length]]));
+function showAreas() {
+  // area regions are drawn when turned on and the case has more than one area
+  return S.areas && areaList().length > 1;
 }
-function areaLegend(colors) {
-  if (!colors) return;
+function areaOutline(a) {
+  // outline color of an area region (buses keep their own colors)
+  const list = areaList();
+  return AREA_COLORS[Math.max(0, list.indexOf(a)) % AREA_COLORS.length];
+}
+function hull(pts) {
+  // convex hull (Andrew's monotone chain), counter-clockwise
+  const P = [...pts].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (P.length < 3) return P;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [], up = [];
+  for (const p of P) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (const p of P.reverse()) { while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p) <= 0) up.pop(); up.push(p); }
+  return lo.slice(0, -1).concat(up.slice(0, -1));
+}
+function areaRegions(points, pad, cls = "") {
+  // one bounded, labeled region per area around its buses' points: [{area, x, y}],
+  // in the drawing's own units; the outline is the convex hull of a pad-radius disc at each point
+  const groups = new Map();
+  for (const p of points) {
+    if (!groups.has(p.area)) groups.set(p.area, []);
+    for (let j = 0; j < 16; j++) {
+      const t = 2 * Math.PI * j / 16;
+      groups.get(p.area).push({ x: p.x + pad * Math.cos(t), y: p.y + pad * Math.sin(t) });
+    }
+  }
+  const regions = sv("g", { class: `area-regions ${cls}` }), names = sv("g", { class: `area-regions ${cls}` });
   const refs = new Map(S.state.case.tables.areas.map(a => [a[0], a[1]]));
-  const L = $("#legend");
-  L.append(h("div", {}, "Areas (halo color; ★ price reference bus)"),
-    h("div", { class: "row wrap" }, [...colors].map(([a, col]) =>
-      h("span", { class: "area-key", title: refs.has(a) ? `area ${a}, price reference bus ${refs.get(a)}` : `area ${a} (no areas row)` },
-        h("span", { class: "sw", style: `background:${col}` }), `${a}`))));
+  for (const [a, pts] of [...groups].sort((u, v) => u[0] - v[0])) {
+    const H = hull(pts), color = areaOutline(a);
+    const path = sv("path", { d: "M" + H.map(q => `${q.x},${q.y}`).join("L") + "Z", class: "area-region", stroke: color, fill: color });
+    const title = sv("title");
+    title.textContent = `area ${a}: ${points.filter(p => p.area === a).length} bus(es)` +
+      (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)");
+    path.append(title);
+    regions.append(path);
+    const top = H.reduce((m, q) => (q.y < m.y ? q : m), H[0]);
+    const label = sv("text", { x: top.x, y: top.y - 4, class: "area-name", fill: color, "text-anchor": "middle" });
+    label.textContent = `Area ${a}`;
+    names.append(label);
+  }
+  return { regions, names };
+}
+function areaLegend() {
+  if (!showAreas()) return;
+  $("#legend").append(h("div", {}, "Outlines: areas (★ price reference bus)"));
 }
 function setAreas(on) {
   S.areas = on;
   try { localStorage.setItem("ppedit.areas", on ? "1" : "0"); } catch (_) { /* storage unavailable */ }
+  if (S.style === "oneline") needFit = true; // the one-line layout changes too
+  else if (!useGeo()) { layout(true); needFit = true; } // group or ungroup areas
   renderNetwork();
 }
 
@@ -465,7 +511,7 @@ function renderNetwork() {
   const ids = new Set(c.tables.bus.map(b => b[0]));
   const sum = busSummary();
   const errBus = new Set(S.state.issues.filter(i => i.table === "bus" && i.level === "error" && i.row !== null).map(i => i.row));
-  const areaCol = areaColors(), priceRef = new Set(c.tables.areas.map(a => a[1]));
+  const areas = showAreas(), priceRef = new Set(c.tables.areas.map(a => a[1]));
   const labels = sv("g"); // line labels drawn above lines, below nodes
   // classic style: arrow in the direction of real power flow and |MW| label at mid-line
   const flowMark = (p, q, mw, color) => {
@@ -567,8 +613,7 @@ function renderNetwork() {
     const node = sv("g", { class: cls.join(" "), transform: `translate(${p.x},${p.y})`, "data-bus": b[0] });
     const v = sum.volt.get(b[0]);
     const hasGen = sum.ngen.get(b[0]) > 0, hasLoad = b[2] !== 0 || b[3] !== 0;
-    if (areaCol) {
-      node.append(sv("circle", { r: 15, class: "area-halo", fill: areaCol.get(b[6]) }));
+    if (areas) {
       if (priceRef.has(b[0])) {
         const star = sv("text", { x: -15, y: -9, class: "area-star", "text-anchor": "middle" });
         star.textContent = "★";
@@ -612,10 +657,22 @@ function renderNetwork() {
     node.addEventListener("pointerdown", e => startDrag(e, b[0], i));
     g.append(node);
   });
+  if (areas) { // regions under the network, names above the lines
+    const pts = [];
+    c.tables.bus.forEach(b => {
+      const p = W(b[0]);
+      if (!p) return;
+      pts.push({ area: b[6], x: p.x, y: p.y });
+      if (classic) pts.push({ area: b[6], x: p.x + 58, y: p.y + 14 }); // bus labels
+    });
+    const R = areaRegions(pts, classic ? 22 : 20);
+    g.prepend(R.regions);
+    g.insertBefore(R.names, labels.nextSibling);
+  }
   svg.classList.remove("oneline");
   svg.replaceChildren(...(geo ? [renderMap(svg.clientWidth, svg.clientHeight)] : []), g);
   renderLegend(!!res, classic);
-  areaLegend(areaCol);
+  areaLegend();
   if (G && (G.estimated.size || G.missing)) {
     const L = $("#legend");
     if (G.estimated.size) L.append(h("div", {}, `Dashed: ${G.estimated.size} bus(es) without geodata, placed near neighbors`));
@@ -648,7 +705,9 @@ function onelineLayout() {
   const ids = new Set(buses);
   const brs = T.branch.map((b, i) => [b, i]).filter(([b]) => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]);
   const dcs = T.dcline.map((d, i) => [d, i]).filter(([d]) => ids.has(d[0]) && ids.has(d[1]) && d[0] !== d[1]);
-  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0]), dcs.map(([d]) => [d[0], d[1]])]);
+  const grouped = showAreas(), area = new Map(T.bus.map(b => [b[0], b[6]]));
+  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0]), dcs.map(([d]) => [d[0], d[1]]),
+    grouped ? T.bus.map(b => b[6]) : null]);
   if (olCache && olCache.sig === sig) return olCache;
   const adj = new Map(buses.map(b => [b, new Set()]));
   [...brs, ...dcs].forEach(([b]) => { adj.get(b[0]).add(b[1]); adj.get(b[1]).add(b[0]); });
@@ -702,6 +761,16 @@ function onelineLayout() {
       place(rows[ri]);
     }
   }
+  // with areas shown, each area gets its own strip of columns (areas left to right in
+  // number order, the sweep order kept within an area), so area regions don't overlap
+  const alist = areaList();
+  if (grouped) rows.forEach(r => {
+    alist.forEach((a, ai) => {
+      const mine = r.filter(b => area.get(b) === a);
+      mine.forEach((b, i) => u.set(b, (ai + (i + 0.5) / mine.length) / alist.length));
+    });
+    r.sort((a, b) => u.get(a) - u.get(b));
+  });
   // columns: one per generator, load, branch and DC line (lines sit between their two buses)
   const slots = [], own = new Map(buses.map(b => [b, []]));
   const add = (key, kind, ref, ...on) => {
@@ -717,6 +786,15 @@ function onelineLayout() {
   buses.forEach(b => { if (!own.get(b).length) add(u.get(b), "bare", b, b); });
   slots.sort((a, b) => a.key - b.key);
   slots.forEach((s, i) => (s.x = i * OL.dx));
+  if (grouped) { // a gap between area strips leaves room for the bus labels and the box edges
+    let shift = 0, prev = null;
+    slots.forEach(s => {
+      const strip = Math.min(alist.length - 1, Math.floor(s.key * alist.length));
+      if (prev !== null && strip !== prev) shift += OL.label + 3 * OL.pad;
+      prev = strip;
+      s.x += shift;
+    });
+  }
   const bar = new Map(buses.map(b => {
     const xs = own.get(b).map(s => s.x);
     return [b, { x0: Math.min(...xs) - OL.pad, x1: Math.max(...xs) + OL.pad, y: 0 }];
@@ -745,7 +823,26 @@ function onelineLayout() {
   const corners = buses.length ? [{ x: Math.min(...xs0), y: 0 }, { x: Math.max(...xs1), y: y - OL.gap }] : [];
   const col = kind => new Map(slots.filter(s => s.kind === kind).map(s => [s.ref, s.x]));
   const ys = [...new Set([...bar.values()].map(B => B.y))].sort((a, b) => a - b);
-  olCache = { sig, bar, ys, corners, gen: col("gen"), load: col("load"), branch: col("branch"), dcline: col("dcline") };
+  // area boxes: the columns of each area's generators, loads and internal lines (ties
+  // between areas are left out, so the strips are disjoint), over the rows it occupies
+  const boxes = new Map();
+  if (grouped) buses.forEach(b => {
+    const B = bar.get(b), a = area.get(b);
+    const inside = own.get(b).filter(sl => !(sl.kind === "branch" || sl.kind === "dcline") ||
+      (sl.kind === "branch" ? brs.find(([, i]) => i === sl.ref)[0] : dcs.find(([, i]) => i === sl.ref)[0]).slice(0, 2).every(v => area.get(v) === a));
+    const xs = inside.length ? inside.map(sl => sl.x) : [B.x0 + OL.pad, B.x1 - OL.pad];
+    const box = boxes.get(a) || { x0: Infinity, x1: -Infinity, y0: Infinity, y1: -Infinity };
+    box.x0 = Math.min(box.x0, Math.min(...xs) - OL.pad - OL.label);
+    box.x1 = Math.max(box.x1, Math.max(...xs) + OL.pad + 8);
+    box.y0 = Math.min(box.y0, B.y - OL.gen + 14);
+    box.y1 = Math.max(box.y1, B.y + OL.load - 14);
+    boxes.set(a, box);
+  });
+  if (corners.length) boxes.forEach(B => { // fit the boxes and their names too
+    corners[0] = { x: Math.min(corners[0].x, B.x0), y: Math.min(corners[0].y, B.y0 - 30) };
+    corners[1] = { x: Math.max(corners[1].x, B.x1), y: Math.max(corners[1].y, B.y1) };
+  });
+  olCache = { sig, bar, ys, corners, boxes, gen: col("gen"), load: col("load"), branch: col("branch"), dcline: col("dcline") };
   return olCache;
 }
 
@@ -902,11 +999,10 @@ function renderOneline() {
       (rd ? `\nPf ${fmt(rd.Pf, 1)} MW, Pt ${fmt(rd.Pt, 1)} MW, loss ${fmt(rd.loss_MW, 2)} MW` : ""));
     lines.append(hit);
   });
-  // bus bars with number and voltage at the left end (on an area-colored band when areas are shown)
-  const areaCol = areaColors(), priceRef = new Set(T.areas.map(a => a[1]));
+  // bus bars with number and voltage at the left end
+  const areas = showAreas(), priceRef = new Set(T.areas.map(a => a[1]));
   T.bus.forEach((b, i) => {
     const B = L.bar.get(b[0]), v = sum.volt.get(b[0]);
-    if (areaCol) bars.append(sv("rect", { x: B.x0 - 6, y: B.y - 9, width: B.x1 - B.x0 + 12, height: 18, rx: 4, class: "area-band", fill: areaCol.get(b[6]) }));
     const cls = ["ol-bar"];
     if (b[1] === 4 || (T.bus.length > 1 && !sum.conn.has(b[0]))) cls.push("isolated");
     if (errBus.has(i)) cls.push("err");
@@ -918,7 +1014,7 @@ function renderOneline() {
     if (showText) {
       const t = sv("text", { x: B.x0 - 6, y: B.y - 3, class: "ol-bus", "text-anchor": "end" });
       const t1 = sv("tspan", { x: B.x0 - 6, class: "num" });
-      t1.textContent = `${areaCol && priceRef.has(b[0]) ? "★ " : ""}${b[1] === 3 ? "REF " : ""}${b[0]}`;
+      t1.textContent = `${areas && priceRef.has(b[0]) ? "★ " : ""}${b[1] === 3 ? "REF " : ""}${b[0]}`;
       const t2 = sv("tspan", { x: B.x0 - 6, dy: "1.2em" });
       t2.textContent = `${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`;
       t.append(t1, t2);
@@ -926,9 +1022,24 @@ function renderOneline() {
     }
   });
   g.append(wires, bars, lines, text);
+  if (areas) { // a box per area around its strip of columns
+    const regions = sv("g", { class: "area-regions ol" }), names = sv("g", { class: "area-regions ol" });
+    const refs = new Map(T.areas.map(a => [a[0], a[1]]));
+    for (const [a, B] of [...L.boxes].sort((p, q) => p[0] - q[0])) {
+      const color = areaOutline(a);
+      const r = sv("rect", { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: B.y1 - B.y0, rx: 10, class: "area-region", stroke: color, fill: color });
+      tip(r, `area ${a}: ${T.bus.filter(b => b[6] === a).length} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)"));
+      regions.append(r);
+      const t = sv("text", { x: B.x0 + 8 / k, y: B.y0 - 6 / k, class: "area-name", fill: color, style: `font-size:${13 / k}px;stroke-width:${3 / k}px` });
+      t.textContent = `Area ${a}`;
+      names.append(t);
+    }
+    g.prepend(regions);
+    g.append(names);
+  }
   svg.replaceChildren(g);
   renderLegend(!!res, false, true);
-  areaLegend(areaCol);
+  areaLegend();
   renderInspector();
   if (!T.bus.length) {
     const t = sv("text", { x: svg.clientWidth / 2, y: svg.clientHeight / 2, "text-anchor": "middle", fill: "#69726e" });
@@ -1085,7 +1196,7 @@ function updateNetTools() {
   const na = areaList().length, ab = $("#net-areas");
   ab.checked = S.areas;
   ab.disabled = na < 2;
-  ab.closest("label").title = na < 2 ? "Color buses by area: the case has only one area" : `Color buses by area (${na} areas)`;
+  ab.closest("label").title = na < 2 ? "Show areas: the case has only one area" : `Outline and label the ${na} areas (the force layout groups each area's buses)`;
   $("#geodata-export").disabled = !has;
   $("#geodata-clear").disabled = !has;
   for (const cb of $$("#map-menu [data-layer]")) {

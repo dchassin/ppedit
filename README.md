@@ -86,9 +86,12 @@ In the editor:
       `longitude`. **Map ▸ Download CSV** exports the geodata.
 
     The **Areas** check box (enabled when the case has more than one area)
-    puts a colored halo behind each bus (a colored band behind each bus bar
-    in the one-line style) by its `area`, and marks price reference buses
-    with ★.
+    draws a dashed, labeled outline around the buses of each area and marks
+    price reference buses with ★; bus colors don't change. The force layout
+    then groups each area's buses together, and the one-line style gives
+    each area its own strip of columns (areas left to right in number
+    order). In the geodata layout the outlines follow the bus locations, so
+    a widely spread area can enclose another area's buses.
   - **Buses / Generators / Branches / Gen costs / DC lines / DC line
     costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines

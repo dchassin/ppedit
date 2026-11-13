@@ -160,12 +160,10 @@ td.bad input { color: var(--err); }
 .net-check:hover:not(:has(:disabled)) { border-color: var(--accent); }
 .net-check:has(:disabled) { opacity: .45; cursor: default; }
 /* areas */
-#net .node circle.area-halo { stroke: none; opacity: .35; pointer-events: none; }
 #net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
-#net .area-band { stroke: none; opacity: .45; pointer-events: none; }
+#net .area-region { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+#net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
 .res-block.wide { grid-column: 1 / -1; }
-.legend .row.wrap { flex-wrap: wrap; max-width: 220px; }
-.legend .area-key { display: inline-flex; align-items: center; gap: 3px; margin-right: 6px; }
 .dropdown.left { left: 0; right: auto; }
 .dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
 .dropdown label:hover { background: var(--sel); }
