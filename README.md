@@ -34,6 +34,7 @@ Install using `pip`:
 The editor opens at http://localhost:8050/. Start from **New ▸** to load
 any PYPOWER built-in case (`case9`, `case14`, ..., `case300`), or **Open…**
 to upload a file. **Save as ▸** downloads `.py`, `.json` or `.glm`.
+**Exit** stops the server after asking for confirmation.
 
 In the editor:
 

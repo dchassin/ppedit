@@ -39,6 +39,8 @@ last edit changed cells other than the one edited). Errors return
     with `"confirm": true` unless `force` is true
   - `GET  /api/export?format=py|json|glm|csv`: download the case (`csv`:
     its geodata)
+  - `POST /api/exit`: `{}` stop the server (unsaved changes are lost);
+    returns `{"exit": true}` and shuts down shortly after responding
 
 Caveats
 -------
@@ -50,6 +52,7 @@ Caveats
 import copy
 import logging
 import os
+import signal
 import threading
 
 from flask import Flask, jsonify, request, send_from_directory, Response
@@ -65,6 +68,10 @@ HISTORY = 200
 """Number of undo steps kept"""
 
 _LOOPBACK = {"localhost","127.0.0.1","::1","[::1]"}
+
+def _shutdown():
+    """Stop `ppedit serve` as Ctrl-C would"""
+    signal.raise_signal(signal.SIGINT)
 
 class Editor:
     """In-memory editing session: the case, its file, and undo history
@@ -155,7 +162,8 @@ class Editor:
             "cascade": cascade,
         }
 
-def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -> Flask:
+def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
+        shutdown=None) -> Flask:
     """Create the editor application
 
     Arguments
@@ -167,6 +175,10 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -
 
       - `allow_remote`: accept requests whose `Host` is not a loopback name
 
+      - `shutdown`: function called (shortly after responding) by
+        `POST /api/exit` to stop the server; default raises `SIGINT` in
+        the server process
+
     Returns
     -------
 
@@ -175,6 +187,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -
     app = Flask(__name__,static_folder=None)
     editor = Editor(case,path)
     app.config["EDITOR"] = editor
+    app.config["SHUTDOWN"] = shutdown or _shutdown
 
     @app.before_request
     def _guard():
@@ -348,5 +361,11 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -
         mime = {"json":"application/json","csv":"text/csv"}.get(fmt,"text/plain")
         return Response(text,mimetype=mime,headers={
             "Content-Disposition":f'attachment; filename="{name}{ext}"'})
+
+    @app.post("/api/exit")
+    def exit_server():
+        _logger.info("exit requested by the editor")
+        threading.Timer(0.2,app.config["SHUTDOWN"]).start()
+        return jsonify(exit=True)
 
     return app

@@ -1538,6 +1538,7 @@ async function onAction(btn) {
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
+    else if (a === "exit") await exitServer();
   } catch (_) { /* toast already shown */ }
 }
 
@@ -1551,6 +1552,19 @@ async function saveTo(path) {
     await act("/api/save", { ...body, force: true });
   }
   toast(`Saved ${S.state.path}`);
+}
+
+async function exitServer() {
+  const msg = S.state.dirty
+    ? "The case has unsaved changes that will be lost.\n\nStop the ppedit server anyway?"
+    : "Stop the ppedit server? The editor will stop working until you run ppedit serve again.";
+  if (!confirm(msg)) return;
+  try { await api("/api/exit", {}); }
+  catch (err) { return toast(err.message, true); }
+  document.body.replaceChildren(h("div", { class: "stopped" },
+    h("h1", {}, "ppedit server stopped"),
+    h("p", {}, "You can close this tab. Run ppedit serve to start the editor again.")));
+  document.title = "ppedit (stopped)";
 }
 
 function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("open")); }

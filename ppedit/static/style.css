@@ -295,3 +295,7 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
   box-shadow: 0 6px 20px rgba(0,0,0,.25);
 }
 .toast.error { background: var(--err); }
+
+.topbar button.exit:hover { background: #8a2e2e; border-color: #a33a3a; }
+.stopped { max-width: 32em; margin: 20vh auto; text-align: center; color: #44514d; }
+.stopped h1 { font-size: 1.4em; color: #1f6f5c; }
