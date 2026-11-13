@@ -32,7 +32,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
 | `ppedit/static/index.html` | editor page layout | |
 | `ppedit/static/style.css` | editor styles | |
-| `ppedit/static/app.js` | editor logic: tables, network diagram (classic and one-line styles), results, issues | checked by hand (see `CLAUDE.md`) |
+| `ppedit/static/app.js` | editor logic: tables, network diagram (simple and classic styles), results, issues | checked by hand (see `CLAUDE.md`) |
 | `ppedit/.gitignore` | generated-output ignores | |
 
 ## Tests

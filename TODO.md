@@ -8,7 +8,7 @@
 - [x] Utility one-line diagram style (shapes by equipment, angle/MW labels, loading colors, MW flow labels)
 
 - [ ] Preserve non-solver GLM objects (`load`, `powerplant`, `powerline`, `shunt`, ...) on round trip, ideally by editing them too
-- [ ] Label overlap avoidance in the one-line style on dense networks
+- [ ] Label overlap avoidance in the classic style on dense networks
 - [ ] Persist network layout (e.g., GLM `latitude`/`longitude` or `geodata`)
 - [ ] `dcline` and `areas` tables
 - [ ] Copy/paste of cell ranges to and from spreadsheets

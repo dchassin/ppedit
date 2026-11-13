@@ -75,10 +75,10 @@
       <div class="net-tools">
         <button data-action="relayout" title="Recompute layout">Re-layout</button>
         <button data-action="fit" title="Fit to window">Fit</button>
-        <span class="seg" role="group" aria-label="Diagram style">
-          <button data-action="style" data-style="classic" title="Classic view: bus type colors">Classic</button>
-          <button data-action="style" data-style="oneline" title="Utility one-line diagram: shapes by equipment, angles, MW and flows">One-line</button>
-        </span>
+        <select id="net-style" aria-label="Diagram style" title="Diagram style">
+          <option value="simple" title="Simple view: bus type colors">Simple</option>
+          <option value="classic" title="Classic utility one-line diagram: shapes by equipment, angles, MW and flows">Classic</option>
+        </select>
       </div>
       <aside id="inspector" class="inspector" hidden></aside>
     </div>
