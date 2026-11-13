@@ -39,8 +39,8 @@ In the editor:
   - **Network**: drag buses, scroll to zoom, click a bus or branch to edit
     it in the side panel; add a generator, a branch, or a new linked bus from
     the panel. Two styles:
-    - *Classic*: buses colored by type; after a solve, by voltage.
-    - *One-line* (utility on-line diagram conventions): generator buses
+    - *Simple*: buses colored by type; after a solve, by voltage.
+    - *Classic* (utility one-line diagram conventions): generator buses
       are circles, load buses triangles, other buses squares, and
       disconnected buses are drawn empty; transformers show as interlocking
       circles. Buses are colored by voltage magnitude (blue low, red high)

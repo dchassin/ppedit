@@ -72,7 +72,7 @@ Nothing needs network or credentials.
 - Network positions are not persisted. The diagram is drawn in screen
   coordinates (symbols and text keep their size when zooming), so pan/zoom
   re-renders through `scheduleRender()`; fine to ~300 buses.
-- One-line style: a bus with generation and load is drawn as a circle.
+- Classic style: a bus with generation and load is drawn as a circle.
 
 ## Working rules
 

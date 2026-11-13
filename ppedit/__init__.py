@@ -73,7 +73,7 @@ What is not promised
   - `dcline` and `areas` data are not edited.
 
   - The network diagram is a force-directed layout, not geography; positions
-    are not saved. In the one-line style a bus with both generation and load
+    are not saved. In the classic style a bus with both generation and load
     is drawn as a generator (circle); its label shows both MW values.
 
   - Buses with no in-service branch are solved as isolated (type NONE)

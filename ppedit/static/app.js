@@ -10,7 +10,7 @@ const S = {
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch", index}
-  style: (() => { try { return localStorage.getItem("ppedit.style") || "classic"; } catch (_) { return "classic"; } })(),
+  style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
 };
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -379,8 +379,8 @@ function fitView() {
 }
 
 let needFit = true;
-// one-line style: blue = low, red = high (voltage and loading)
-function vColorOneLine(vm) { return vColor(2 - vm); }
+// classic style: blue = low, red = high (voltage and loading)
+function vColorClassic(vm) { return vColor(2 - vm); }
 function loadColor(L) { return vColor(1 - (Math.min(L, 150) - 50) / 50 * 0.06); }
 const NEUTRAL_LINE = "#8d9792";
 
@@ -403,11 +403,11 @@ function busSummary() {
 function renderNetwork() {
   const svg = $("#net");
   const c = S.state.case, res = S.state.result && S.state.result.success ? S.state.result : null;
-  const oneline = S.style === "oneline";
+  const classic = S.style === "classic";
   layout();
   if (needFit && svg.clientWidth) { fitView(); needFit = false; }
   $("#net-style").value = S.style;
-  svg.classList.toggle("oneline", oneline);
+  svg.classList.toggle("classic", classic);
   // draw in screen coordinates so symbols and text keep their size when zooming
   const { k, x, y } = S.zoom;
   const W = id => { const p = S.pos[id]; return p ? { x: p.x * k + x, y: p.y * k + y } : null; };
@@ -422,21 +422,21 @@ function renderNetwork() {
     if (!ids.has(b[0]) || !ids.has(b[1]) || !p || !q) return;
     const xfmr = (b[8] && b[8] !== 0) || b[9];
     const cls = ["edge"];
-    if (xfmr && !oneline) cls.push("xfmr");
+    if (xfmr && !classic) cls.push("xfmr");
     if (b[10] === 0) cls.push("out");
     if (S.pick && S.pick.kind === "branch" && S.pick.index === i) cls.push("sel");
     const line = sv("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: cls.join(" ") });
     const rb = res && res.branch[i] && b[10] === 1 ? res.branch[i] : null;
     if (rb && rb.loading_pct !== null && !cls.includes("sel")) {
       const L = rb.loading_pct;
-      if (oneline) {
+      if (classic) {
         line.style.stroke = loadColor(L);
         line.style.strokeWidth = L > 100 ? 3.5 : 2.4;
       } else {
         line.style.stroke = L > 100 ? "#b42318" : L > 80 ? "#c27c0e" : "#5f8f80";
         line.style.strokeWidth = 1.2 + Math.min(L, 120) / 30;
       }
-    } else if (oneline && b[10] === 1 && !cls.includes("sel")) {
+    } else if (classic && b[10] === 1 && !cls.includes("sel")) {
       line.style.strokeWidth = 2;
     }
     const hit = sv("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: "edge-hit" });
@@ -445,7 +445,7 @@ function renderNetwork() {
     hit.append(title);
     hit.addEventListener("click", e => { e.stopPropagation(); pick("branch", i); });
     g.append(line, hit);
-    if (oneline) {
+    if (classic) {
       const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
       const ux = dx / len, uy = dy / len;
       if (xfmr) { // two interlocking circles a quarter of the way from the from bus
@@ -485,10 +485,10 @@ function renderNetwork() {
     const v = sum.volt.get(b[0]);
     const hasGen = sum.ngen.get(b[0]) > 0, hasLoad = b[2] !== 0 || b[3] !== 0;
     let r;
-    if (oneline) {
+    if (classic) {
       const isolated = b[1] === 4 || (c.tables.bus.length > 1 && !sum.conn.has(b[0]));
       if (isolated) cls.push("isolated");
-      const fill = isolated ? "none" : vColorOneLine(v.Vm);
+      const fill = isolated ? "none" : vColorClassic(v.Vm);
       let shape;
       if (hasGen) { r = 8; shape = sv("circle", { r, class: "body", fill }); }
       else if (hasLoad) { r = 9; shape = sv("path", { d: `M0,${-r} L${r * 0.95},${r * 0.7} L${-r * 0.95},${r * 0.7} Z`, class: "body", fill }); }
@@ -522,7 +522,7 @@ function renderNetwork() {
     g.append(node);
   });
   svg.replaceChildren(g);
-  renderLegend(!!res, oneline);
+  renderLegend(!!res, classic);
   renderInspector();
   if (!c.tables.bus.length) {
     const t = sv("text", { x: svg.clientWidth / 2, y: svg.clientHeight / 2, "text-anchor": "middle", fill: "#69726e" });
@@ -531,9 +531,9 @@ function renderNetwork() {
   }
 }
 
-function renderLegend(solved, oneline) {
+function renderLegend(solved, classic) {
   const L = $("#legend");
-  if (oneline) {
+  if (classic) {
     const shape = (svgInner) => {
       const s = sv("svg", { width: 16, height: 16, viewBox: "-8 -8 16 16" });
       s.innerHTML = svgInner;
@@ -547,7 +547,7 @@ function renderLegend(solved, oneline) {
       h("div", { class: "row" }, shape(`<rect x="-5" y="-5" width="10" height="10" fill="none" ${st}/>`), "disconnected"),
       h("div", { class: "row" }, shape(`<circle r="3" fill="#dee2dd" ${st}/><circle r="6.5" fill="none" ${st}/>`), "reference bus"),
       h("div", {}, `Voltage magnitude (pu)${solved ? "" : " — case values; run PF for solution"}`),
-      h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColorOneLine(.94)},${vColorOneLine(1)},${vColorOneLine(1.06)})` }), "1.06"),
+      h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColorClassic(.94)},${vColorClassic(1)},${vColorClassic(1.06)})` }), "1.06"),
       h("div", {}, solved ? "Line loading (% of rateA), MW flow labels" : "Line loading and MW flows shown after a solve"),
       h("div", { class: "row" }, "0%", h("span", { class: "bar", style: `background:linear-gradient(90deg,${loadColor(0)},${loadColor(50)},${loadColor(100)})` }), "100%+"),
       h("div", {}, "Labels: bus, angle, G = generation, L = load"));
@@ -567,7 +567,7 @@ function renderLegend(solved, oneline) {
 
 function setStyle(style) {
   S.style = style;
-  try { localStorage.setItem("ppedit.style", style); } catch (_) { /* storage unavailable */ }
+  try { localStorage.setItem("ppedit.diagram", style); } catch (_) { /* storage unavailable */ }
   renderNetwork();
 }
 
