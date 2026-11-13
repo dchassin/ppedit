@@ -6,7 +6,7 @@ Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 `ppedit` runs a small local web server and opens an editor in your
 browser. It reads and writes PYPOWER case files (`.py`, `.json`) and Arras
 Energy GridLAB-D models that use `module pypower` (`.glm`). You edit the bus,
-generator, branch, generator-cost, DC line and DC line cost tables, see the network drawn as a
+generator, branch, generator-cost, DC line, DC line cost and area tables, see the network drawn as a
 one-line diagram, get immediate validation (missing REF bus, dangling
 references, zero-impedance branches, malformed cost curves, ...), and run
 PYPOWER power flow and optimal power flow, with voltages and line loadings
@@ -85,16 +85,32 @@ In the editor:
       key `geodata` (rows of `BUS_I, LAT, LON, ...`) with the auxiliary
       column names under `geotags`; `.glm` keeps each bus's `latitude` and
       `longitude`. **Map ▸ Download CSV** exports the geodata.
+
+    The **Areas** check box (enabled when the case has more than one area)
+    draws a labeled region around the buses of each area and marks price
+    reference buses with ★; bus colors don't change. Regions never overlap:
+    each bus claims the space nearer to it than to any bus of another area
+    (out to a radius set by the typical line length), and points along the
+    lines inside an area join its buses into one region. The force layout
+    groups each area's buses together; in the geodata layout an area whose
+    buses are far apart shows as separate patches. The one-line style gives
+    each area its own box of columns (areas left to right in number order);
+    a line between two areas is drawn with a jog from its column in one box
+    to its column in the other, so every bus bar stays inside its area.
   - **Buses / Generators / Branches / Gen costs / DC lines / DC line
-    costs**: spreadsheet-style editing; Enter or Tab commits, Escape
-    cancels. Renumbering a bus updates the generators, branches and DC lines
-    that use it; deleting a bus asks before deleting its connections;
-    generator cost rows follow their generators and DC line cost rows their
-    DC lines.
+    costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
+    cancels. Renumbering a bus updates the generators, branches, DC lines
+    and area price reference buses that use it; deleting a bus asks before
+    deleting its connections; generator cost rows follow their generators
+    and DC line cost rows their DC lines. Renumbering an area in the Areas
+    table moves its buses with it.
   - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
-    branch flows and loading, DC line flows and losses, the PYPOWER report,
-    and **Apply solution to case** to copy the solved Vm/Va/Pg/Qg and DC line
-    flows into the model.
+    branch flows and loading, DC line flows and losses, area totals, the
+    PYPOWER report, and **Apply solution to case** to copy the solved
+    Vm/Va/Pg/Qg and DC line flows into the model.
+  - **Issues**: every validation error and warning; click one to jump to
+    the cell.
+  - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 
 DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are
 solved as in `pypower.toggle_dcline`: each line is a pair of generators at
@@ -104,9 +120,19 @@ loss1*Pf`); OPF dispatches `Pf` within `Pmin`..`Pmax` at the `dclinecost`
 cost. GLM files store DC lines as `module pypower` `dcline` objects;
 GridLAB-D has no DC line cost objects, so `dclinecost` is kept only in
 `.py` and `.json`.
-  - **Issues**: every validation error and warning; click one to jump to
-    the cell.
-  - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
+
+Areas follow the PYPOWER `areas` format (`area`, `price_ref_bus`; see
+`pypower.caseformat`) and list the areas named by the bus `area` column.
+A case opened without an `areas` table (every `.glm` file, and PYPOWER
+cases such as `case39`) gets one row per bus area, with the area's REF bus,
+else its bus with the most generating capacity, else its first bus as price
+reference bus.
+After a solve, Results shows each area's generation, load, shunt
+consumption, internal losses, net export over AC and DC ties, and, for OPF,
+the price (λP) at its price reference bus. The `areas` table is not passed
+to PYPOWER and is kept only in `.py` and `.json`: GridLAB-D has no area
+objects (each GLM bus keeps its `area`, and the rows are rebuilt when the
+file is opened).
 
 The server listens on `127.0.0.1` only and has no authentication; it is a
 single-user desktop tool.

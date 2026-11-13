@@ -34,10 +34,11 @@ GLM property names, units and keywords; `converters/py2glm.py` for the
   `dclinecost` rows are `[model, startup, shutdown, ncost, costs]` with
   `costs` a comma-separated string (as in the GLM `costs` property).
   `COST_TABLES` maps each cost table to the table it follows row by row.
+  `areas` rows are `[area, price_ref_bus]`.
 - Every edit goes through `Case.set_value`, `add_row`, `delete_rows`,
   `set_global`, or `apply_result`, which keep references valid (bus
   renumber cascades, bus delete needs `cascade`, gencost follows gen,
-  dclinecost follows dcline). The
+  dclinecost follows dcline, area renumber moves its buses). The
   server wraps each in `Editor.edit()` for undo and rollback on error.
 - `.py` cases are parsed with `ast` and never executed (`_parse_py`,
   `_eval`). Do not replace this with `import`/`exec`.
@@ -75,7 +76,9 @@ Nothing needs network or credentials.
 - GLM `dcline`: `Sfrom` = `Pf + j Pt`, `Sto` = `Qf + j Qt` (GridLAB-D's
   positional mapping in `pypower.cpp` and `py2glm.py`, not the meaning in
   the `dcline.cpp` property descriptions). `dclinecost` has no GLM object
-  and is dropped on GLM output (with a comment).
+  and is dropped on GLM output (with a comment); so is `areas`, which
+  module pypower also lacks (bus `area` is kept). `areas` is not passed to
+  the solver; per-area results are computed in `Case._area_summary`.
 - GLM import keeps only `bus`, `gen`, `branch`, `gencost`, `dcline`; everything else
   is listed in `Case.notes`, and saving over the source file needs `force`.
 - GLM bus names are `pp_bus_<bus_i>`, unlike `py2glm.py` (`pp_bus_<row>`).
@@ -98,6 +101,18 @@ Nothing needs network or credentials.
   units under one transform (so it scales with zoom, unlike the other
   styles); buses are not draggable. Branches skipping rows cross bus bars
   (drawn with a white halo gap); dense on case118/case300.
+- Areas check box (`S.areas`, `showAreas()` in `app.js`): draws each area
+  as the union of per-site discs clipped to the half-planes nearer than any
+  other area's site (`areaRegions`; sites are buses plus points along
+  internal lines), so regions never overlap; bus colors don't change.
+  Turning it on re-runs the force layout with area cohesion and gives each
+  area its own column strip (box) in the one-line layout (part of the
+  `olCache` signature), where ties get a column in each box and a jog
+  (`route` in `renderOneline`). Geodata positions are fixed, so an area may
+  show as several patches there.
+- A case without an `areas` table gets default rows from the bus areas on
+  load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
+  written" comment only when the rows differ from those defaults.
 
 ## Working rules
 

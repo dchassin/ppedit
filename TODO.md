@@ -15,7 +15,7 @@
 - [ ] Edit geodata in the editor (drag buses in the geodata layout, a geodata table)
 - [ ] Persist force-layout positions
 - [x] `dcline` and `dclinecost` tables (edit, validate, draw, solve; GLM `dcline` objects)
-- [ ] `areas` table
+- [x] `areas` table (edit, validate, area colors in the diagram, per-area results)
 - [ ] Copy/paste of cell ranges to and from spreadsheets
 - [ ] Multiple open cases (tabs) and a recent-files list
 

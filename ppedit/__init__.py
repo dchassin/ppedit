@@ -44,21 +44,24 @@ Description
 models used by the PYPOWER solver, either as PYPOWER case files or as
 Arras Energy GridLAB-D models that use `module pypower`. A Flask server
 holds one case in memory and exposes it through a JSON API; the browser
-page edits the bus, generator, branch, generator cost, DC line and DC line
-cost tables, draws the network, checks the case, and runs PYPOWER power flow
+page edits the bus, generator, branch, generator cost, DC line, DC line
+cost and area tables, draws the network, checks the case, and runs PYPOWER power flow
 and optimal power flow.
 
 Given a case file, `ppedit.Case` is expected to satisfy:
 
   1. **Round trip.** `Case.load(path).dumps(fmt)` re-read with `Case.load`
-     gives the same tables for `py`, `json`, and `glm`, except `dclinecost`,
-     which GLM cannot hold.
+     gives the same tables for `py`, `json`, and `glm`, except `dclinecost`
+     and the price reference buses of `areas`, which GLM cannot hold (bus
+     `area` numbers are kept, and `areas` rows are rebuilt from them).
 
   2. **Referential integrity.** Edits through `Case.set_value`,
      `Case.add_row`, and `Case.delete_rows` never leave a generator, branch
-     or DC line pointing to a bus that does not exist: renumbering a bus
-     renumbers its references, and deleting a bus with connections is refused
-     unless `cascade=True`.
+     or DC line, or an area's price reference bus, pointing to a bus that
+     does not exist: renumbering a bus renumbers its references, and
+     deleting a bus with connections (or that is a price reference bus) is
+     refused unless `cascade=True`. Renumbering an area in the `areas`
+     table renumbers the `area` of its buses.
 
   3. **Cost alignment.** When the case has `gencost` (`dclinecost`), adding
      or deleting a generator (DC line) adds or deletes its cost row(s).
@@ -90,8 +93,10 @@ What is not promised
     `powerplant`, ...) and other modules are reported on load and dropped on
     save.
 
-  - `areas` data are not edited. `dclinecost` is not written to GLM (there
-    is no GridLAB-D object for it).
+  - `dclinecost` and `areas` are not written to GLM (there are no
+    GridLAB-D objects for them). `areas` is not passed to the solver: the
+    per-area results (`Case.solve`) are sums over the bus `area` column, and
+    an area's price is the OPF `lam_P` at its price reference bus.
 
   - DC lines are solved with ppedit's own implementation of the
     `pypower.toggle_dcline` model (that function fails with current numpy).

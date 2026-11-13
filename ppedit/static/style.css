@@ -156,6 +156,14 @@ td.bad input { color: var(--err); }
 #net-style:hover { border-color: var(--accent); }
 #net-layout { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 4px 6px; cursor: pointer; }
 #net-layout:hover:not(:disabled) { border-color: var(--accent); }
+.net-check { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
+.net-check:hover:not(:has(:disabled)) { border-color: var(--accent); }
+.net-check:has(:disabled) { opacity: .45; cursor: default; }
+/* areas */
+#net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
+#net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
+#net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
+.res-block.wide { grid-column: 1 / -1; }
 .dropdown.left { left: 0; right: auto; }
 .dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
 .dropdown label:hover { background: var(--sel); }

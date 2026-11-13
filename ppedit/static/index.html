@@ -63,6 +63,7 @@
   <button data-view="gencost">Gen costs <span class="count" data-count="gencost"></span></button>
   <button data-view="dcline">DC lines <span class="count" data-count="dcline"></span></button>
   <button data-view="dclinecost">DC line costs <span class="count" data-count="dclinecost"></span></button>
+  <button data-view="areas">Areas <span class="count" data-count="areas"></span></button>
   <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
   <button data-view="issues">Issues <span class="count issues" id="issue-count"></span></button>
   <div class="globals">
@@ -88,6 +89,7 @@
           <option value="force" title="Force-directed layout from the topology">Force layout</option>
           <option value="geodata" title="Bus locations from the case geodata, drawn on a map">Geodata</option>
         </select>
+        <label class="net-check"><input type="checkbox" id="net-areas"> Areas</label>
         <div class="menu">
           <button data-menu="map-menu" title="Geodata and map layers">Map ▾</button>
           <div id="map-menu" class="dropdown left">

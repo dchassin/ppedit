@@ -1519,3 +1519,5 @@ object pypower.gencost
     shutdown 0 $;
     costs "0,0,12,144,36,1008,60,2832";
 }
+
+// 3 areas row(s) not written: module pypower has no area objects (bus area numbers are kept; reading this file rebuilds the rows with default price reference buses)
