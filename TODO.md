@@ -11,7 +11,9 @@
 - [ ] Preserve non-solver GLM objects (`load`, `powerplant`, `powerline`, `shunt`, ...) on round trip, ideally by editing them too
 - [ ] Label overlap avoidance in the classic style on dense networks
 - [ ] One-line style: shorter bus bars and fewer crossings on large meshed cases (e.g. bus splitting or column compaction)
-- [ ] Persist network layout (e.g., GLM `latitude`/`longitude` or `geodata`)
+- [x] Geodata layout: bus locations from CSV or case `geodata`/`geotags` (GLM `latitude`/`longitude`), drawn on a map with imagery, roads, state/county boundaries and names
+- [ ] Edit geodata in the editor (drag buses in the geodata layout, a geodata table)
+- [ ] Persist force-layout positions
 - [ ] `dcline` and `areas` tables
 - [ ] Copy/paste of cell ranges to and from spreadsheets
 - [ ] Multiple open cases (tabs) and a recent-files list

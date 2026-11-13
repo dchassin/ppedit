@@ -149,6 +149,37 @@ td.bad input { color: var(--err); }
 .net-tools { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; }
 #net-style { margin-left: 6px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 4px 6px; cursor: pointer; }
 #net-style:hover { border-color: var(--accent); }
+#net-layout { border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 4px 6px; cursor: pointer; }
+#net-layout:hover:not(:disabled) { border-color: var(--accent); }
+.dropdown.left { left: 0; right: auto; }
+.dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
+.dropdown label:hover { background: var(--sel); }
+.dropdown label.disabled { color: var(--muted); }
+.dropdown .note { font-size: 11px; color: var(--muted); padding: 6px 10px 2px; max-width: 220px; }
+.dropdown button:disabled { color: var(--muted); background: none; cursor: default; }
+/* geodata layout and map */
+.map-credit {
+  position: absolute; right: 12px; bottom: 12px; font-size: 10px; color: #4b5652;
+  background: rgba(255,255,255,.8); border-radius: 4px; padding: 2px 6px; pointer-events: none;
+}
+#net.geo { background: #eef1ec; }
+#net.geo .edge { stroke: #4b5652; }
+#net.geo.imagery { background: #2a2f2c; }
+#net.geo.imagery .edge:not(.sel):not(.out) { stroke: #fff6d5; }
+#net .node.nogeo .body { stroke-dasharray: 2 1.5; }
+#net .map-bound { fill: none; vector-effect: non-scaling-stroke; pointer-events: none; }
+#net .map-bound.state { stroke: #6f7a75; stroke-width: 1.6; }
+#net .map-bound.county { stroke: #9aa39f; stroke-width: .8; stroke-dasharray: 4 2; }
+#net.imagery .map-bound.state { stroke: #f4f1e8; }
+#net.imagery .map-bound.county { stroke: #d9d4c4; }
+#net .map-label { pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.85); stroke-width: 3px; text-anchor: middle; dominant-baseline: middle; }
+#net .map-label.state { font: 600 12px var(--sans, sans-serif); fill: #4b5652; letter-spacing: 1px; text-transform: uppercase; }
+#net .map-label.county { font: italic 10px var(--sans, sans-serif); fill: #69726e; }
+#net.imagery .map-label { stroke: rgba(0,0,0,.7); }
+#net.imagery .map-label.state { fill: #fff; }
+#net.imagery .map-label.county { fill: #ece7d6; }
+#net .map-tile, #net .map-overlay { pointer-events: none; }
+#net .map-overlay { opacity: .8; }
 /* classic style */
 #net.classic .node .body { stroke: #3d4744; stroke-width: 1.4; cursor: pointer; }
 #net.classic .node.isolated .body { stroke: #7d8883; stroke-width: 1.6; stroke-dasharray: 2 1.5; }

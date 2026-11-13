@@ -11,6 +11,11 @@ const S = {
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch", index}
   style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
+  layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
+  map: (() => {
+    const def = { imagery: false, roads: false, states: true, stateNames: true, counties: false, countyNames: false };
+    try { return { ...def, ...JSON.parse(localStorage.getItem("ppedit.map") || "{}") }; } catch (_) { return def; }
+  })(),
 };
 
 const $ = (sel, el = document) => el.querySelector(sel);
@@ -369,12 +374,14 @@ function layout(force = false) {
 
 function fitView() {
   const svg = $("#net");
-  const pts = S.style === "oneline" ? onelineLayout().corners : S.state.case.tables.bus.map(b => S.pos[b[0]]).filter(Boolean);
+  const P = positions();
+  const pts = S.style === "oneline" ? onelineLayout().corners : S.state.case.tables.bus.map(b => P[b[0]]).filter(Boolean);
   if (!pts.length) { S.zoom = { k: 1, x: svg.clientWidth / 2, y: svg.clientHeight / 2 }; return; }
   const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
   const W = svg.clientWidth - (S.pick ? 330 : 0), H = svg.clientHeight;
-  const k = Math.min(4, Math.min((W - 80) / Math.max(1, x1 - x0), (H - 80) / Math.max(1, y1 - y0)));
+  const kmax = useGeo() ? 0.05 : 4; // geodata: metres, at most 20 m per pixel
+  const k = Math.min(kmax, Math.min((W - 80) / Math.max(1, x1 - x0), (H - 80) / Math.max(1, y1 - y0)));
   S.zoom = { k, x: W / 2 - k * (x0 + x1) / 2, y: H / 2 - k * (y0 + y1) / 2 };
 }
 
@@ -401,17 +408,22 @@ function busSummary() {
 }
 
 function renderNetwork() {
+  updateNetTools();
   if (S.style === "oneline") return renderOneline();
   const svg = $("#net");
   const c = S.state.case, res = S.state.result && S.state.result.success ? S.state.result : null;
   const classic = S.style === "classic";
-  layout();
+  const geo = useGeo();
+  if (!geo) layout();
   if (needFit && svg.clientWidth) { fitView(); needFit = false; }
   $("#net-style").value = S.style;
   svg.classList.toggle("classic", classic);
+  svg.classList.toggle("geo", geo);
+  svg.classList.toggle("imagery", geo && S.map.imagery);
   // draw in screen coordinates so symbols and text keep their size when zooming
   const { k, x, y } = S.zoom;
-  const W = id => { const p = S.pos[id]; return p ? { x: p.x * k + x, y: p.y * k + y } : null; };
+  const POS = positions(), G = geo ? geoLayout() : null;
+  const W = id => { const p = POS[id]; return p ? { x: p.x * k + x, y: p.y * k + y } : null; };
   const g = sv("g");
   const ids = new Set(c.tables.bus.map(b => b[0]));
   const sum = busSummary();
@@ -482,6 +494,7 @@ function renderNetwork() {
     const cls = ["node"];
     if (S.pick && S.pick.kind === "bus" && S.pick.index === i) cls.push("sel");
     if (errBus.has(i)) cls.push("err");
+    if (G && G.estimated.has(b[0])) cls.push("nogeo");
     const node = sv("g", { class: cls.join(" "), transform: `translate(${p.x},${p.y})`, "data-bus": b[0] });
     const v = sum.volt.get(b[0]);
     const hasGen = sum.ngen.get(b[0]) > 0, hasLoad = b[2] !== 0 || b[3] !== 0;
@@ -523,8 +536,13 @@ function renderNetwork() {
     g.append(node);
   });
   svg.classList.remove("oneline");
-  svg.replaceChildren(g);
+  svg.replaceChildren(...(geo ? [renderMap(svg.clientWidth, svg.clientHeight)] : []), g);
   renderLegend(!!res, classic);
+  if (G && (G.estimated.size || G.missing)) {
+    const L = $("#legend");
+    if (G.estimated.size) L.append(h("div", {}, `Dashed: ${G.estimated.size} bus(es) without geodata, placed near neighbors`));
+    if (G.missing) L.append(h("div", {}, `${G.missing} bus(es) without geodata not shown`));
+  }
   renderInspector();
   if (!c.tables.bus.length) {
     const t = sv("text", { x: svg.clientWidth / 2, y: svg.clientHeight / 2, "text-anchor": "middle", fill: "#69726e" });
@@ -860,9 +878,276 @@ function renderLegend(solved, classic, oneline = false) {
   }
 }
 
+// ---------------------------------------------------------------- geodata layout and map
+//
+// Bus positions come from the case geodata projected to Web Mercator (EPSG:3857)
+// metres with y pointing down, so S.zoom.k is screen pixels per metre. Map layers
+// are drawn under the network: USGS imagery tiles, a TIGERweb roads image exported
+// for the current view, and TIGERweb state/county polygons queried for the view
+// (drawn in world units under one transform) with names at their interior points.
+
+const EARTH_R = 6378137, WORLD = 2 * Math.PI * EARTH_R;
+const IMAGERY = { tile: (z, y, x) => `https://basemap.nationalmap.gov/arcgis/rest/services/USGSImageryOnly/MapServer/tile/${z}/${y}/${x}`, maxZoom: 16 };
+const ROADS = { url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer/export", layers: "show:0,1,2,3,4,5,6,7,8" };
+const TIGER_BOUNDS = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer";
+const BOUNDS = {
+  // maxRes, nameRes, abbrRes: coarsest metres per pixel at which polygons, names, abbreviated names show
+  states: { layer: 0, fields: "NAME,STUSAB,INTPTLAT,INTPTLON", maxRes: 20000, nameRes: 3000, abbrRes: 20000, cls: "state" },
+  counties: { layer: 1, fields: "NAME,INTPTLAT,INTPTLON", maxRes: 1500, nameRes: 800, abbrRes: 0, cls: "county" },
+};
+const CREDITS = { imagery: "Imagery: USGS The National Map", roads: "Roads", bounds: "Boundaries" };
+
+function mercator(lat, lon) {
+  const phi = Math.max(-85.0511, Math.min(85.0511, lat)) * Math.PI / 180;
+  return { x: EARTH_R * lon * Math.PI / 180, y: -EARTH_R * Math.log(Math.tan(Math.PI / 4 + phi / 2)) };
+}
+function hasGeo() { return !!(S.state && S.state.case.geodata && S.state.case.geodata.length); }
+function useGeo() { return S.layout === "geodata" && S.style !== "oneline" && hasGeo(); }
+function positions() { return useGeo() ? geoLayout().pos : S.pos; }
+
+let geoCache = null;
+function geoLayout() {
+  // located buses from geodata (first row per bus); buses without geodata are
+  // placed near their located neighbors (marked estimated) or left out
+  const c = S.state.case;
+  const key = JSON.stringify([c.geodata.map(r => r.slice(0, 3)), c.tables.bus.map(b => b[0]), c.tables.branch.map(b => [b[0], b[1]])]);
+  if (geoCache && geoCache.key === key) return geoCache;
+  const where = new Map();
+  for (const r of c.geodata) if (!where.has(r[0])) where.set(r[0], r);
+  const ids = c.tables.bus.map(b => b[0]);
+  const pos = {};
+  for (const b of ids) if (where.has(b)) pos[b] = mercator(where.get(b)[1], where.get(b)[2]);
+  const pts = Object.values(pos);
+  const span = pts.length > 1 ? Math.max(Math.max(...pts.map(p => p.x)) - Math.min(...pts.map(p => p.x)),
+    Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y))) : 0;
+  const offset = Math.max(200, span * 0.02);
+  const adj = new Map(ids.map(b => [b, []]));
+  c.tables.branch.forEach(b => {
+    if (adj.has(b[0]) && adj.has(b[1]) && b[0] !== b[1]) { adj.get(b[0]).push(b[1]); adj.get(b[1]).push(b[0]); }
+  });
+  const estimated = new Set();
+  for (let changed = true; changed;) {
+    changed = false;
+    ids.forEach((b, i) => {
+      if (pos[b]) return;
+      const nb = adj.get(b).map(n => pos[n]).filter(Boolean);
+      if (!nb.length) return;
+      const a = i * 2.39996; // golden angle keeps siblings apart
+      pos[b] = { x: nb.reduce((s, p) => s + p.x, 0) / nb.length + offset * Math.cos(a), y: nb.reduce((s, p) => s + p.y, 0) / nb.length + offset * Math.sin(a) };
+      estimated.add(b);
+      changed = true;
+    });
+  }
+  geoCache = { key, pos, where, estimated, missing: ids.filter(b => !pos[b]).length };
+  return geoCache;
+}
+
+function setLayout(value) {
+  const geo = useGeo();
+  S.layout = value;
+  try { localStorage.setItem("ppedit.layout", value); } catch (_) { /* storage unavailable */ }
+  if (useGeo() !== geo) needFit = true;
+  renderNetwork();
+}
+
+let space = null; // coordinate space of the last drawing: force, geo or oneline
+function updateNetTools() {
+  const has = hasGeo(), oneline = S.style === "oneline";
+  const now = oneline ? "oneline" : useGeo() ? "geo" : "force";
+  if (now !== space) { needFit = true; space = now; }
+  const sel = $("#net-layout");
+  sel.querySelector('[value="geodata"]').disabled = !has;
+  sel.value = useGeo() ? "geodata" : "force";
+  sel.disabled = oneline;
+  sel.title = oneline ? "The one-line style computes its own layout"
+    : has ? "Bus positions" : "Geodata layout: load a CSV of bus locations (Map ▾) or open a case with geodata";
+  $("[data-action=relayout]").disabled = useGeo();
+  $("#geodata-export").disabled = !has;
+  $("#geodata-clear").disabled = !has;
+  for (const cb of $$("#map-menu [data-layer]")) {
+    cb.checked = !!S.map[cb.dataset.layer];
+    cb.closest("label").classList.toggle("disabled", !useGeo());
+  }
+  const credit = $("#map-credit");
+  const geo = useGeo(), m = S.map;
+  const parts = [];
+  if (geo && m.imagery) parts.push(CREDITS.imagery);
+  const census = [geo && m.roads && CREDITS.roads, geo && (m.states || m.stateNames || m.counties || m.countyNames) && CREDITS.bounds].filter(Boolean);
+  if (census.length) parts.push(`${census.join(", ")}: U.S. Census Bureau TIGERweb`);
+  credit.textContent = parts.join(" · ");
+  credit.hidden = !parts.length;
+}
+
+function viewBox(W, H) {
+  const { k, x, y } = S.zoom;
+  return [-x / k, -y / k, (W - x) / k, (H - y) / k]; // world metres: x0, y0, x1, y1
+}
+
+const tileCache = new Map();
+function tileLayer(W, H) {
+  const g = sv("g");
+  const { k, x, y } = S.zoom;
+  const z = Math.max(0, Math.min(IMAGERY.maxZoom, Math.round(Math.log2(k * WORLD / 256))));
+  const n = 2 ** z, size = WORLD / n;
+  const [X0, Y0, X1, Y1] = viewBox(W, H);
+  const tx0 = Math.max(0, Math.floor((X0 + WORLD / 2) / size)), tx1 = Math.min(n - 1, Math.floor((X1 + WORLD / 2) / size));
+  const ty0 = Math.max(0, Math.floor((Y0 + WORLD / 2) / size)), ty1 = Math.min(n - 1, Math.floor((Y1 + WORLD / 2) / size));
+  if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 400) return g;
+  const used = new Set();
+  const place = (tz, tx, ty) => {
+    const url = IMAGERY.tile(tz, ty, tx), tsize = WORLD / 2 ** tz;
+    if (used.has(url)) return;
+    let img = tileCache.get(url);
+    if (!img) { img = sv("image", { href: url, class: "map-tile", preserveAspectRatio: "none" }); tileCache.set(url, img); }
+    const px = (tx * tsize - WORLD / 2) * k + x, py = (ty * tsize - WORLD / 2) * k + y;
+    img.setAttribute("x", px.toFixed(1)); img.setAttribute("y", py.toFixed(1));
+    img.setAttribute("width", (tsize * k + 0.5).toFixed(1)); img.setAttribute("height", (tsize * k + 0.5).toFixed(1));
+    g.append(img);
+    used.add(url);
+  };
+  // coarser tiles underneath fill in while finer ones load or where they are missing
+  const up = Math.min(3, z), f = 2 ** up;
+  if (up) for (let ty = Math.floor(ty0 / f); ty <= Math.floor(ty1 / f); ty++) for (let tx = Math.floor(tx0 / f); tx <= Math.floor(tx1 / f); tx++) place(z - up, tx, ty);
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) place(z, tx, ty);
+  for (const url of tileCache.keys()) { // keep the cache bounded
+    if (tileCache.size <= 600) break;
+    if (!used.has(url)) tileCache.delete(url);
+  }
+  return g;
+}
+
+const exportCache = {};
+function exportLayer(name, spec, W, H) {
+  // one transparent image of the whole view from an ArcGIS MapServer export,
+  // fetched shortly after the view settles; the last image stays in place meanwhile
+  const o = exportCache[name] || (exportCache[name] = { img: sv("image", { class: "map-overlay", preserveAspectRatio: "none" }), box: null, want: "" });
+  const box = viewBox(W, H);
+  const want = box.map(v => Math.round(v)).join(",") + `|${W}x${H}`;
+  if (o.want !== want && W > 0 && H > 0) {
+    o.want = want;
+    clearTimeout(o.timer);
+    o.timer = setTimeout(() => {
+      const w = Math.min(4096, Math.round(W)), hgt = Math.min(4096, Math.round(H));
+      const url = `${spec.url}?bbox=${box[0].toFixed(0)},${(-box[3]).toFixed(0)},${box[2].toFixed(0)},${(-box[1]).toFixed(0)}`
+        + `&bboxSR=3857&imageSR=3857&size=${w},${hgt}&dpi=96&format=png32&transparent=true&layers=${encodeURIComponent(spec.layers)}&f=image`;
+      const pre = new Image();
+      pre.onload = () => { if (o.want !== want) return; o.img.setAttribute("href", url); o.box = box; scheduleRender(); };
+      pre.src = url;
+    }, 350);
+  }
+  if (!o.box) return null;
+  const { k, x, y } = S.zoom;
+  o.img.setAttribute("x", (o.box[0] * k + x).toFixed(1)); o.img.setAttribute("y", (o.box[1] * k + y).toFixed(1));
+  o.img.setAttribute("width", ((o.box[2] - o.box[0]) * k).toFixed(1)); o.img.setAttribute("height", ((o.box[3] - o.box[1]) * k).toFixed(1));
+  return o.img;
+}
+
+const boundCache = {};
+function boundaryLayer(name, W, H) {
+  // state or county polygons for (a margin around) the view, generalized to the
+  // current resolution; refetched when the view leaves the box or zooms in 2x
+  const spec = BOUNDS[name];
+  const b = boundCache[name] || (boundCache[name] = { feats: [], box: null, res: 0, origin: [0, 0], g: sv("g"), want: "" });
+  const res = 1 / S.zoom.k;
+  if (res > spec.maxRes) return b;
+  const view = viewBox(W, H);
+  const covered = b.box && view[0] >= b.box[0] && view[1] >= b.box[1] && view[2] <= b.box[2] && view[3] <= b.box[3] && res >= b.res / 2;
+  if (!covered && W > 0) {
+    const mx = (view[2] - view[0]) / 2, my = (view[3] - view[1]) / 2;
+    const box = [view[0] - mx, view[1] - my, view[2] + mx, view[3] + my];
+    const want = box.map(v => Math.round(v)).join(",");
+    if (b.want !== want) {
+      b.want = want;
+      clearTimeout(b.timer);
+      b.timer = setTimeout(() => fetchBounds(name, box, res, want), 400);
+    }
+  }
+  return b;
+}
+
+async function fetchBounds(name, box, res, want) {
+  const spec = BOUNDS[name], b = boundCache[name];
+  if (b.ctl) b.ctl.abort();
+  b.ctl = new AbortController();
+  const q = new URLSearchParams({
+    where: "1=1", geometry: `${box[0].toFixed(0)},${(-box[3]).toFixed(0)},${box[2].toFixed(0)},${(-box[1]).toFixed(0)}`,
+    geometryType: "esriGeometryEnvelope", inSR: "3857", spatialRel: "esriSpatialRelIntersects",
+    outFields: spec.fields, returnGeometry: "true", outSR: "3857",
+    maxAllowableOffset: String(Math.max(1, Math.round(res))), geometryPrecision: "0", f: "json",
+  });
+  try {
+    const data = await (await fetch(`${TIGER_BOUNDS}/${spec.layer}/query?${q}`, { signal: b.ctl.signal })).json();
+    if (data.error) throw new Error(data.error.message || "query failed");
+    if (b.want !== want) return;
+    const ox = box[0], oy = box[1]; // coordinates relative to the box keep SVG numbers small
+    const g = sv("g");
+    b.feats = (data.features || []).map(f => {
+      const d = (f.geometry && f.geometry.rings || []).map(ring =>
+        "M" + ring.map(([px, py]) => `${Math.round(px - ox)},${Math.round(-py - oy)}`).join("L") + "Z").join("");
+      if (d) g.append(sv("path", { d, class: `map-bound ${spec.cls}` }));
+      const a = f.attributes || {};
+      return { name: a.NAME, abbr: a.STUSAB, label: a.INTPTLAT ? mercator(+a.INTPTLAT, +a.INTPTLON) : null };
+    });
+    Object.assign(b, { g, box, res, origin: [ox, oy] });
+    scheduleRender();
+  } catch (err) {
+    if (err.name !== "AbortError") console.warn(`ppedit: ${name} boundaries unavailable: ${err.message}`);
+  }
+}
+
+function renderMap(W, H) {
+  const m = S.map, root = sv("g", { class: "map" });
+  const { k, x, y } = S.zoom;
+  if (m.imagery) root.append(tileLayer(W, H));
+  if (m.roads) { const img = exportLayer("roads", ROADS, W, H); if (img) root.append(img); }
+  const labels = sv("g");
+  for (const [name, show, names] of [["counties", m.counties, m.countyNames], ["states", m.states, m.stateNames]]) {
+    if (!show && !names) continue;
+    const spec = BOUNDS[name], b = boundaryLayer(name, W, H);
+    if (1 / k > spec.maxRes || !b.box) continue;
+    if (show) {
+      b.g.setAttribute("transform", `matrix(${k},0,0,${k},${x + k * b.origin[0]},${y + k * b.origin[1]})`);
+      root.append(b.g);
+    }
+    const full = 1 / k <= spec.nameRes;
+    if (names && (full || 1 / k <= spec.abbrRes)) {
+      for (const f of b.feats) {
+        const text = full ? f.name : f.abbr;
+        if (!f.label || !text) continue;
+        const px = f.label.x * k + x, py = f.label.y * k + y;
+        if (px < -50 || py < -20 || px > W + 50 || py > H + 20) continue;
+        const t = sv("text", { x: px.toFixed(1), y: py.toFixed(1), class: `map-label ${spec.cls}` });
+        t.textContent = text;
+        labels.append(t);
+      }
+    }
+  }
+  root.append(labels);
+  return root;
+}
+
+function setMapLayer(layer, on) {
+  S.map[layer] = on;
+  try { localStorage.setItem("ppedit.map", JSON.stringify(S.map)); } catch (_) { /* storage unavailable */ }
+  renderNetwork();
+}
+
+async function loadGeodata(file) {
+  const text = await file.text();
+  await act("/api/geodata", { filename: file.name, text });
+  const n = S.state.case.geodata.length, tags = S.state.case.geotags;
+  if (S.style === "oneline") S.style = "simple";
+  setLayout("geodata");
+  needFit = true;
+  show("network");
+  toast(`Loaded ${n} bus location(s)${tags.length ? ` with ${tags.join(", ")}` : ""} from ${file.name}`);
+}
+
 function setStyle(style) {
+  const geo = useGeo();
   if ((style === "oneline") !== (S.style === "oneline")) needFit = true; // different coordinate spaces
   S.style = style;
+  if (useGeo() !== geo) needFit = true;
   try { localStorage.setItem("ppedit.diagram", style); } catch (_) { /* storage unavailable */ }
   renderNetwork();
 }
@@ -901,6 +1186,18 @@ function renderInspector() {
       if (rb) kids.push(h("div", { class: "sub" }, `Solution: Vm ${fmt(rb.Vm, 4)} pu, Va ${fmt(rb.Va, 2)}°` + (rb.lam_P !== null ? `, λP ${fmt(rb.lam_P, 2)} $/MWh` : "")));
     }
     kids.push(h("dl", {}, [1, 2, 3, 4, 5, 9, 7, 8, 11, 12, 6, 10].flatMap(field)));
+    if (hasGeo()) {
+      const geo = c.geodata.find(r => r[0] === num);
+      kids.push(h("h4", {}, "Location"));
+      if (geo) {
+        kids.push(h("dl", {},
+          h("dt", {}, "LAT [deg]"), h("dd", {}, fmt(geo[1], 6)),
+          h("dt", {}, "LON [deg]"), h("dd", {}, fmt(geo[2], 6)),
+          ...c.geotags.flatMap((t, j) => [h("dt", {}, t), h("dd", {}, String(geo[3 + j] ?? ""))])));
+      } else {
+        kids.push(h("div", { class: "sub" }, "No geodata for this bus" + (useGeo() && geoLayout().estimated.has(num) ? " (drawn near its neighbors)" : "")));
+      }
+    }
     const gens = c.tables.gen.map((g, i) => [g, i]).filter(([g]) => g[0] === num);
     kids.push(h("h4", {}, `Generators (${gens.length})`), h("ul", {}, gens.map(([g, i]) =>
       h("li", {}, h("a", { onclick: () => goto("gen", i) }, `gen ${i + 1}`), `${fmt(g[1], 1)} MW · ${S.meta.columns.gen[7].options[g[7]]}`))));
@@ -968,8 +1265,8 @@ function scheduleRender() {
 let drag = null;
 function startDrag(e, busId, index) {
   e.stopPropagation();
-  const p = S.pos[busId];
-  drag = { busId, index, sx: e.clientX, sy: e.clientY, px: p.x, py: p.y, moved: false };
+  const p = positions()[busId];
+  drag = { busId, index, sx: e.clientX, sy: e.clientY, px: p.x, py: p.y, moved: false, fixed: useGeo() };
   $("#net").setPointerCapture(e.pointerId);
 }
 function setupNetworkEvents() {
@@ -984,7 +1281,8 @@ function setupNetworkEvents() {
   svg.addEventListener("pointermove", e => {
     if (drag) {
       const dx = (e.clientX - drag.sx) / S.zoom.k, dy = (e.clientY - drag.sy) / S.zoom.k;
-      if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+      if (Math.abs(dx * S.zoom.k) + Math.abs(dy * S.zoom.k) > 2) drag.moved = true;
+      if (drag.fixed) return; // geodata positions are data, not dragged
       S.pos[drag.busId] = { x: drag.px + dx, y: drag.py + dy };
       scheduleRender();
     } else if (pan) {
@@ -1004,7 +1302,7 @@ function setupNetworkEvents() {
     const r = svg.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const f = Math.exp(-e.deltaY * 0.0015);
-    const k = Math.max(0.05, Math.min(20, S.zoom.k * f));
+    const k = useGeo() ? Math.max(1e-5, Math.min(20, S.zoom.k * f)) : Math.max(0.05, Math.min(20, S.zoom.k * f));
     S.zoom.x = mx - (mx - S.zoom.x) * k / S.zoom.k;
     S.zoom.y = my - (my - S.zoom.y) * k / S.zoom.k;
     S.zoom.k = k;
@@ -1133,6 +1431,11 @@ async function onAction(btn) {
     else if (a === "del-rows") await deleteRows();
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
+    else if (a === "geodata-load") $("#geodata-input").click();
+    else if (a === "geodata-export") { window.location = "/api/export?format=csv"; }
+    else if (a === "geodata-clear") {
+      if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
+    }
   } catch (_) { /* toast already shown */ }
 }
 
@@ -1163,6 +1466,12 @@ async function init() {
     if (!e.target.closest(".dropdown")) closeMenus();
   });
   $("#net-style").addEventListener("change", e => setStyle(e.target.value));
+  $("#net-layout").addEventListener("change", e => setLayout(e.target.value));
+  $("#map-menu").addEventListener("change", e => { if (e.target.dataset.layer) setMapLayer(e.target.dataset.layer, e.target.checked); });
+  $("#geodata-input").addEventListener("change", e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (f) loadGeodata(f).catch(() => { /* toast already shown */ });
+  });
   $("#file-input").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) openFile(f); });
   $("#grid").addEventListener("change", e => { if (e.target.dataset.col) commitCell(e.target); });
   $("#grid").addEventListener("keydown", e => {

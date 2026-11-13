@@ -3,8 +3,8 @@
 Syntax
 ------
 
-    ppedit serve [FILE] [-p PORT] [--host HOST] [--no-browser] [-d] [-w]
-    ppedit convert INPUT OUTPUT [-d] [-w]
+    ppedit serve [FILE] [-g CSV] [-p PORT] [--host HOST] [--no-browser] [-d] [-w]
+    ppedit convert INPUT OUTPUT [-g CSV] [-d] [-w]
     ppedit check FILE [-d] [-w]
 
 Positional arguments
@@ -22,6 +22,10 @@ Optional arguments
 ------------------
 
   - `-d|--debug`: enable debug logging and traceback on exceptions
+
+  - `-g|--geodata CSV`: add bus locations from a CSV file with at least the
+    columns `BUS_I`, `LAT` and `LON` (other columns are kept as auxiliary
+    data) to the case being served or converted
 
   - `-h|--help`: show this help message and exit
 
@@ -60,6 +64,19 @@ Given a case file, `ppedit.Case` is expected to satisfy:
   4. **No code execution.** `.py` case files are parsed, never imported or
      run, so a case file from elsewhere cannot run code on the server.
 
+  5. **Geodata.** Bus locations (`Case.geodata`, rows of `[BUS_I, LAT, LON,
+     aux...]` with auxiliary column names in `Case.geotags`) are read from a
+     CSV file, from the `geodata` (and `geotags`) keys of a `.py`/`.json`
+     case, or from GLM bus `latitude`/`longitude`, and are written back under
+     the same keys. Renumbering a bus renumbers its geodata and deleting a
+     bus deletes its geodata.
+
+The network diagram has a *Geodata* layout, available when the case has
+geodata, that places buses at their locations on a map (Web Mercator) with
+optional USGS satellite imagery, Census TIGERweb roads, and state and county
+boundaries and names. Buses without geodata are drawn next to their located
+neighbors (dashed) or left out.
+
 What is not promised
 --------------------
 
@@ -72,8 +89,13 @@ What is not promised
 
   - `dcline` and `areas` data are not edited.
 
-  - The network diagram is a force-directed layout, not geography; positions
-    are not saved. In the classic style a bus with both generation and load
+  - The force-directed layout is not geography and its positions are not
+    saved; bus positions are kept only as geodata, which the diagram does not
+    edit (load a CSV or edit the case file). Map layers are fetched by the
+    browser from public U.S. government map services (USGS The National Map,
+    Census Bureau TIGERweb): they need network access, cover the United
+    States only, and are not cached by `ppedit`. GLM output keeps bus
+    locations but not auxiliary geodata. In the classic style a bus with both generation and load
     is drawn as a generator (circle); its label shows both MW values. The
     one-line style computes its own layered layout from the topology (it
     is not dragged); on large meshed cases its bus bars get long and
@@ -90,6 +112,8 @@ Columns follow `pypower.caseformat`; units are listed in `ppedit.case.COLUMNS`.
 ```mermaid
 flowchart LR
     file[(.py / .json / .glm)] --> Case
+    csv[(geodata .csv)] --> Case
+    maps[USGS / TIGERweb map services] --> browser
     Case <-->|JSON API| server[Flask server]
     server <--> browser[Browser editor]
     Case --> solver[PYPOWER runpf / runopf]

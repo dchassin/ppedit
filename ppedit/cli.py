@@ -8,6 +8,7 @@ Examples
     ppedit convert case14.py case14.glm
     ppedit check case14.glm
     ppedit serve case14.glm
+    ppedit serve case14.py --geodata case14_geodata.csv
 
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
 and opens it in a browser.
@@ -41,6 +42,7 @@ def main(argv:list[str]|None=None) -> int:
         epilog="See https://www.chassin.org/ppedit for full documentation.")
     parser.add_argument("command",choices=["serve","convert","check"])
     parser.add_argument("files",nargs="*",help="case file(s): .py, .json, or .glm")
+    parser.add_argument("-g","--geodata",help="CSV of bus locations (BUS_I,LAT,LON,...) to add to the case (serve, convert)")
     parser.add_argument("-p","--port",type=int,default=8050,help="server port (default 8050)")
     parser.add_argument("--host",default="127.0.0.1",help="interface to listen on (default 127.0.0.1)")
     parser.add_argument("--no-browser",action="store_true",help="do not open a browser")
@@ -60,6 +62,8 @@ def main(argv:list[str]|None=None) -> int:
             case = Case.load(args.files[0])
             for note in case.notes:
                 print(f"WARNING [ppedit]: {note}",file=sys.stderr)
+            if args.geodata:
+                case.load_geodata(args.geodata)
             case.save(args.files[1])
             return 0
         if args.command == "check":
@@ -83,6 +87,9 @@ def main(argv:list[str]|None=None) -> int:
                 case = Case.load(path)
             else:
                 case = Case(name=os.path.splitext(os.path.basename(path))[0])
+        if args.geodata:
+            case = case or Case(name="untitled")
+            case.load_geodata(args.geodata)
         app = create_app(case,path,allow_remote=args.host not in ("127.0.0.1","localhost","::1"))
         url = f"http://{'localhost' if args.host in ('127.0.0.1','0.0.0.0') else args.host}:{args.port}/"
         print(f"ppedit: editing {path or 'new case'} at {url} (Ctrl-C to stop)")

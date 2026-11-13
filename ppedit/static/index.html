@@ -80,7 +80,30 @@
           <option value="classic" title="Classic utility one-line diagram: shapes by equipment, angles, MW and flows">Classic</option>
           <option value="oneline" title="Utility one-line diagram: sources on top, horizontal bus bars, vertical branches, standard symbols, MW and MVAr flows">One-line</option>
         </select>
+        <select id="net-layout" aria-label="Diagram layout" title="Bus positions">
+          <option value="force" title="Force-directed layout from the topology">Force layout</option>
+          <option value="geodata" title="Bus locations from the case geodata, drawn on a map">Geodata</option>
+        </select>
+        <div class="menu">
+          <button data-menu="map-menu" title="Geodata and map layers">Map ▾</button>
+          <div id="map-menu" class="dropdown left">
+            <div class="sep">Geodata (bus locations)</div>
+            <button data-action="geodata-load" title="CSV with columns BUS_I, LAT, LON; other columns are kept as auxiliary data">Load CSV…</button>
+            <button data-action="geodata-export" id="geodata-export">Download CSV</button>
+            <button data-action="geodata-clear" id="geodata-clear">Remove geodata</button>
+            <div class="sep">Map layers (geodata layout)</div>
+            <label><input type="checkbox" data-layer="imagery"> Satellite imagery</label>
+            <label><input type="checkbox" data-layer="roads"> Roads</label>
+            <label><input type="checkbox" data-layer="states"> State boundaries</label>
+            <label><input type="checkbox" data-layer="stateNames"> State names</label>
+            <label><input type="checkbox" data-layer="counties"> County boundaries</label>
+            <label><input type="checkbox" data-layer="countyNames"> County names</label>
+            <div class="note">US coverage, loaded from USGS and Census Bureau map services</div>
+          </div>
+        </div>
+        <input type="file" id="geodata-input" accept=".csv,text/csv" hidden>
       </div>
+      <div class="map-credit" id="map-credit" hidden></div>
       <aside id="inspector" class="inspector" hidden></aside>
     </div>
   </section>

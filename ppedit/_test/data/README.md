@@ -2,6 +2,7 @@
 
 | File | Purpose |
 |---|---|
+| `case9_geodata.csv` | Synthetic bus locations for the PYPOWER `case9` buses 1–9, written by hand (2026-11-13) at the coordinates of nine Northern California cities (illustrative, not the real network). Columns `BUS_I`, `LAT`, `LON` (decimal degrees) and auxiliary `NAME` (text) and `KV` (number). |
 | `case3.glm` | Hand-written 3-bus `module pypower` model (2026-11-13). Mixes numeric and keyword enumerations, `bus`/`parent`/`from`/`to`/`fbus`/`tbus` references, missing properties (defaults apply), inline comments, a nested `load` object, a `powerplant` object, and `gencost` objects listed out of generator order. |
 
 Expected content after `Case.load`: 3 buses (REF, PV, PQ; 100 MW total
