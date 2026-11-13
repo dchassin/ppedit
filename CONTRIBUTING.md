@@ -5,7 +5,7 @@ Thank you for your interest in contributing to `ppedit`, part of the
 how to report problems, propose changes, and submit pull requests.
 
 Read the [README](README.md) for what the package does, and the
-[documentation](https://dchassin.github.io/ppedit) for how to use it.
+[documentation](https://www.chassin.org/ppedit) for how to use it.
 Maintainers and AI assistants should also read [CLAUDE.md](CLAUDE.md),
 [DESIGN.md](DESIGN.md), and [MANIFEST.md](MANIFEST.md).
 

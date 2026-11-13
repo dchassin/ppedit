@@ -15,7 +15,7 @@ sub-transmission models for Arras Energy.
 
 # Documentation
 
-See https://dchassin.github.io/ppedit
+See https://www.chassin.org/ppedit
 
 # Installation
 

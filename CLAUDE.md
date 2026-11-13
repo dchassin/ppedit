@@ -12,7 +12,7 @@ GridLAB-D `module pypower` models: a Flask server (`ppedit/server.py`) holds
 one `Case` (`ppedit/case.py`) in memory and serves a plain HTML/CSS/JS editor
 (`ppedit/static/`, no build step, no JS dependencies). Python 3.10+, alpha.
 
-- Docs site: https://dchassin.github.io/ppedit (pdoc from docstrings)
+- Docs site: https://www.chassin.org/ppedit (pdoc from docstrings)
 - Maintainer: David P. Chassin
 - CLI entry point: `ppedit` -> `ppedit.cli:main`
 
@@ -53,7 +53,7 @@ Frontend is vanilla JS in one file (`app.js`) with a tiny `h()` DOM helper.
 ```bash
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install --upgrade pip && pip install -e . pytest
-pytest            # ~2 s, includes doctests in ppedit/case.py
+pytest            # ~2 s, includes ppedit/case.py docstring examples (test_doctest.py)
 make docs
 ppedit serve ppedit/_test/data/case3.glm   # manual UI check
 ```

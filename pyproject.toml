@@ -37,7 +37,7 @@ dynamic = ["dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/dchassin/ppedit"
-Documentation = "https://dchassin.github.io/ppedit"
+Documentation = "https://www.chassin.org/ppedit"
 Repository = "https://github.com/dchassin/ppedit.git"
 Issues = "https://github.com/dchassin/ppedit/issues"
 
@@ -45,5 +45,4 @@ Issues = "https://github.com/dchassin/ppedit/issues"
 ppedit = "ppedit.cli:main"
 
 [tool.pytest.ini_options]
-testpaths = ["ppedit/_test", "ppedit/case.py"]
-addopts = "--doctest-modules"
+testpaths = ["ppedit/_test"]
