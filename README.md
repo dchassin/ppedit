@@ -6,7 +6,7 @@ Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 `ppedit` runs a small local web server and opens an editor in your
 browser. It reads and writes PYPOWER case files (`.py`, `.json`) and Arras
 Energy GridLAB-D models that use `module pypower` (`.glm`). You edit the bus,
-generator, branch and generator-cost tables, see the network drawn as a
+generator, branch, generator-cost, DC line and DC line cost tables, see the network drawn as a
 one-line diagram, get immediate validation (missing REF bus, dangling
 references, zero-impedance branches, malformed cost curves, ...), and run
 PYPOWER power flow and optimal power flow, with voltages and line loadings
@@ -37,9 +37,11 @@ to upload a file. **Save as ▸** downloads `.py`, `.json` or `.glm`.
 
 In the editor:
 
-  - **Network**: drag buses, scroll to zoom, click a bus or branch to edit
-    it in the side panel; add a generator, a branch, or a new linked bus from
-    the panel. Three styles:
+  - **Network**: drag buses, scroll to zoom, click a bus, branch or DC line
+    to edit it in the side panel; add a generator, a branch, a DC line, or a
+    new linked bus from the panel. DC lines are drawn as purple dash-dot
+    lines (with a "DC" tag in the simple and classic styles and a converter
+    box at each end in the one-line style). Three styles:
     - *Simple*: buses colored by type; after a solve, by voltage.
     - *Classic* (utility one-line diagram conventions): generator buses
       are circles, load buses triangles, other buses squares, and
@@ -81,13 +83,25 @@ In the editor:
       key `geodata` (rows of `BUS_I, LAT, LON, ...`) with the auxiliary
       column names under `geotags`; `.glm` keeps each bus's `latitude` and
       `longitude`. **Map ▸ Download CSV** exports the geodata.
-  - **Buses / Generators / Branches / Gen costs**: spreadsheet-style
-    editing; Enter or Tab commits, Escape cancels. Renumbering a bus updates
-    the generators and branches that use it; deleting a bus asks before
-    deleting its connections; generator cost rows follow their generators.
+  - **Buses / Generators / Branches / Gen costs / DC lines / DC line
+    costs**: spreadsheet-style editing; Enter or Tab commits, Escape
+    cancels. Renumbering a bus updates the generators, branches and DC lines
+    that use it; deleting a bus asks before deleting its connections;
+    generator cost rows follow their generators and DC line cost rows their
+    DC lines.
   - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
-    branch flows and loading, the PYPOWER report, and **Apply solution to
-    case** to copy the solved Vm/Va/Pg/Qg into the model.
+    branch flows and loading, DC line flows and losses, the PYPOWER report,
+    and **Apply solution to case** to copy the solved Vm/Va/Pg/Qg and DC line
+    flows into the model.
+
+DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are
+solved as in `pypower.toggle_dcline`: each line is a pair of generators at
+its terminal buses, which become PV buses held at the line's `Vf` and `Vt`.
+Power flow keeps the line's `Pf` and applies its losses (`loss0 +
+loss1*Pf`); OPF dispatches `Pf` within `Pmin`..`Pmax` at the `dclinecost`
+cost. GLM files store DC lines as `module pypower` `dcline` objects;
+GridLAB-D has no DC line cost objects, so `dclinecost` is kept only in
+`.py` and `.json`.
   - **Issues**: every validation error and warning; click one to jump to
     the cell.
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.

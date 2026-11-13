@@ -14,7 +14,8 @@
 - [x] Geodata layout: bus locations from CSV or case `geodata`/`geotags` (GLM `latitude`/`longitude`), drawn on a map with imagery, roads, state/county boundaries and names
 - [ ] Edit geodata in the editor (drag buses in the geodata layout, a geodata table)
 - [ ] Persist force-layout positions
-- [ ] `dcline` and `areas` tables
+- [x] `dcline` and `dclinecost` tables (edit, validate, draw, solve; GLM `dcline` objects)
+- [ ] `areas` table
 - [ ] Copy/paste of cell ranges to and from spreadsheets
 - [ ] Multiple open cases (tabs) and a recent-files list
 

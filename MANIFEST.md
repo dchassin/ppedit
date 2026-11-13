@@ -16,6 +16,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Add or change a table column: `COLUMNS` (and `GLM_UNITS`) in `ppedit/case.py`; validation in `Case.validate`; `ppedit/_test/test_case.py`
 - Add a validation rule: `Case.validate`; test in `test_validate_finds_errors`
 - Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
+- Change DC line handling: `COLUMNS["dcline"]`, `COST_TABLES` and `Case.solve` in `ppedit/case.py`; solver callbacks in `ppedit/_dcline.py`; `ppedit/_test/test_dcline.py`
 - Add an API route: `ppedit/server.py` (and its docstring API list); `ppedit/_test/test_server.py`; call it from `ppedit/static/app.js`
 - Change the UI: `ppedit/static/{index.html,style.css,app.js}`
 - Change geodata handling or map layers: `Case.load_geodata`/`_geo_*` helpers in `ppedit/case.py`; `geoLayout`/`renderMap` in `ppedit/static/app.js`; `ppedit/_test/test_geodata.py`
@@ -30,6 +31,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/__init__.py` | package docs, re-exports | pdoc landing page |
 | `ppedit/cli.py` | CLI `main()`: serve, convert, check | entry point `ppedit`; tested by `_test/test_cli.py` |
 | `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O, edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
+| `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
 | `ppedit/static/index.html` | editor page layout | |
 | `ppedit/static/style.css` | editor styles | |

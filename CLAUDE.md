@@ -24,18 +24,20 @@ one `Case` (`ppedit/case.py`) in memory and serves a plain HTML/CSS/JS editor
   (specification and "What is not promised").
 
 Upstream references (read-only; use sparse checkout of
-`arras-energy/gridlabd`): `module/pypower/{bus,gen,branch,gencost}.cpp` for
+`arras-energy/gridlabd`): `module/pypower/{bus,gen,branch,gencost,dcline}.cpp` for
 GLM property names, units and keywords; `converters/py2glm.py` for the
 `gridlabd convert -t pypower` output this package should stay compatible with.
 
 ## Core conventions
 
-- Tables are lists of rows ordered as `COLUMNS[table]`; `gencost` rows are
-  `[model, startup, shutdown, ncost, costs]` with `costs` a comma-separated
-  string (as in the GLM `costs` property).
+- Tables are lists of rows ordered as `COLUMNS[table]`; `gencost` and
+  `dclinecost` rows are `[model, startup, shutdown, ncost, costs]` with
+  `costs` a comma-separated string (as in the GLM `costs` property).
+  `COST_TABLES` maps each cost table to the table it follows row by row.
 - Every edit goes through `Case.set_value`, `add_row`, `delete_rows`,
   `set_global`, or `apply_result`, which keep references valid (bus
-  renumber cascades, bus delete needs `cascade`, gencost follows gen). The
+  renumber cascades, bus delete needs `cascade`, gencost follows gen,
+  dclinecost follows dcline). The
   server wraps each in `Editor.edit()` for undo and rollback on error.
 - `.py` cases are parsed with `ast` and never executed (`_parse_py`,
   `_eval`). Do not replace this with `import`/`exec`.
@@ -66,7 +68,15 @@ Nothing needs network or credentials.
   reactive-power cost rows (`case30pwl`, `case9Q`, `case30Q`) with current
   numpy; the editor reports the solver error. `case9target` PF does not
   converge in PYPOWER either.
-- GLM import keeps only `bus`, `gen`, `branch`, `gencost`; everything else
+- DC lines are solved by `ppedit/_dcline.py`, not `pypower.toggle_dcline`
+  (which fails with current numpy and mishandles `dclinecost`,
+  out-of-service lines and Q cost rows); results are checked against the
+  expected values of `pypower/t/t_dcline.py`.
+- GLM `dcline`: `Sfrom` = `Pf + j Pt`, `Sto` = `Qf + j Qt` (GridLAB-D's
+  positional mapping in `pypower.cpp` and `py2glm.py`, not the meaning in
+  the `dcline.cpp` property descriptions). `dclinecost` has no GLM object
+  and is dropped on GLM output (with a comment).
+- GLM import keeps only `bus`, `gen`, `branch`, `gencost`, `dcline`; everything else
   is listed in `Case.notes`, and saving over the source file needs `force`.
 - GLM bus names are `pp_bus_<bus_i>`, unlike `py2glm.py` (`pp_bus_<row>`).
 - Force-layout positions are not persisted; only geodata is. The diagram is drawn in screen

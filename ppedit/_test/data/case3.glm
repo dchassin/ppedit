@@ -101,6 +101,23 @@ object pypower.gencost
     model 2;
     costs "0.01,20,0";
 }
+object pypower.dcline
+{
+    name pp_dcline_0;
+    from pp_bus_1;
+    to pp_bus_3;
+    status 1;
+    Sfrom 10+9.8j MVA;  // Pf + j Pt, as written by gridlabd convert
+    Sto 0+0j MVA;
+    Vfrom 1.02 pu.V;
+    Vto 1 pu.V;
+    Pmin 0 MW;
+    Pmax 50 MW;
+    Qmint -20 MVAr;
+    Qmaxt 20 MVAr;
+    loss1 0.02 MW/MW;
+    mu_Pmax 0 $/MW;
+}
 object powerplant
 {
     name "pp_plant_1";

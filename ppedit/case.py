@@ -1,15 +1,22 @@
 """PYPOWER case model
 
 The `Case` class holds one PYPOWER case (`version`, `baseMVA`, `bus`, `gen`,
-`branch`, and optional `gencost`) as plain Python lists so it can be edited
-row by row and sent to a browser as JSON. It reads and writes:
+`branch`, and optional `gencost`, `dcline` and `dclinecost`) as plain Python
+lists so it can be edited row by row and sent to a browser as JSON. It reads
+and writes:
 
   - PYPOWER case files (`.py`), parsed with `ast` (the file is never run);
     the case may be built up in a variable (`ppc = {...}`) or returned as a
     dict literal (`return {...}`);
   - PYPOWER JSON (`.json`), the same keys as a `ppc` dict with list arrays;
   - Arras Energy GridLAB-D models (`.glm`) that use `module pypower`
-    (`bus`, `gen`, `branch` and `gencost` objects).
+    (`bus`, `gen`, `branch`, `gencost` and `dcline` objects).
+
+DC lines (`dcline`, columns as in `pypower.idx_dcline`) connect two buses
+with a controlled real power flow `Pf` and linear losses `loss0 +
+loss1*Pf`; optional `dclinecost` rows (one per DC line, in the `gencost`
+format) price the flow `Pf` for OPF. `Case.solve` models them as in
+`pypower.toggle_dcline`.
 
 A case may also carry bus locations (`Case.geodata`): rows of `[BUS_I, LAT,
 LON, ...]` in decimal degrees (WGS84), where any further values are
@@ -25,7 +32,7 @@ Examples
     >>> from ppedit import Case
     >>> case = Case.builtin("case9")
     >>> case.size()
-    {'bus': 9, 'gen': 3, 'branch': 9, 'gencost': 3}
+    {'bus': 9, 'gen': 3, 'branch': 9, 'gencost': 3, 'dcline': 0, 'dclinecost': 0}
     >>> case.set_value("bus", 4, "Pd", 95)  # True would mean other cells changed
     False
     >>> [issue["message"] for issue in case.validate()]
@@ -45,12 +52,24 @@ Caveats
     objects in a GLM file (`load`, `powerplant`, `powerline`, `relay`,
     `shunt`, `transformer`, `scada`, `weather`, `geodata`, ...) are counted
     and reported by `Case.load()` but are not kept, so saving to GLM drops
-    them. `dcline` data is not supported.
+    them. `areas` data is not supported.
+
+  - GLM `dcline` objects: `Sfrom` holds `Pf + j Pt` and `Sto` holds
+    `Qf + j Qt`. This is how GridLAB-D passes these properties to PYPOWER
+    (real and imaginary parts in PYPOWER column order, `module/pypower/
+    pypower.cpp`) and how `gridlabd convert -t pypower` writes them, so the
+    matrix GridLAB-D solves matches the case; it differs from the property
+    descriptions in `dcline.cpp` (MVA flow at each end). `dclinecost` is
+    not written to GLM; a comment in the output says how many rows were
+    left out. GridLAB-D replaces `loss1 = 0` with its default loss factor
+    (`pypower::default_dcline_loss1`, 0.05) unless it can infer one from
+    `Sfrom` and `Sto`.
 
   - GLM output names buses `pp_bus_<bus_i>`, generators `pp_gen_<n>`,
     branches `pp_branch_<n>` and cost curves `pp_gencost_<n>` (1-based row
-    order). `gridlabd convert -t pypower` names buses by row order instead;
-    the two agree when bus numbers run 1..N in order.
+    order) and DC lines `pp_dcline_<n>` (1-based). `gridlabd convert -t
+    pypower` names buses by row order and DC lines from 0 instead; the bus
+    names agree when bus numbers run 1..N in order.
 
   - PYPOWER result columns (e.g. `PF`, `QF`, `lam_P`) present in an input
     case are dropped on load; only the input columns are edited.
@@ -100,6 +119,20 @@ BRANCH_STATUS = {1:"IN",0:"OUT"}
 
 COST_MODELS = {1:"PIECEWISE",2:"POLYNOMIAL"}
 """Generator cost model codes and their `module pypower` keywords"""
+
+DCLINE_STATUS = {1:"IN",0:"OUT"}
+"""DC line status codes and their `module pypower` keywords"""
+
+def _cost_columns(what):
+    return [
+        _col("model","","enum",2,"cost model",COST_MODELS),
+        _col("startup","$",desc="startup cost"),
+        _col("shutdown","$",desc="shutdown cost"),
+        _col("ncost","","int",3,"number of cost coefficients or points"),
+        _col("costs","","text","0,0,0",
+            f"comma-separated cost data in {what}: c(n-1),...,c0 for POLYNOMIAL; "
+            "p1,f1,p2,f2,... for PIECEWISE"),
+    ]
 
 COLUMNS = {
     "bus": [
@@ -155,20 +188,38 @@ COLUMNS = {
         _col("angmin","deg",default=-360.0,desc="minimum angle difference"),
         _col("angmax","deg",default=360.0,desc="maximum angle difference"),
     ],
-    "gencost": [
-        _col("model","","enum",2,"cost model",COST_MODELS),
-        _col("startup","$",desc="startup cost"),
-        _col("shutdown","$",desc="shutdown cost"),
-        _col("ncost","","int",3,"number of cost coefficients or points"),
-        _col("costs","","text","0,0,0",
-            "comma-separated cost data: c(n-1),...,c0 for POLYNOMIAL; "
-            "p1,f1,p2,f2,... for PIECEWISE"),
+    "gencost": _cost_columns("MW of generator output"),
+    "dcline": [
+        _col("fbus","","int",0,"from bus number"),
+        _col("tbus","","int",0,"to bus number"),
+        _col("status","","enum",1,"DC line status",DCLINE_STATUS),
+        _col("Pf","MW",desc="real power flow at the from bus (from -> to)"),
+        _col("Pt","MW",desc="real power flow at the to bus (from -> to)"),
+        _col("Qf","MVAr",desc="reactive power injection at the from bus"),
+        _col("Qt","MVAr",desc="reactive power injection at the to bus"),
+        _col("Vf","pu",default=1.0,desc="voltage setpoint at the from bus"),
+        _col("Vt","pu",default=1.0,desc="voltage setpoint at the to bus"),
+        _col("Pmin","MW",desc="minimum Pf (negative allows flow from to -> from)"),
+        _col("Pmax","MW",default=100.0,desc="maximum Pf"),
+        _col("QminF","MVAr",desc="minimum reactive power injection at the from bus"),
+        _col("QmaxF","MVAr",desc="maximum reactive power injection at the from bus"),
+        _col("QminT","MVAr",desc="minimum reactive power injection at the to bus"),
+        _col("QmaxT","MVAr",desc="maximum reactive power injection at the to bus"),
+        _col("loss0","MW",desc="constant term of the loss function (loss = loss0 + loss1*Pf)"),
+        _col("loss1","MW/MW",desc="linear term of the loss function (loss = loss0 + loss1*Pf)"),
     ],
+    "dclinecost": _cost_columns("MW of DC line flow Pf"),
 }
 """Editable columns of each table (name, unit, kind, default, description)"""
 
 TABLES = list(COLUMNS)
 """Names of the editable tables, in display order"""
+
+COST_TABLES = {"gencost":"gen","dclinecost":"dcline"}
+"""Cost tables and the table each one follows row by row"""
+
+DCLINE_GLM = ["Vfrom","Vto","Pmin","Pmax","Qminf","Qmaxf","Qmint","Qmaxt","loss0","loss1"]
+"""GLM `dcline` properties for the `dcline` columns `Vf` .. `loss1`"""
 
 GLM_UNITS = {
     "bus": {"Pd":"MW","Qd":"MVAr","Gs":"MW","Bs":"MVAr","Vm":"pu.kV",
@@ -181,6 +232,9 @@ GLM_UNITS = {
     "branch": {"r":"pu.Ohm","x":"pu.Ohm","b":"pu.S","rateA":"MVA",
         "rateB":"MVA","rateC":"MVA","ratio":"pu","angle":"deg",
         "angmin":"deg","angmax":"deg"},
+    "dcline": {"Vf":"pu.V","Vt":"pu.V","Pmin":"MW","Pmax":"MW",
+        "QminF":"MVAr","QmaxF":"MVAr","QminT":"MVAr","QmaxT":"MVAr",
+        "loss0":"MW","loss1":"MW/MW"},
 }
 """Units written to GLM, matching `gridlabd convert -t pypower`"""
 
@@ -301,17 +355,16 @@ class Case:
                         f"expected at least {len(spec)}")
                 rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
             self.tables[table] = rows
+        spec = COLUMNS["dcline"]
         rows = []
-        for n,row in enumerate(_tolist(data.get("gencost",[]))):
-            if len(row) < 4:
-                raise CaseError(f"gencost row {n+1} has fewer than 4 columns")
-            model,startup,shutdown,ncost = (_number(row[0],"int"),
-                _number(row[1]),_number(row[2]),_number(row[3],"int"))
-            costs = [float(x) for x in row[4:]]
-            need = 2*ncost if model == 1 else ncost
-            costs = costs[:need] if len(costs) >= need else costs
-            rows.append([model,startup,shutdown,ncost,_costs_text(costs)])
-        self.tables["gencost"] = rows
+        for n,row in enumerate(_tolist(data.get("dcline",[]))):
+            if len(row) < len(spec):
+                raise CaseError(f"dcline row {n+1} has {len(row)} columns, "
+                    f"expected at least {len(spec)}")
+            rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
+        self.tables["dcline"] = rows
+        for table in COST_TABLES:
+            self.tables[table] = _cost_rows(table,data.get(table,[]))
         self.geodata,self.geotags = _geo_from_ppc(data)
 
     @classmethod
@@ -379,21 +432,26 @@ class Case:
 
           - `arrays`: return numpy arrays (for the solver) instead of lists;
             geodata is left out
+
+        `gencost`, `dcline` and `dclinecost` are included only when they
+        have rows.
         """
         data = {"version":self.version,"baseMVA":self.baseMVA}
-        for table in ("bus","gen","branch"):
-            data[table] = [list(row) for row in self.tables[table]]
-        if self.tables["gencost"]:
-            costs = []
-            for model,startup,shutdown,ncost,text in self.tables["gencost"]:
-                costs.append([model,startup,shutdown,ncost]+_costs_list(text))
-            width = max(len(x) for x in costs)
-            data["gencost"] = [x+[0.0]*(width-len(x)) for x in costs]
+        for table in ("bus","gen","branch","gencost","dcline","dclinecost"):
+            if table in COST_TABLES:
+                if self.tables[table]:
+                    costs = []
+                    for model,startup,shutdown,ncost,text in self.tables[table]:
+                        costs.append([model,startup,shutdown,ncost]+_costs_list(text))
+                    width = max(len(x) for x in costs)
+                    data[table] = [x+[0.0]*(width-len(x)) for x in costs]
+            elif table in ("bus","gen","branch") or self.tables[table]:
+                data[table] = [list(row) for row in self.tables[table]]
         if arrays:
             import numpy as np # pylint: disable=import-outside-toplevel
-            for key in ("bus","gen","branch","gencost"):
+            for key in TABLES:
                 if key in data:
-                    width = len(COLUMNS[key]) if key != "gencost" else len(data[key][0])
+                    width = len(data[key][0]) if key in COST_TABLES else len(COLUMNS[key])
                     data[key] = np.array(data[key],dtype=float).reshape(-1,width)
         elif self.geodata:
             data["geodata"] = [list(row) for row in self.geodata]
@@ -453,11 +511,11 @@ def {name}():
     ppc["baseMVA"] = {_fmt(self.baseMVA)}
 ''')
         data = self.to_ppc()
-        for table in ("bus","gen","branch","gencost"):
+        for table in ("bus","gen","branch","gencost","dcline","dclinecost"):
             if table not in data:
                 continue
-            header = " ".join(c["name"] for c in COLUMNS[table]) if table != "gencost" \
-                else "model startup shutdown ncost c(n-1) ... c0"
+            header = " ".join(c["name"] for c in COLUMNS[table]) if table not in COST_TABLES \
+                else "model startup shutdown ncost c(n-1) ... c0 (or x1 y1 ... xn yn)"
             out.write(f"\n    ## {table} data\n    # {header}\n")
             out.write(f'    ppc["{table}"] = array([\n')
             rows = [", ".join(_fmt(v) for v in row) for row in data[table]]
@@ -510,6 +568,20 @@ def {name}():
                     f'    model {COST_MODELS.get(model,"UNKNOWN")};\n'
                     f'    startup {_fmt(startup)} $;\n    shutdown {_fmt(shutdown)} $;\n'
                     f'    costs "{costs}";\n}}\n')
+        if self.tables["dcline"]:
+            out.write("\n//\n// dcline\n//\n")
+            for n,row in enumerate(self.tables["dcline"]):
+                out.write(f'object pypower.dcline\n{{\n    name "pp_dcline_{n+1}";\n'
+                    f'    from "pp_bus_{row[0]}";\n    to "pp_bus_{row[1]}";\n'
+                    f'    status {DCLINE_STATUS.get(row[2],row[2])};\n'
+                    f'    Sfrom {_glm_complex(row[3],row[4])} MVA;\n'
+                    f'    Sto {_glm_complex(row[5],row[6])} MVA;\n')
+                for name,col,val in zip(DCLINE_GLM,COLUMNS["dcline"][7:],row[7:]):
+                    out.write(f"    {name} {_glm_value('dcline',col,val)};\n")
+                out.write("}\n")
+        if self.tables["dclinecost"]:
+            out.write(f"\n// {len(self.tables['dclinecost'])} dclinecost row(s) not written: "
+                "module pypower has no DC line cost objects\n")
         return out.getvalue()
 
     # ----- editing -----
@@ -544,9 +616,9 @@ def {name}():
     def set_value(self,table:str,row:int,column:str,value) -> bool:
         """Set one cell
 
-        Changing a bus number also renumbers the generators and branches
-        that refer to it. Changing a cost model or cost data updates
-        `ncost` to match.
+        Changing a bus number also renumbers the generators, branches, DC
+        lines and geodata that refer to it. Changing a cost model or cost
+        data (`gencost` or `dclinecost`) updates `ncost` to match.
 
         Returns
         -------
@@ -581,19 +653,20 @@ def {name}():
                 if gen[0] == old:
                     gen[0] = value
                     cascade = True
-            for branch in self.tables["branch"]:
-                for j in (0,1):
-                    if branch[j] == old:
-                        branch[j] = value
-                        cascade = True
+            for table2 in ("branch","dcline"):
+                for branch in self.tables[table2]:
+                    for j in (0,1):
+                        if branch[j] == old:
+                            branch[j] = value
+                            cascade = True
             for geo in self.geodata:
                 if geo[0] == old and value != old:
                     geo[0] = value
                     cascade = True
-        if table in ("gen","branch") and column in ("bus","fbus","tbus"):
+        if table in ("gen","branch","dcline") and column in ("bus","fbus","tbus"):
             if not any(r[0] == value for r in self.tables["bus"]):
                 raise CaseError(f"bus {value} does not exist")
-        if table == "gencost" and column == "model" and value != record[0]:
+        if table in COST_TABLES and column == "model" and value != record[0]:
             n = len(_costs_list(record[4]))
             record[3] = n//2 if value == 1 else n
             cascade = True
@@ -613,7 +686,7 @@ def {name}():
             ref = [r[0] for r in buses if r[1] == 3]
             row[0] = ref[0] if ref else (buses[0][0] if buses else 0)
             row[6] = self.baseMVA
-        elif table == "branch":
+        elif table in ("branch","dcline"):
             row[0] = buses[0][0] if buses else 0
             row[1] = buses[1][0] if len(buses) > 1 else row[0]
         return row
@@ -631,9 +704,9 @@ def {name}():
 
           - `after`: insert after this row (default: append)
 
-        Adding a generator also adds a cost row (a copy of the last one, or
-        zero polynomial costs) when the case has cost data, so `gencost` stays
-        aligned with `gen`.
+        Adding a generator (DC line) also adds a cost row (a copy of the last
+        one, or zero polynomial costs) when the case has `gencost`
+        (`dclinecost`) rows, so the cost table stays aligned with its table.
         """
         self._check(table)
         rows = self.tables[table]
@@ -656,8 +729,9 @@ def {name}():
         except CaseError:
             del rows[index]
             raise
-        if table == "gen" and self.tables["gencost"]:
-            costs = self.tables["gencost"]
+        cost = {v:k for k,v in COST_TABLES.items()}.get(table)
+        if cost and self.tables[cost]:
+            costs = self.tables[cost]
             ngen = len(rows) - 1
             template = list(costs[ngen-1]) if ngen and len(costs) >= ngen \
                 else [2,0.0,0.0,3,"0,0,0"]
@@ -674,9 +748,12 @@ def {name}():
 
           - `rows`: row indexes to delete
 
-          - `cascade`: when deleting buses, also delete the generators and
-            branches connected to them; otherwise refuse if any exist.
-            Geodata rows of deleted buses are always removed.
+          - `cascade`: when deleting buses, also delete the generators,
+            branches and DC lines connected to them; otherwise refuse if any
+            exist. Geodata rows of deleted buses are always removed.
+
+        Deleting generators (DC lines) also deletes their `gencost`
+        (`dclinecost`) rows.
 
         Returns
         -------
@@ -693,22 +770,25 @@ def {name}():
             gens = [n for n,g in enumerate(self.tables["gen"]) if g[0] in numbers]
             branches = [n for n,b in enumerate(self.tables["branch"])
                 if b[0] in numbers or b[1] in numbers]
-            if (gens or branches) and not cascade:
+            dclines = [n for n,b in enumerate(self.tables["dcline"])
+                if b[0] in numbers or b[1] in numbers]
+            if (gens or branches or dclines) and not cascade:
                 raise CaseError(f"bus(es) {sorted(numbers)} have {len(gens)} "
-                    f"generator(s) and {len(branches)} branch(es) connected")
-            for k,v in self.delete_rows("gen",gens).items():
-                removed[k] += v
-            for k,v in self.delete_rows("branch",branches).items():
-                removed[k] += v
+                    f"generator(s), {len(branches)} branch(es) and {len(dclines)} "
+                    "DC line(s) connected")
+            for sub,index in (("gen",gens),("branch",branches),("dcline",dclines)):
+                for k,v in self.delete_rows(sub,index).items():
+                    removed[k] += v
             self.geodata = [g for g in self.geodata if g[0] not in numbers]
-        if table == "gen" and self.tables["gencost"]:
-            ngen = len(self.tables["gen"])
-            costs = self.tables["gencost"]
+        cost = {v:k for k,v in COST_TABLES.items()}.get(table)
+        if cost and self.tables[cost]:
+            ngen = len(self.tables[table])
+            costs = self.tables[cost]
             drop = [r for r in rows if r < len(costs)]
             drop += [r+ngen for r in rows if r+ngen < len(costs)]
             for r in sorted(set(drop),reverse=True):
                 del costs[r]
-                removed["gencost"] += 1
+                removed[cost] += 1
         for r in rows:
             del self.tables[table][r]
             removed[table] += 1
@@ -786,16 +866,23 @@ def {name}():
         return where
 
     def apply_result(self,result:dict):
-        """Copy a solution's bus voltages and generator outputs into the case"""
+        """Copy a solution's bus voltages, generator outputs and DC line flows into the case
+
+        DC line `Pf`, `Pt`, `Qf` and `Qt` are copied for in-service lines.
+        """
         if not result.get("success"):
             raise CaseError("cannot apply a failed solution")
         if len(result["bus"]) != len(self.tables["bus"]) \
-                or len(result["gen"]) != len(self.tables["gen"]):
+                or len(result["gen"]) != len(self.tables["gen"]) \
+                or len(result.get("dcline",[])) != len(self.tables["dcline"]):
             raise CaseError("solution does not match the case (it was edited)")
         for row,res in zip(self.tables["bus"],result["bus"]):
             row[7],row[8] = res["Vm"],res["Va"]
         for row,res in zip(self.tables["gen"],result["gen"]):
             row[1],row[2] = res["Pg"],res["Qg"]
+        for row,res in zip(self.tables["dcline"],result.get("dcline",[])):
+            if res["solved"]:
+                row[3:7] = [res["Pf"],res["Pt"],res["Qf"],res["Qt"]]
 
     # ----- checking and solving -----
 
@@ -813,7 +900,7 @@ def {name}():
         def add(level,table,row,column,message):
             issues.append({"level":level,"table":table,"row":row,
                 "column":column,"message":message})
-        bus,gen,branch,costs = (self.tables[t] for t in TABLES)
+        bus,gen,branch,dcline = (self.tables[t] for t in ("bus","gen","branch","dcline"))
         if not bus:
             add("error","bus",None,None,"case has no buses")
         numbers = {}
@@ -844,6 +931,30 @@ def {name}():
                 add("error","gen",n,"Qmin","Qmin exceeds Qmax")
             if row[7] == 1:
                 online.setdefault(row[0],[]).append(n)
+        for n,row in enumerate(dcline):
+            for j,col in ((0,"fbus"),(1,"tbus")):
+                if row[j] not in numbers:
+                    add("error","dcline",n,col,f"bus {row[j]} does not exist")
+                elif row[2] == 1:
+                    online.setdefault(row[j],[]).append(None) # a DC line terminal is a PV source
+            if row[0] == row[1]:
+                add("error","dcline",n,"tbus","DC line connects a bus to itself")
+            if row[9] > row[10]:
+                add("error","dcline",n,"Pmin","Pmin exceeds Pmax")
+            if row[11] > row[12]:
+                add("error","dcline",n,"QminF","QminF exceeds QmaxF")
+            if row[13] > row[14]:
+                add("error","dcline",n,"QminT","QminT exceeds QmaxT")
+            if row[16] >= 1:
+                add("error","dcline",n,"loss1","loss1 must be less than 1")
+            elif row[16] < 0:
+                add("warning","dcline",n,"loss1","loss1 is negative")
+            for k,col in ((7,"Vf"),(8,"Vt")):
+                if row[k] <= 0:
+                    add("warning","dcline",n,col,"voltage setpoint is not positive")
+            if row[2] == 1 and not row[9] <= row[3] <= row[10]:
+                add("warning","dcline",n,"Pf",
+                    "Pf is outside Pmin..Pmax (power flow uses Pf as given)")
         for n,row in enumerate(bus):
             if row[1] in (2,3) and row[0] not in online:
                 add("warning","bus",n,"type",
@@ -868,24 +979,30 @@ def {name}():
             for n,row in enumerate(bus):
                 if row[0] not in connected and row[1] != 4:
                     add("warning","bus",n,None,f"bus {row[0]} has no in-service branch")
-        if costs:
-            if len(costs) not in (len(gen),2*len(gen)):
-                add("error","gencost",None,None,
-                    f"{len(costs)} cost rows for {len(gen)} generators "
-                    f"(need {len(gen)} or {2*len(gen)})")
+        for table,owner in COST_TABLES.items():
+            costs,count = self.tables[table],len(self.tables[owner])
+            if not costs:
+                continue
+            if table == "gencost" and len(costs) not in (count,2*count):
+                add("error",table,None,None,
+                    f"{len(costs)} cost rows for {count} generators "
+                    f"(need {count} or {2*count})")
+            elif table == "dclinecost" and len(costs) != count:
+                add("error",table,None,None,
+                    f"{len(costs)} cost rows for {count} DC lines (need {count})")
             for n,(model,startup,shutdown,ncost,text) in enumerate(costs):
                 values = _costs_list(text)
                 need = 2*ncost if model == 1 else ncost
                 if len(values) != need:
-                    add("error","gencost",n,"costs",
+                    add("error",table,n,"costs",
                         f"{COST_MODELS.get(model,'?')} with ncost={ncost} needs "
                         f"{need} values, found {len(values)}")
                 if model == 1:
                     xs = values[0::2]
                     if any(b < a for a,b in zip(xs,xs[1:])):
-                        add("error","gencost",n,"costs","piecewise MW points must increase")
+                        add("error",table,n,"costs","piecewise MW points must increase")
                 if startup < 0 or shutdown < 0:
-                    add("error","gencost",n,"startup","startup/shutdown cost is negative")
+                    add("error",table,n,"startup","startup/shutdown cost is negative")
         if self.geodata:
             seen = {}
             for n,row in enumerate(self.geodata):
@@ -918,11 +1035,22 @@ def {name}():
           - `dict`: `success`, `kind`, `iterations` (PF), `objective`
             (OPF, $/h), `losses_MW`, `log` (solver text output), and the rows
             `bus` (`bus_i`, `Vm`, `Va`, `lam_P`), `gen` (`bus`, `Pg`, `Qg`),
-            and `branch` (`fbus`, `tbus`, `PF`, `QF`, `PT`, `QT`,
-            `loading_pct` of `rateA`, or `None` when unrated)
+            `branch` (`fbus`, `tbus`, `PF`, `QF`, `PT`, `QT`,
+            `loading_pct` of `rateA`, or `None` when unrated), and `dcline`
+            (`fbus`, `tbus`, `solved`, `Pf`, `Pt`, `Qf`, `Qt`, `Vf`, `Vt`,
+            `loss_MW`, and for OPF the multipliers `mu_Pmin`, `mu_Pmax`
+            in $/MWh). `losses_MW` includes the DC line losses, which are
+            also given alone as `dcline_losses_MW`.
 
         Buses with no in-service branch are solved as isolated (type NONE)
-        without changing the case; `log` names them.
+        without changing the case; `log` names them. DC lines are modeled
+        as in `pypower.toggle_dcline`: each in-service line is a pair of
+        generators at its terminal buses, which become PV buses held at
+        `Vf` and `Vt`; power flow keeps `Pf` and sets `Pt = Pf - (loss0 +
+        loss1*Pf)`, and OPF dispatches `Pf` within `Pmin..Pmax` at the
+        `dclinecost` cost (zero if there is none). DC lines that are out of
+        service or touch an isolated bus are not solved (`solved` is
+        false, flows 0).
 
         Exceptions
         ----------
@@ -954,6 +1082,17 @@ def {name}():
         if isolated:
             log.write(f"Solved bus(es) {', '.join(str(x) for x in isolated)} as isolated "
                 "(type NONE): no in-service branch\n")
+        if "dcline" in ppc:
+            from ppedit._dcline import add_dclines # pylint: disable=import-outside-toplevel
+            dead = {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated)
+            cut = [n for n,r in enumerate(self.tables["dcline"])
+                if r[2] == 1 and (r[0] in dead or r[1] in dead)]
+            for n in cut:
+                ppc["dcline"][n,2] = 0
+            if cut:
+                log.write(f"DC line(s) {', '.join(str(n+1) for n in cut)} not solved: "
+                    "terminal bus is isolated\n")
+            ppc = add_dclines(ppc)
         with contextlib.redirect_stdout(log), warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
@@ -965,7 +1104,7 @@ def {name}():
             except Exception as err: # pylint: disable=broad-exception-caught
                 _logger.debug("solver failed: %s",err)
                 return {"success":False,"kind":kind,"log":log.getvalue()+f"\n{err}",
-                    "bus":[],"gen":[],"branch":[]}
+                    "bus":[],"gen":[],"branch":[],"dcline":[]}
         try:
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
             with warnings.catch_warnings():
@@ -973,6 +1112,21 @@ def {name}():
                 printpf(res,log,ppoption(opt,OUT_ALL=1)) # results form: (results, fd, ppopt)
         except Exception as err: # pylint: disable=broad-exception-caught
             log.write(f"(report unavailable: {err})\n")
+        dclines = []
+        for n,d in enumerate(res["dcline"] if "dcline" in res else []):
+            solved = bool(d[2]) and bool(res["success"])
+            dclines.append({"fbus":int(d[0]),"tbus":int(d[1]),"solved":solved,
+                "Pf":float(d[3]),"Pt":float(d[4]),"Qf":float(d[5]),"Qt":float(d[6]),
+                "Vf":float(d[7]),"Vt":float(d[8]),"loss_MW":float(d[3]-d[4]) if solved else 0.0,
+                "mu_Pmin":float(d[17]) if kind == "opf" else None,
+                "mu_Pmax":float(d[18]) if kind == "opf" else None})
+        if dclines:
+            log.write("\nDC lines\n   #   from     to      Pf MW      Pt MW    loss MW"
+                "    Qf MVAr    Qt MVAr\n")
+            for n,d in enumerate(dclines):
+                log.write(f"{n+1:4d} {d['fbus']:6d} {d['tbus']:6d} " + (
+                    "".join(f"{d[k]:11.2f}" for k in ("Pf","Pt","loss_MW","Qf","Qt"))
+                    if d["solved"] else "   (not solved: out of service or isolated)") + "\n")
         bus,gen,branch = res["bus"],res["gen"],res["branch"]
         result = {
             "success": bool(res["success"]),
@@ -986,6 +1140,7 @@ def {name}():
                 for b in bus],
             "gen": [{"bus":int(g[0]),"Pg":float(g[1]),"Qg":float(g[2])} for g in gen],
             "branch": [],
+            "dcline": dclines,
         }
         losses = 0.0
         for b in branch:
@@ -997,7 +1152,8 @@ def {name}():
             result["branch"].append({"fbus":int(b[0]),"tbus":int(b[1]),
                 "PF":pf,"QF":qf,"PT":pt,"QT":qt,
                 "loading_pct":100*smax/rate if rate > 0 else None})
-        result["losses_MW"] = losses
+        result["dcline_losses_MW"] = sum(d["loss_MW"] for d in dclines)
+        result["losses_MW"] = losses + result["dcline_losses_MW"]
         return _jsonsafe(result)
 
 # ---------------------------------------------------------------------------
@@ -1018,6 +1174,20 @@ def builtin_cases() -> list[str]:
         m = re.match(r"case(\d+)",name)
         return (int(m.group(1)) if m else 99999,name)
     return sorted((x for x in names if x not in skip),key=order)
+
+def _cost_rows(table,value):
+    """Read `gencost`/`dclinecost` matrix rows as `[model, startup, shutdown, ncost, costs]`"""
+    rows = []
+    for n,row in enumerate(_tolist(value)):
+        if len(row) < 4:
+            raise CaseError(f"{table} row {n+1} has fewer than 4 columns")
+        model,startup,shutdown,ncost = (_number(row[0],"int"),
+            _number(row[1]),_number(row[2]),_number(row[3],"int"))
+        costs = [float(x) for x in row[4:]]
+        need = 2*ncost if model == 1 else ncost
+        costs = costs[:need] if len(costs) >= need else costs
+        rows.append([model,startup,shutdown,ncost,_costs_text(costs)])
+    return rows
 
 def _tolist(value):
     if hasattr(value,"tolist"):
@@ -1142,6 +1312,29 @@ def _glm_angle(text,hemispheres):
         return -value if m.group(2).upper() == hemispheres[1] else value
     return _number(text)
 
+def _glm_complex(real,imag):
+    """Format two numbers as a GLM complex value `a+bj`"""
+    sign = "-" if imag < 0 or (imag == 0 and math.copysign(1,imag) < 0) else "+"
+    return f"{_fmt(real)}{sign}{_fmt(abs(imag))}j"
+
+_COMPLEX = re.compile(r"^\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"
+    r"(?:\s*([+-]\s*(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*([ijdr]))?")
+
+def _glm_complex_value(text):
+    """Read a GLM complex value (`a+bj`, `a+bi`, polar `a+bd`/`a+br`, or real) as `(real, imag)`"""
+    text = _unquote(text)
+    m = _COMPLEX.match(text)
+    if not m:
+        raise CaseError(f"'{text}' is not a complex number")
+    a = float(m.group(1))
+    if m.group(2) is None:
+        return a,0.0
+    b = float(m.group(2).replace(" ",""))
+    if m.group(3) in "ij":
+        return a,b
+    angle = math.radians(b) if m.group(3) == "d" else b
+    return a*math.cos(angle),a*math.sin(angle)
+
 def _glm_value(table,col,val):
     if col["kind"] == "enum":
         return col["options"].get(val,str(val))
@@ -1241,7 +1434,7 @@ def _parse_py(text,name):
 
 # ----- GLM parser -----
 
-_SOLVER_CLASSES = {"bus","gen","branch","gencost"}
+_SOLVER_CLASSES = {"bus","gen","branch","gencost","dcline"}
 
 def _strip_comments(text):
     out = []
@@ -1328,7 +1521,7 @@ def _parse_glm(text):
     text = _strip_comments(text)
     directives = sum(1 for line in text.splitlines() if line.strip().startswith("#"))
     text = "\n".join("" if line.strip().startswith("#") else line for line in text.splitlines())
-    data = {"version":"2","baseMVA":100.0,"bus":[],"gen":[],"branch":[],"gencost":[]}
+    data = {"version":"2","baseMVA":100.0,"bus":[],"gen":[],"branch":[],"gencost":[],"dcline":[]}
     geodata = []
     names = {"bus":{},"gen":{}}
     objects = {t:[] for t in _SOLVER_CLASSES}
@@ -1422,12 +1615,35 @@ def _parse_glm(text):
         costs.append((seen[index],index,n,[model,_glm_number(props.get("startup","0")),
             _glm_number(props.get("shutdown","0")),ncost]+values))
     data["gencost"] = [x[3] for x in sorted(costs)]
+    # DC lines (Sfrom = Pf + j Pt and Sto = Qf + j Qt, as GridLAB-D passes them to PYPOWER)
+    spec = COLUMNS["dcline"]
+    for n,props in enumerate(objects["dcline"]):
+        try:
+            row = [0,0,_glm_number(props.get("status","IN"),"enum",DCLINE_STATUS)]
+            for j,(ref,num) in enumerate((("from","fbus"),("to","tbus"))):
+                if ref in props:
+                    bus = _unquote(props[ref])
+                    if bus not in names["bus"]:
+                        raise CaseError(f"{ref} '{bus}' is not a bus")
+                    row[j] = names["bus"][bus]
+                elif num in props:
+                    row[j] = _glm_number(props[num],"int")
+                else:
+                    raise CaseError(f"'{ref}' is missing")
+            row += list(_glm_complex_value(props.get("Sfrom","0")))
+            row += list(_glm_complex_value(props.get("Sto","0")))
+            row += [_glm_number(props[name]) if name in props else col["default"]
+                for name,col in zip(DCLINE_GLM,spec[7:])]
+        except CaseError as err:
+            raise CaseError(f"dcline object {n+1}: {err}") from err
+        data["dcline"].append(row)
     if geodata:
         data["geodata"] = geodata
     notes = []
     if directives:
         others["# directive"] = directives
     if others:
-        notes.append("not kept (only module pypower bus, gen, branch and gencost data are edited): "
+        notes.append("not kept (only module pypower bus, gen, branch, gencost and dcline data "
+            "are edited): "
             + ", ".join(f"{v} {k}" for k,v in sorted(others.items())))
     return data,notes

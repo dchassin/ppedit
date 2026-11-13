@@ -5,11 +5,11 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
-  selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set() },
+  selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set() },
   filter: "",
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
-  pick: null,          // {kind: "bus"|"branch", index}
+  pick: null,          // {kind: "bus"|"branch"|"dcline", index}
   style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
   layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
   map: (() => {
@@ -37,7 +37,7 @@ const sv = (tag, attrs = {}) => {
   for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
   return el;
 };
-const TABLE_TITLES = { bus: "bus", gen: "generator", branch: "branch", gencost: "generator cost" };
+const TABLE_TITLES = { bus: "bus", gen: "generator", branch: "branch", gencost: "generator cost", dcline: "DC line", dclinecost: "DC line cost" };
 const fmt = (v, d = 3) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : v);
 
 // ---------------------------------------------------------------- server
@@ -175,6 +175,10 @@ function rowLabel(table, i) {
     const g = i % ngen, q = i >= ngen;
     return `${q ? "Q " : ""}gen ${g + 1}${t.gen[g] ? ` @${t.gen[g][0]}` : ""}`;
   }
+  if (table === "dclinecost") {
+    const d = t.dcline[i];
+    return `dcline ${i + 1}${d ? ` ${d[0]}→${d[1]}` : ""}`;
+  }
   return `${i + 1}`;
 }
 
@@ -242,8 +246,8 @@ async function commitCell(el) {
   try {
     const st = await act("/api/cell", { table, row, column, value: el.value });
     if (st.cascade) {
-      const msg = table === "bus" && column === "bus_i" ? "Bus renumbered; generators and branches updated" :
-        table === "gencost" ? "ncost updated to match the cost data" : "Related values updated";
+      const msg = table === "bus" && column === "bus_i" ? "Bus renumbered; generators, branches and DC lines updated" :
+        table === "gencost" || table === "dclinecost" ? "ncost updated to match the cost data" : "Related values updated";
       toast(msg);
     }
   } catch (_) {
@@ -283,8 +287,9 @@ async function deleteRows() {
     const nums = new Set(rows.map(i => S.state.case.tables.bus[i][0]));
     const ng = S.state.case.tables.gen.filter(g => nums.has(g[0])).length;
     const nb = S.state.case.tables.branch.filter(b => nums.has(b[0]) || nums.has(b[1])).length;
-    if (ng || nb) {
-      if (!confirm(`Deleting ${rows.length} bus(es) also deletes ${ng} generator(s) and ${nb} branch(es) connected to them. Continue?`)) return;
+    const nd = S.state.case.tables.dcline.filter(b => nums.has(b[0]) || nums.has(b[1])).length;
+    if (ng || nb || nd) {
+      if (!confirm(`Deleting ${rows.length} bus(es) also deletes ${ng} generator(s), ${nb} branch(es) and ${nd} DC line(s) connected to them. Continue?`)) return;
       cascade = true;
     }
   }
@@ -322,7 +327,7 @@ function layout(force = false) {
   const c = S.state.case;
   const buses = c.tables.bus.map(b => b[0]);
   const ids = new Set(buses);
-  const edges = c.tables.branch.filter(b => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]).map(b => [b[0], b[1]]);
+  const edges = [...c.tables.branch, ...c.tables.dcline].filter(b => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]).map(b => [b[0], b[1]]);
   const adj = new Map(buses.map(b => [b, []]));
   edges.forEach(([a, b]) => { adj.get(a).push(b); adj.get(b).push(a); });
   const missing = buses.filter(b => force || !S.pos[b]);
@@ -390,6 +395,7 @@ let needFit = true;
 function vColorClassic(vm) { return vColor(2 - vm); }
 function loadColor(L) { return vColor(1 - (Math.min(L, 150) - 50) / 50 * 0.06); }
 const NEUTRAL_LINE = "#8d9792";
+const DC_COLOR = "#7b4fa0"; // matches --dc in style.css
 
 function busSummary() {
   // per-bus generation, load, voltage and connectivity for labels and shapes
@@ -429,6 +435,28 @@ function renderNetwork() {
   const sum = busSummary();
   const errBus = new Set(S.state.issues.filter(i => i.table === "bus" && i.level === "error" && i.row !== null).map(i => i.row));
   const labels = sv("g"); // line labels drawn above lines, below nodes
+  // classic style: arrow in the direction of real power flow and |MW| label at mid-line
+  const flowMark = (p, q, mw, color) => {
+    const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+    if (len <= 30) return;
+    const ux = dx / len, uy = dy / len;
+    const fwd = mw >= 0;
+    const t = 0.5;
+    const ax = p.x + dx * t, ay = p.y + dy * t;
+    const sx = fwd ? ux : -ux, sy = fwd ? uy : -uy;
+    const a = 4;
+    labels.append(sv("path", {
+      d: `M${ax + sx * a},${ay + sy * a} L${ax - sx * a - sy * a * 0.8},${ay - sy * a + sx * a * 0.8} L${ax - sx * a + sy * a * 0.8},${ay - sy * a - sx * a * 0.8} Z`,
+      class: "flow-arrow", fill: color || NEUTRAL_LINE,
+    }));
+    let ang = Math.atan2(dy, dx) * 180 / Math.PI;
+    if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
+    const nx = -uy, ny = ux, off = 7;
+    const lx = ax + nx * off * (ny < 0 ? -1 : 1), ly = ay + ny * off * (ny < 0 ? -1 : 1);
+    const txt = sv("text", { x: lx, y: ly, class: "flow-label", "text-anchor": "middle", "dominant-baseline": "middle", transform: `rotate(${ang} ${lx} ${ly})` });
+    txt.textContent = `${Math.abs(mw).toFixed(1)} MW`;
+    labels.append(txt);
+  };
   // edges
   c.tables.branch.forEach((b, i) => {
     const p = W(b[0]), q = W(b[1]);
@@ -465,26 +493,35 @@ function renderNetwork() {
         const mx = p.x + dx * 0.25, my = p.y + dy * 0.25;
         for (const s of [-3, 3]) g.append(sv("circle", { cx: mx + ux * s, cy: my + uy * s, r: 4.5, class: "xfmr-sym" }));
       }
-      if (rb && len > 30) {
-        // flow arrow and MW label at mid-line, arrow pointing in the direction of real power flow
-        const fwd = rb.PF >= 0;
-        const t = 0.5;
-        const ax = p.x + dx * t, ay = p.y + dy * t;
-        const sx = fwd ? ux : -ux, sy = fwd ? uy : -uy;
-        const a = 4;
-        labels.append(sv("path", {
-          d: `M${ax + sx * a},${ay + sy * a} L${ax - sx * a - sy * a * 0.8},${ay - sy * a + sx * a * 0.8} L${ax - sx * a + sy * a * 0.8},${ay - sy * a - sx * a * 0.8} Z`,
-          class: "flow-arrow", fill: line.style.stroke || NEUTRAL_LINE,
-        }));
-        let ang = Math.atan2(dy, dx) * 180 / Math.PI;
-        if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
-        const nx = -uy, ny = ux, off = 7;
-        const lx = ax + nx * off * (ny < 0 ? -1 : 1), ly = ay + ny * off * (ny < 0 ? -1 : 1);
-        const txt = sv("text", { x: lx, y: ly, class: "flow-label", "text-anchor": "middle", "dominant-baseline": "middle", transform: `rotate(${ang} ${lx} ${ly})` });
-        txt.textContent = `${Math.abs(rb.PF).toFixed(1)} MW`;
-        labels.append(txt);
-      }
+      if (rb) flowMark(p, q, rb.PF, line.style.stroke);
     }
+  });
+  // DC lines: dash-dot lines with a "DC" converter tag near the from bus
+  c.tables.dcline.forEach((d, i) => {
+    const p = W(d[0]), q = W(d[1]);
+    if (!ids.has(d[0]) || !ids.has(d[1]) || !p || !q || d[0] === d[1]) return;
+    const on = d[2] === 1;
+    const rd = res && res.dcline && res.dcline[i] && res.dcline[i].solved ? res.dcline[i] : null;
+    const cls = ["edge", "dcline"];
+    if (!on) cls.push("out");
+    if (S.pick && S.pick.kind === "dcline" && S.pick.index === i) cls.push("sel");
+    g.append(sv("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: cls.join(" ") }));
+    const dx = q.x - p.x, dy = q.y - p.y;
+    if (Math.hypot(dx, dy) > 40) {
+      const mx = p.x + dx * 0.25, my = p.y + dy * 0.25;
+      labels.append(sv("rect", { x: mx - 8, y: my - 5.5, width: 16, height: 11, rx: 2, class: "dc-sym" }));
+      const tx = sv("text", { x: mx, y: my + 0.5, class: "dc-sym-text", "text-anchor": "middle", "dominant-baseline": "middle" });
+      tx.textContent = "DC";
+      labels.append(tx);
+    }
+    if (rd && classic) flowMark(p, q, rd.Pf, DC_COLOR);
+    const hit = sv("line", { x1: p.x, y1: p.y, x2: q.x, y2: q.y, class: "edge-hit" });
+    const title = sv("title");
+    title.textContent = `DC line ${i + 1}: ${d[0]} → ${d[1]}${on ? "" : " OUT"}` +
+      (rd ? `\nPf ${fmt(rd.Pf, 1)} MW, Pt ${fmt(rd.Pt, 1)} MW, loss ${fmt(rd.loss_MW, 2)} MW` : `\nPf ${fmt(d[3], 1)} MW (case value)`);
+    hit.append(title);
+    hit.addEventListener("click", e => { e.stopPropagation(); pick("dcline", i); });
+    g.append(hit);
   });
   g.append(labels);
   // nodes
@@ -557,7 +594,7 @@ function renderNetwork() {
 // are horizontal and branches vertical. Rows are the hop distance from the nearest
 // generator bus (sources on top), split so that no branch joins two buses of the
 // same row; buses are ordered within rows by barycenter sweeps (crossing reduction).
-// Every generator, load and branch gets its own column and each bus bar spans its
+// Every generator, load, branch and DC line gets its own column and each bus bar spans its
 // own columns; bars that would overlap in a row move to an extra track. The diagram
 // is drawn in layout units under one transform, so it scales as a whole.
 
@@ -569,10 +606,11 @@ function onelineLayout() {
   const buses = T.bus.map(b => b[0]);
   const ids = new Set(buses);
   const brs = T.branch.map((b, i) => [b, i]).filter(([b]) => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]);
-  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0])]);
+  const dcs = T.dcline.map((d, i) => [d, i]).filter(([d]) => ids.has(d[0]) && ids.has(d[1]) && d[0] !== d[1]);
+  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0]), dcs.map(([d]) => [d[0], d[1]])]);
   if (olCache && olCache.sig === sig) return olCache;
   const adj = new Map(buses.map(b => [b, new Set()]));
-  brs.forEach(([b]) => { adj.get(b[0]).add(b[1]); adj.get(b[1]).add(b[0]); });
+  [...brs, ...dcs].forEach(([b]) => { adj.get(b[0]).add(b[1]); adj.get(b[1]).add(b[0]); });
   // levels: hops from the nearest generator bus; an island without one starts at REF or its best-connected bus
   const level = new Map();
   const bfs = starts => {
@@ -623,7 +661,7 @@ function onelineLayout() {
       place(rows[ri]);
     }
   }
-  // columns: one per generator, load and branch (branches sit between their two buses)
+  // columns: one per generator, load, branch and DC line (lines sit between their two buses)
   const slots = [], own = new Map(buses.map(b => [b, []]));
   const add = (key, kind, ref, ...on) => {
     const s = { key, kind, ref, x: 0 };
@@ -634,6 +672,7 @@ function onelineLayout() {
   T.gen.forEach((g, i) => { if (ids.has(g[0])) add(u.get(g[0]) - 1e-9, "gen", i, g[0]); });
   T.bus.forEach(b => { if (b[2] !== 0 || b[3] !== 0) add(u.get(b[0]) + 1e-9, "load", b[0], b[0]); });
   brs.forEach(([b, i]) => add((u.get(b[0]) + u.get(b[1])) / 2, "branch", i, b[0], b[1]));
+  dcs.forEach(([d, i]) => add((u.get(d[0]) + u.get(d[1])) / 2, "dcline", i, d[0], d[1]));
   buses.forEach(b => { if (!own.get(b).length) add(u.get(b), "bare", b, b); });
   slots.sort((a, b) => a.key - b.key);
   slots.forEach((s, i) => (s.x = i * OL.dx));
@@ -665,7 +704,7 @@ function onelineLayout() {
   const corners = buses.length ? [{ x: Math.min(...xs0), y: 0 }, { x: Math.max(...xs1), y: y - OL.gap }] : [];
   const col = kind => new Map(slots.filter(s => s.kind === kind).map(s => [s.ref, s.x]));
   const ys = [...new Set([...bar.values()].map(B => B.y))].sort((a, b) => a - b);
-  olCache = { sig, bar, ys, corners, gen: col("gen"), load: col("load"), branch: col("branch") };
+  olCache = { sig, bar, ys, corners, gen: col("gen"), load: col("load"), branch: col("branch"), dcline: col("dcline") };
   return olCache;
 }
 
@@ -789,6 +828,39 @@ function renderOneline() {
       (rb ? `\nPF ${fmt(rb.PF, 1)} MW, QF ${fmt(rb.QF, 1)} MVAr, loading ${rb.loading_pct === null ? "unrated" : fmt(rb.loading_pct, 0) + "%"}` : ""));
     lines.append(hit);
   });
+  // DC lines: dash-dot vertical lines with a converter (box with a diagonal) at each end
+  const converter = (xx, yc, on) => {
+    lines.append(sv("rect", { x: xx - 6, y: yc - 6, width: 12, height: 12, class: "ol-conv" + (on ? "" : " dead") }),
+      sv("line", { x1: xx - 6, y1: yc + 6, x2: xx + 6, y2: yc - 6, class: "ol-conv" + (on ? "" : " dead") }));
+  };
+  T.dcline.forEach((d, i) => {
+    const xx = L.dcline.get(i);
+    if (xx === undefined) return;
+    const A = L.bar.get(d[0]), Z = L.bar.get(d[1]);
+    const fromTop = A.y <= Z.y, ya = Math.min(A.y, Z.y), yb = Math.max(A.y, Z.y), len = yb - ya;
+    const on = d[2] === 1;
+    const rd = res && res.dcline && res.dcline[i] && res.dcline[i].solved ? res.dcline[i] : null;
+    const cls = ["ol-dcline"];
+    if (!on) cls.push("out");
+    if (S.pick && S.pick.kind === "dcline" && S.pick.index === i) cls.push("sel");
+    lines.append(sv("line", { x1: xx, y1: ya + 6, x2: xx, y2: yb - 6, class: "ol-halo" }),
+      sv("line", { x1: xx, y1: ya, x2: xx, y2: yb, class: cls.join(" ") }),
+      sv("circle", { cx: xx, cy: ya, r: 2.8, class: "ol-dot" }), sv("circle", { cx: xx, cy: yb, r: 2.8, class: "ol-dot" }));
+    converter(xx, ya + 20, on);
+    converter(xx, yb - 20, on);
+    const seg = Math.min(len, (L.ys.find(v => v > ya + 1) ?? yb) - ya);
+    const yl = ya + seg * 0.5;
+    if (rd) {
+      // signed flow from the upper bus toward the lower bus (Qf, Qt are injections into the buses)
+      const p = fromTop ? rd.Pf : -rd.Pt, q = fromTop ? -rd.Qf : -rd.Qt;
+      flowLabels(xx, yl, p, q);
+      if (Math.abs(p) >= 0.05) arrow(xx, yl, p > 0);
+    }
+    const hit = onPick(sv("line", { x1: xx, y1: ya, x2: xx, y2: yb, class: "edge-hit" }), "dcline", i);
+    tip(hit, `DC line ${i + 1}: ${d[0]} → ${d[1]}${on ? "" : " OUT"}` +
+      (rd ? `\nPf ${fmt(rd.Pf, 1)} MW, Pt ${fmt(rd.Pt, 1)} MW, loss ${fmt(rd.loss_MW, 2)} MW` : ""));
+    lines.append(hit);
+  });
   // bus bars with number and voltage at the left end
   T.bus.forEach((b, i) => {
     const B = L.bar.get(b[0]), v = sum.volt.get(b[0]);
@@ -839,6 +911,7 @@ function renderLegend(solved, classic, oneline = false) {
       h("div", { class: "row" }, shape(`<line x1="0" y1="-8" x2="0" y2="8" ${st} stroke-dasharray="3 2"/><line x1="0" y1="-5" x2="0" y2="5" ${st}/>`), "switch closed",
         shape(`<line x1="0" y1="-5" x2="5" y2="2" stroke="#2e7d4f" stroke-width="1.4"/><line x1="-3" y1="5" x2="3" y2="5" stroke="#2e7d4f" stroke-width="1.4"/>`), "open"),
       h("div", { class: "row" }, shape(`<line x1="-8" y1="0" x2="8" y2="0" stroke="#1d2321" stroke-width="4"/>`), "bus: number, Vm∠Va"),
+      h("div", { class: "row" }, shape(`<line x1="0" y1="-9" x2="0" y2="9" stroke="${DC_COLOR}" stroke-width="2" stroke-dasharray="5 2 1.5 2"/><rect x="-4.5" y="-4.5" width="9" height="9" fill="#fff" stroke="${DC_COLOR}" stroke-width="1.2"/><line x1="-4.5" y1="4.5" x2="4.5" y2="-4.5" stroke="${DC_COLOR}" stroke-width="1"/>`), "DC line with converters"),
       h("div", {}, "Dashed: generator/load connection (pseudo-line)"),
       h("div", {}, "Flows MW | MVAr, + = downward (into the bus from a"),
       h("div", {}, "generator, out of it to a load); arrow = MW direction"),
@@ -863,18 +936,21 @@ function renderLegend(solved, classic, oneline = false) {
       h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColorClassic(.94)},${vColorClassic(1)},${vColorClassic(1.06)})` }), "1.06"),
       h("div", {}, solved ? "Line loading (% of rateA), MW flow labels" : "Line loading and MW flows shown after a solve"),
       h("div", { class: "row" }, "0%", h("span", { class: "bar", style: `background:linear-gradient(90deg,${loadColor(0)},${loadColor(50)},${loadColor(100)})` }), "100%+"),
+      h("div", { class: "row" }, h("span", { style: `color:${DC_COLOR}` }, "–·– DC"), "DC line"),
       h("div", {}, "Labels: bus, angle, G = generation, L = load"));
   } else if (solved) {
     L.replaceChildren(
       h("div", {}, "Voltage magnitude (pu)"),
       h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColor(.94)},${vColor(1)},${vColor(1.06)})` }), "1.06"),
-      h("div", { class: "row" }, "Line loading: ", h("span", { style: "color:#5f8f80" }, "■ <80%"), h("span", { style: "color:#c27c0e" }, "■ 80–100%"), h("span", { style: "color:#b42318" }, "■ >100%")));
+      h("div", { class: "row" }, "Line loading: ", h("span", { style: "color:#5f8f80" }, "■ <80%"), h("span", { style: "color:#c27c0e" }, "■ 80–100%"), h("span", { style: "color:#b42318" }, "■ >100%")),
+      h("div", { class: "row" }, h("span", { style: `color:${DC_COLOR}` }, "–·– DC"), "DC line"));
   } else {
     L.replaceChildren(
       ...[[3, "REF"], [2, "PV"], [1, "PQ"], [4, "isolated"]].map(([t, n]) =>
         h("div", { class: "row" }, h("span", { class: "sw", style: `background:${TYPE_COLOR[t]}` }), n)),
       h("div", { class: "row" }, h("span", { class: "sw", style: "border:1.6px solid #8a5a12;background:none" }), "has generator"),
-      h("div", { class: "row" }, "– – transformer"));
+      h("div", { class: "row" }, "– – transformer"),
+      h("div", { class: "row" }, h("span", { style: `color:${DC_COLOR}` }, "–·– DC"), "DC line"));
   }
 }
 
@@ -910,7 +986,7 @@ function geoLayout() {
   // located buses from geodata (first row per bus); buses without geodata are
   // placed near their located neighbors (marked estimated) or left out
   const c = S.state.case;
-  const key = JSON.stringify([c.geodata.map(r => r.slice(0, 3)), c.tables.bus.map(b => b[0]), c.tables.branch.map(b => [b[0], b[1]])]);
+  const key = JSON.stringify([c.geodata.map(r => r.slice(0, 3)), c.tables.bus.map(b => b[0]), [...c.tables.branch, ...c.tables.dcline].map(b => [b[0], b[1]])]);
   if (geoCache && geoCache.key === key) return geoCache;
   const where = new Map();
   for (const r of c.geodata) if (!where.has(r[0])) where.set(r[0], r);
@@ -922,7 +998,7 @@ function geoLayout() {
     Math.max(...pts.map(p => p.y)) - Math.min(...pts.map(p => p.y))) : 0;
   const offset = Math.max(200, span * 0.02);
   const adj = new Map(ids.map(b => [b, []]));
-  c.tables.branch.forEach(b => {
+  [...c.tables.branch, ...c.tables.dcline].forEach(b => {
     if (adj.has(b[0]) && adj.has(b[1]) && b[0] !== b[1]) { adj.get(b[0]).push(b[1]); adj.get(b[1]).push(b[0]); }
   });
   const estimated = new Set();
@@ -1204,11 +1280,26 @@ function renderInspector() {
     const brs = c.tables.branch.map((b, i) => [b, i]).filter(([b]) => b[0] === num || b[1] === num);
     kids.push(h("h4", {}, `Branches (${brs.length})`), h("ul", {}, brs.map(([b, i]) =>
       h("li", {}, h("a", { onclick: () => pick("branch", i) }, `${b[0]} → ${b[1]}`), `x ${b[3]}${b[10] ? "" : " · OUT"}`))));
+    const dcs = c.tables.dcline.map((d, i) => [d, i]).filter(([d]) => d[0] === num || d[1] === num);
+    if (dcs.length) kids.push(h("h4", {}, `DC lines (${dcs.length})`), h("ul", {}, dcs.map(([d, i]) =>
+      h("li", {}, h("a", { onclick: () => pick("dcline", i) }, `${d[0]} → ${d[1]}`), `Pf ${fmt(d[3], 1)} MW${d[2] ? "" : " · OUT"}`))));
     kids.push(h("div", { class: "btns" },
       h("button", { onclick: () => addConnected("gen", num) }, "+ Generator"),
       h("button", { onclick: () => addConnected("branch", num) }, "+ Branch from here"),
+      h("button", { onclick: () => addConnected("dcline", num) }, "+ DC line from here"),
       h("button", { onclick: () => addConnected("bus", num) }, "+ New bus linked here"),
       h("button", { onclick: () => goto("bus", index) }, "Show in table")));
+  } else if (kind === "dcline") {
+    kids.push(h("h3", {}, `DC line ${row[0]} → ${row[1]}`), h("div", { class: "sub" }, `row ${index + 1}` + (row[2] ? "" : " · out of service")));
+    const rd = res && res.dcline && res.dcline[index];
+    if (rd && rd.solved) {
+      kids.push(h("div", { class: "sub" }, `Solution: Pf ${fmt(rd.Pf, 2)} MW, Pt ${fmt(rd.Pt, 2)} MW, loss ${fmt(rd.loss_MW, 2)} MW; ` +
+        `Qf ${fmt(rd.Qf, 2)}, Qt ${fmt(rd.Qt, 2)} MVAr` + (rd.mu_Pmax ? `, μPmax ${fmt(rd.mu_Pmax, 2)} $/MWh` : "") + (rd.mu_Pmin ? `, μPmin ${fmt(rd.mu_Pmin, 2)} $/MWh` : "")));
+    } else if (rd) kids.push(h("div", { class: "sub" }, "Not solved (out of service or isolated terminal)"));
+    kids.push(h("dl", {}, cols.map((_, k) => k).flatMap(field)));
+    const cost = c.tables.dclinecost[index];
+    kids.push(h("div", { class: "btns" }, h("button", { onclick: () => goto("dcline", index) }, "Show in table"),
+      cost ? h("button", { onclick: () => goto("dclinecost", index) }, "Show cost") : null));
   } else {
     kids.push(h("h3", {}, `Branch ${row[0]} → ${row[1]}`), h("div", { class: "sub" }, `row ${index + 1}` + (row[8] ? " · transformer" : "")));
     if (res && res.branch[index]) {
@@ -1232,6 +1323,12 @@ async function addConnected(what, bus) {
     const st = await act("/api/rows", { table: "branch", values: { fbus: bus, tbus: other[0] } });
     pick("branch", st.row);
     toast("Branch added — set its to bus in the panel");
+  } else if (what === "dcline") {
+    const other = c.tables.bus.find(b => b[0] !== bus);
+    if (!other) return toast("Add another bus first", true);
+    const st = await act("/api/rows", { table: "dcline", values: { fbus: bus, tbus: other[0] } });
+    pick("dcline", st.row);
+    toast("DC line added — set its to bus and limits in the panel");
   } else {
     const st = await act("/api/rows", { table: "bus" });
     const nb = st.case.tables.bus[st.row][0];
@@ -1328,15 +1425,15 @@ function renderResults() {
     card(kind, r.success ? "Converged" : "Failed", r.success ? "ok" : "fail"),
     r.success ? card("Generation", `${fmt(totalPg, 1)} MW`) : null,
     r.success ? card("Load", `${fmt(totalPd, 1)} MW`) : null,
-    r.success ? card("Losses", `${fmt(r.losses_MW, 2)} MW`) : null,
+    r.success ? card("Losses", `${fmt(r.losses_MW, 2)} MW` + (r.dcline && r.dcline.length ? ` (DC ${fmt(r.dcline_losses_MW, 2)})` : "")) : null,
     r.objective !== null && r.success ? card("Cost", `${fmt(r.objective, 2)} $/h`) : null,
     r.success ? card("Vm range", `${fmt(Math.min(...r.bus.map(b => b.Vm)), 3)} – ${fmt(Math.max(...r.bus.map(b => b.Vm)), 3)}`) : null);
   const kids = [cards];
   if (r.success) {
     kids.push(h("div", { style: "margin-bottom:12px" },
-      h("button", { onclick: () => act("/api/apply").then(() => toast("Solution copied into bus Vm/Va and generator Pg/Qg")) },
+      h("button", { onclick: () => act("/api/apply").then(() => toast("Solution copied into bus Vm/Va, generator Pg/Qg and DC line flows")) },
         "Apply solution to case"),
-      h("span", { class: "hint", style: "margin-left:10px" }, "copies Vm, Va and Pg, Qg into the case (undoable)")));
+      h("span", { class: "hint", style: "margin-left:10px" }, "copies Vm, Va, Pg, Qg and DC line Pf, Pt, Qf, Qt into the case (undoable)")));
     const busRows = r.bus.map(b => [b.bus_i, fmt(b.Vm, 4), fmt(b.Va, 3)].concat(r.kind === "opf" ? [fmt(b.lam_P, 3)] : []));
     const busCls = r.bus.map((b, i) => {
       const spec = c.tables.bus[i];
@@ -1347,7 +1444,12 @@ function renderResults() {
       block("Generator dispatch", ["gen", "bus", "Pg MW", "Qg MVAr"], r.gen.map((g, i) => [i + 1, g.bus, fmt(g.Pg, 2), fmt(g.Qg, 2)])),
       block("Branch flows", ["#", "from", "to", "P from MW", "Q from MVAr", "loading"],
         r.branch.map((b, i) => [i + 1, b.fbus, b.tbus, fmt(b.PF, 2), fmt(b.QF, 2), loadCell(b.loading_pct)]),
-        r.branch.map(b => [null, null, null, null, null, b.loading_pct > 100 ? "hi" : b.loading_pct > 80 ? "mid" : null]))));
+        r.branch.map(b => [null, null, null, null, null, b.loading_pct > 100 ? "hi" : b.loading_pct > 80 ? "mid" : null])),
+      r.dcline && r.dcline.length ? block("DC line flows", ["#", "from", "to", "Pf MW", "Pt MW", "loss MW", "Qf MVAr", "Qt MVAr"]
+        .concat(r.kind === "opf" ? ["μPmax $/MWh"] : []),
+        r.dcline.map((d, i) => [i + 1, d.fbus, d.tbus].concat(d.solved
+          ? [fmt(d.Pf, 2), fmt(d.Pt, 2), fmt(d.loss_MW, 2), fmt(d.Qf, 2), fmt(d.Qt, 2)].concat(r.kind === "opf" ? [fmt(d.mu_Pmax, 3)] : [])
+          : ["–", "–", "–", "–", "–"].concat(r.kind === "opf" ? ["–"] : [])))) : null));
   }
   kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"), h("pre", { class: "log" }, r.log || "(no output)")));
   box.replaceChildren(...kids);
