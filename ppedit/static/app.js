@@ -891,8 +891,9 @@ const IMAGERY = { tile: (z, y, x) => `https://basemap.nationalmap.gov/arcgis/res
 const ROADS = { url: "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/Transportation/MapServer/export", layers: "show:0,1,2,3,4,5,6,7,8" };
 const TIGER_BOUNDS = "https://tigerweb.geo.census.gov/arcgis/rest/services/TIGERweb/State_County/MapServer";
 const BOUNDS = {
-  states: { layer: 0, fields: "NAME,STUSAB,INTPTLAT,INTPTLON", maxRes: 20000, nameRes: 8000, cls: "state" },
-  counties: { layer: 1, fields: "NAME,INTPTLAT,INTPTLON", maxRes: 1500, nameRes: 300, cls: "county" },
+  // maxRes, nameRes, abbrRes: coarsest metres per pixel at which polygons, names, abbreviated names show
+  states: { layer: 0, fields: "NAME,STUSAB,INTPTLAT,INTPTLON", maxRes: 20000, nameRes: 3000, abbrRes: 20000, cls: "state" },
+  counties: { layer: 1, fields: "NAME,INTPTLAT,INTPTLON", maxRes: 1500, nameRes: 800, abbrRes: 0, cls: "county" },
 };
 const CREDITS = { imagery: "Imagery: USGS The National Map", roads: "Roads", bounds: "Boundaries" };
 
@@ -993,16 +994,21 @@ function tileLayer(W, H) {
   const ty0 = Math.max(0, Math.floor((Y0 + WORLD / 2) / size)), ty1 = Math.min(n - 1, Math.floor((Y1 + WORLD / 2) / size));
   if ((tx1 - tx0 + 1) * (ty1 - ty0 + 1) > 400) return g;
   const used = new Set();
-  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) {
-    const url = IMAGERY.tile(z, ty, tx);
+  const place = (tz, tx, ty) => {
+    const url = IMAGERY.tile(tz, ty, tx), tsize = WORLD / 2 ** tz;
+    if (used.has(url)) return;
     let img = tileCache.get(url);
     if (!img) { img = sv("image", { href: url, class: "map-tile", preserveAspectRatio: "none" }); tileCache.set(url, img); }
-    const px = (tx * size - WORLD / 2) * k + x, py = (ty * size - WORLD / 2) * k + y;
+    const px = (tx * tsize - WORLD / 2) * k + x, py = (ty * tsize - WORLD / 2) * k + y;
     img.setAttribute("x", px.toFixed(1)); img.setAttribute("y", py.toFixed(1));
-    img.setAttribute("width", (size * k + 0.5).toFixed(1)); img.setAttribute("height", (size * k + 0.5).toFixed(1));
+    img.setAttribute("width", (tsize * k + 0.5).toFixed(1)); img.setAttribute("height", (tsize * k + 0.5).toFixed(1));
     g.append(img);
     used.add(url);
-  }
+  };
+  // coarser tiles underneath fill in while finer ones load or where they are missing
+  const up = Math.min(3, z), f = 2 ** up;
+  if (up) for (let ty = Math.floor(ty0 / f); ty <= Math.floor(ty1 / f); ty++) for (let tx = Math.floor(tx0 / f); tx <= Math.floor(tx1 / f); tx++) place(z - up, tx, ty);
+  for (let ty = ty0; ty <= ty1; ty++) for (let tx = tx0; tx <= tx1; tx++) place(z, tx, ty);
   for (const url of tileCache.keys()) { // keep the cache bounded
     if (tileCache.size <= 600) break;
     if (!used.has(url)) tileCache.delete(url);
@@ -1080,7 +1086,7 @@ async function fetchBounds(name, box, res, want) {
         "M" + ring.map(([px, py]) => `${Math.round(px - ox)},${Math.round(-py - oy)}`).join("L") + "Z").join("");
       if (d) g.append(sv("path", { d, class: `map-bound ${spec.cls}` }));
       const a = f.attributes || {};
-      return { name: a.NAME, label: a.INTPTLAT ? mercator(+a.INTPTLAT, +a.INTPTLON) : null };
+      return { name: a.NAME, abbr: a.STUSAB, label: a.INTPTLAT ? mercator(+a.INTPTLAT, +a.INTPTLON) : null };
     });
     Object.assign(b, { g, box, res, origin: [ox, oy] });
     scheduleRender();
@@ -1103,13 +1109,15 @@ function renderMap(W, H) {
       b.g.setAttribute("transform", `matrix(${k},0,0,${k},${x + k * b.origin[0]},${y + k * b.origin[1]})`);
       root.append(b.g);
     }
-    if (names && 1 / k <= spec.nameRes) {
+    const full = 1 / k <= spec.nameRes;
+    if (names && (full || 1 / k <= spec.abbrRes)) {
       for (const f of b.feats) {
-        if (!f.label || !f.name) continue;
+        const text = full ? f.name : f.abbr;
+        if (!f.label || !text) continue;
         const px = f.label.x * k + x, py = f.label.y * k + y;
         if (px < -50 || py < -20 || px > W + 50 || py > H + 20) continue;
         const t = sv("text", { x: px.toFixed(1), y: py.toFixed(1), class: `map-label ${spec.cls}` });
-        t.textContent = f.name;
+        t.textContent = text;
         labels.append(t);
       }
     }

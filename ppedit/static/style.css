@@ -179,6 +179,7 @@ td.bad input { color: var(--err); }
 #net.imagery .map-label.state { fill: #fff; }
 #net.imagery .map-label.county { fill: #ece7d6; }
 #net .map-tile, #net .map-overlay { pointer-events: none; }
+#net .map-overlay { opacity: .8; }
 /* classic style */
 #net.classic .node .body { stroke: #3d4744; stroke-width: 1.4; cursor: pointer; }
 #net.classic .node.isolated .body { stroke: #7d8883; stroke-width: 1.6; stroke-dasharray: 2 1.5; }

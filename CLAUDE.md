@@ -78,8 +78,10 @@ Nothing needs network or credentials.
   layers come straight from the browser (no server proxy, no cache):
   USGS `USGSImageryOnly` tiles (cached to level 16, scaled beyond),
   TIGERweb `Transportation` export images, and TIGERweb `State_County`
-  layer 0/1 queries (JSON, CORS) drawn as paths. US coverage only; offline
-  they simply don't draw. Buses are not draggable in this layout (geodata
+  layer 0/1 queries (JSON, CORS) drawn as paths, names at their interior
+  points (states abbreviated when zoomed out). US coverage only; the USGS
+  imagery has dark gaps over some water; offline the layers simply don't
+  draw. Buses are not draggable in this layout (geodata
   is not edited in the diagram). GLM output keeps lat/lon but not geotags.
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
   layered layout cached by topology signature (`olCache`), drawn in layout
