@@ -159,6 +159,40 @@ td.bad input { color: var(--err); }
 #net.classic .node text.ol-label .num { font-weight: 700; font-size: 11px; fill: var(--ink); }
 #net.classic .node text.ol-label .gen-mw { fill: #1f5f9e; }
 #net.classic .node text.ol-label .load-mw { fill: #7a3b12; }
+/* one-line style */
+#net.oneline .ol-bar { stroke: #1d2321; stroke-width: 5; stroke-linecap: butt; }
+#net.oneline .ol-bar.isolated { stroke: #9aa39f; stroke-dasharray: 6 3; }
+#net.oneline .ol-bar.err { stroke: var(--err); }
+#net.oneline .ol-bar.sel { stroke: var(--accent); stroke-width: 7; }
+#net.oneline .ol-bar-hit { fill: transparent; cursor: pointer; }
+#net.oneline .ol-branch { stroke: #4b5652; stroke-width: 2; }
+#net.oneline .ol-branch.out { stroke: #b5bcb8; stroke-dasharray: 4 3; }
+#net.oneline .ol-branch.sel { stroke: var(--accent); stroke-width: 3.5; }
+#net.oneline .ol-halo { stroke: #fff; stroke-width: 7; }
+#net.oneline .ol-dot { fill: #1d2321; }
+#net.oneline .ol-breaker { fill: #b42318; stroke: #7a1810; stroke-width: 1; pointer-events: none; }
+#net.oneline .ol-breaker.open { fill: #fff; stroke: #2e7d4f; stroke-width: 1.6; }
+#net.oneline .ol-xfmr-bg { fill: #fff; stroke: none; pointer-events: none; }
+#net.oneline .ol-xfmr { fill: none; stroke: #3d4744; stroke-width: 1.4; pointer-events: none; }
+#net.oneline .ol-arrow { fill: #3d4744; pointer-events: none; }
+#net.oneline .ol-pseudo { stroke: #6b7571; stroke-width: 1.3; stroke-dasharray: 3 2; }
+#net.oneline .ol-pseudo.dead { stroke: #c3c9c5; }
+#net.oneline .ol-switch line { stroke: #3d4744; stroke-width: 1.6; }
+#net.oneline .ol-switch circle { fill: #3d4744; }
+#net.oneline .ol-switch.open line { stroke: #2e7d4f; }
+#net.oneline .ol-switch.open circle { fill: #2e7d4f; }
+#net.oneline .ol-gen { cursor: pointer; }
+#net.oneline .ol-gen circle { fill: #fff; stroke: #1f5f9e; stroke-width: 1.6; }
+#net.oneline .ol-gen .wave { fill: none; stroke: #1f5f9e; stroke-width: 1.4; }
+#net.oneline .ol-gen.dead circle, #net.oneline .ol-gen.dead .wave { stroke: #a7b0ac; }
+#net.oneline .ol-load { fill: #7a3b12; cursor: pointer; }
+#net.oneline .ol-load.dead { fill: #c3c9c5; }
+#net.oneline text { pointer-events: none; paint-order: stroke; stroke: #fff; }
+#net.oneline .ol-flow { font: 8.5px var(--mono); fill: #4b5652; stroke-width: 2.5px; }
+#net.oneline .ol-flow.q { fill: #7d8883; }
+#net.oneline .ol-name { font: 9px var(--mono); fill: #1f5f9e; stroke-width: 2.5px; }
+#net.oneline .ol-bus { font: 10px var(--mono); fill: #3d4744; stroke-width: 3px; }
+#net.oneline .ol-bus .num { font-weight: 700; font-size: 11px; fill: var(--ink); }
 #net .xfmr-sym { fill: #fff; stroke: #3d4744; stroke-width: 1.2; pointer-events: none; }
 #net .flow-arrow { stroke: #fff; stroke-width: .6; pointer-events: none; }
 #net .flow-label { font: 8.5px var(--mono); fill: #4b5652; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; pointer-events: none; }

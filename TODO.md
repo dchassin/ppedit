@@ -6,9 +6,11 @@
 - [x] Undo/redo; save guard for GLM content that is not kept
 - [x] PYPOWER example cases in `.py` and `.glm` (see `examples/pypower/`)
 - [x] Utility one-line diagram style (shapes by equipment, angle/MW labels, loading colors, MW flow labels)
+- [x] One-line layout style (horizontal bus bars, vertical branches, sources on top, breakers, switches, MW/MVAr labels)
 
 - [ ] Preserve non-solver GLM objects (`load`, `powerplant`, `powerline`, `shunt`, ...) on round trip, ideally by editing them too
 - [ ] Label overlap avoidance in the classic style on dense networks
+- [ ] One-line style: shorter bus bars and fewer crossings on large meshed cases (e.g. bus splitting or column compaction)
 - [ ] Persist network layout (e.g., GLM `latitude`/`longitude` or `geodata`)
 - [ ] `dcline` and `areas` tables
 - [ ] Copy/paste of cell ranges to and from spreadsheets

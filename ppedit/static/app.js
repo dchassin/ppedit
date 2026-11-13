@@ -369,7 +369,7 @@ function layout(force = false) {
 
 function fitView() {
   const svg = $("#net");
-  const pts = S.state.case.tables.bus.map(b => S.pos[b[0]]).filter(Boolean);
+  const pts = S.style === "oneline" ? onelineLayout().corners : S.state.case.tables.bus.map(b => S.pos[b[0]]).filter(Boolean);
   if (!pts.length) { S.zoom = { k: 1, x: svg.clientWidth / 2, y: svg.clientHeight / 2 }; return; }
   const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
   const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
@@ -401,6 +401,7 @@ function busSummary() {
 }
 
 function renderNetwork() {
+  if (S.style === "oneline") return renderOneline();
   const svg = $("#net");
   const c = S.state.case, res = S.state.result && S.state.result.success ? S.state.result : null;
   const classic = S.style === "classic";
@@ -521,6 +522,7 @@ function renderNetwork() {
     node.addEventListener("pointerdown", e => startDrag(e, b[0], i));
     g.append(node);
   });
+  svg.classList.remove("oneline");
   svg.replaceChildren(g);
   renderLegend(!!res, classic);
   renderInspector();
@@ -531,8 +533,301 @@ function renderNetwork() {
   }
 }
 
-function renderLegend(solved, classic) {
+// ---------------------------------------------------------------- one-line style
+//
+// Layered orthogonal layout in the manner of a utility one-line diagram: bus bars
+// are horizontal and branches vertical. Rows are the hop distance from the nearest
+// generator bus (sources on top), split so that no branch joins two buses of the
+// same row; buses are ordered within rows by barycenter sweeps (crossing reduction).
+// Every generator, load and branch gets its own column and each bus bar spans its
+// own columns; bars that would overlap in a row move to an extra track. The diagram
+// is drawn in layout units under one transform, so it scales as a whole.
+
+const OL = { dx: 34, gen: 112, load: 112, bare: 30, gap: 84, label: 80, pad: 12 };
+let olCache = null;
+
+function onelineLayout() {
+  const T = S.state.case.tables;
+  const buses = T.bus.map(b => b[0]);
+  const ids = new Set(buses);
+  const brs = T.branch.map((b, i) => [b, i]).filter(([b]) => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]);
+  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0])]);
+  if (olCache && olCache.sig === sig) return olCache;
+  const adj = new Map(buses.map(b => [b, new Set()]));
+  brs.forEach(([b]) => { adj.get(b[0]).add(b[1]); adj.get(b[1]).add(b[0]); });
+  // levels: hops from the nearest generator bus; an island without one starts at REF or its best-connected bus
+  const level = new Map();
+  const bfs = starts => {
+    let q = starts.filter(s => !level.has(s));
+    q.forEach(s => level.set(s, 0));
+    while (q.length) {
+      const nq = [];
+      for (const a of q) for (const b of adj.get(a)) if (!level.has(b)) { level.set(b, level.get(a) + 1); nq.push(b); }
+      q = nq;
+    }
+  };
+  const genBus = new Set(T.gen.map(g => g[0]).filter(b => ids.has(b)));
+  bfs(buses.filter(b => genBus.has(b)));
+  const typ = new Map(T.bus.map(b => [b[0], b[1]]));
+  [...buses].sort((a, b) => (typ.get(b) === 3) - (typ.get(a) === 3) || adj.get(b).size - adj.get(a).size)
+    .forEach(b => { if (!level.has(b)) bfs([b]); });
+  // rows: split each level by greedy coloring so every branch joins two different rows
+  const nlev = Math.max(-1, ...level.values()) + 1;
+  const rows = [];
+  for (let lv = 0; lv < nlev; lv++) {
+    const members = buses.filter(b => level.get(b) === lv).sort((a, b) => adj.get(b).size - adj.get(a).size);
+    const color = new Map();
+    for (const b of members) {
+      const used = new Set([...adj.get(b)].filter(v => color.has(v)).map(v => color.get(v)));
+      let k = 0;
+      while (used.has(k)) k++;
+      color.set(b, k);
+    }
+    const nk = members.length ? Math.max(...color.values()) + 1 : 0;
+    for (let k = 0; k < nk; k++) rows.push(members.filter(b => color.get(b) === k).sort((a, b) => a - b));
+  }
+  // order within rows: alternating barycenter sweeps
+  const rowOf = new Map();
+  rows.forEach((r, i) => r.forEach(b => rowOf.set(b, i)));
+  const u = new Map();
+  const place = r => r.forEach((b, i) => u.set(b, (i + 0.5) / r.length));
+  rows.forEach(place);
+  for (let it = 0; it < 12; it++) {
+    const down = it % 2 === 0;
+    const order = rows.map((_, i) => down ? i : rows.length - 1 - i);
+    for (const ri of order) {
+      const key = new Map(rows[ri].map(b => {
+        let nb = [...adj.get(b)].filter(v => down ? rowOf.get(v) < ri : rowOf.get(v) > ri);
+        if (!nb.length) nb = [...adj.get(b)];
+        return [b, nb.length ? nb.reduce((s, v) => s + u.get(v), 0) / nb.length : u.get(b)];
+      }));
+      rows[ri].sort((a, b) => key.get(a) - key.get(b) || u.get(a) - u.get(b));
+      place(rows[ri]);
+    }
+  }
+  // columns: one per generator, load and branch (branches sit between their two buses)
+  const slots = [], own = new Map(buses.map(b => [b, []]));
+  const add = (key, kind, ref, ...on) => {
+    const s = { key, kind, ref, x: 0 };
+    slots.push(s);
+    on.forEach(b => own.get(b).push(s));
+    return s;
+  };
+  T.gen.forEach((g, i) => { if (ids.has(g[0])) add(u.get(g[0]) - 1e-9, "gen", i, g[0]); });
+  T.bus.forEach(b => { if (b[2] !== 0 || b[3] !== 0) add(u.get(b[0]) + 1e-9, "load", b[0], b[0]); });
+  brs.forEach(([b, i]) => add((u.get(b[0]) + u.get(b[1])) / 2, "branch", i, b[0], b[1]));
+  buses.forEach(b => { if (!own.get(b).length) add(u.get(b), "bare", b, b); });
+  slots.sort((a, b) => a.key - b.key);
+  slots.forEach((s, i) => (s.x = i * OL.dx));
+  const bar = new Map(buses.map(b => {
+    const xs = own.get(b).map(s => s.x);
+    return [b, { x0: Math.min(...xs) - OL.pad, x1: Math.max(...xs) + OL.pad, y: 0 }];
+  }));
+  // tracks: bars (with their labels at the left end) that overlap in a row get their own band
+  const bands = [];
+  for (const r of rows) {
+    const ends = [], track = new Map();
+    [...r].sort((a, b) => bar.get(a).x0 - bar.get(b).x0).forEach(b => {
+      const B = bar.get(b);
+      let t = ends.findIndex(e => e < B.x0 - OL.label);
+      if (t < 0) { t = ends.length; ends.push(0); }
+      ends[t] = B.x1 + 8;
+      track.set(b, t);
+    });
+    ends.forEach((_, t) => bands.push(r.filter(b => track.get(b) === t)));
+  }
+  let y = 0;
+  for (const band of bands) {
+    const has = kind => band.some(b => own.get(b).some(s => s.kind === kind));
+    y += has("gen") ? OL.gen : OL.bare;
+    band.forEach(b => (bar.get(b).y = y));
+    y += (has("load") ? OL.load : OL.bare) + OL.gap;
+  }
+  const xs0 = [...bar.values()].map(B => B.x0 - OL.label), xs1 = [...bar.values()].map(B => B.x1);
+  const corners = buses.length ? [{ x: Math.min(...xs0), y: 0 }, { x: Math.max(...xs1), y: y - OL.gap }] : [];
+  const col = kind => new Map(slots.filter(s => s.kind === kind).map(s => [s.ref, s.x]));
+  const ys = [...new Set([...bar.values()].map(B => B.y))].sort((a, b) => a - b);
+  olCache = { sig, bar, ys, corners, gen: col("gen"), load: col("load"), branch: col("branch") };
+  return olCache;
+}
+
+function renderOneline() {
+  const svg = $("#net");
+  const c = S.state.case, T = c.tables, res = S.state.result && S.state.result.success ? S.state.result : null;
+  const L = onelineLayout();
+  if (needFit && svg.clientWidth) { fitView(); needFit = false; }
+  $("#net-style").value = S.style;
+  svg.classList.remove("classic");
+  svg.classList.add("oneline");
+  const { k, x, y } = S.zoom;
+  const g = sv("g", { transform: `matrix(${k},0,0,${k},${x},${y})` });
+  const wires = sv("g"), bars = sv("g"), lines = sv("g"), text = sv("g");
+  const showText = k >= 0.35; // labels would be unreadably small
+  const sum = busSummary();
+  const errBus = new Set(S.state.issues.filter(i => i.table === "bus" && i.level === "error" && i.row !== null).map(i => i.row));
+  const busIndex = new Map(T.bus.map((b, i) => [b[0], i]));
+  const num = v => (Math.abs(v) < 0.05 ? 0 : v).toFixed(1);
+  const tip = (el, s) => { const t = sv("title"); t.textContent = s; el.append(t); return el; };
+  const onPick = (el, kind, index) => {
+    el.addEventListener("pointerdown", e => e.stopPropagation());
+    el.addEventListener("click", e => { e.stopPropagation(); pick(kind, index); });
+    return el;
+  };
+  // MW to the left and MVAr to the right of a vertical line, centered at yc, reading upward
+  const flowLabels = (xx, yc, p, q) => {
+    if (!showText) return;
+    const a = sv("text", { x: xx - 4, y: yc, class: "ol-flow", "text-anchor": "middle", transform: `rotate(-90 ${xx - 4} ${yc})` });
+    a.textContent = `${num(p)} MW`;
+    const b = sv("text", { x: xx + 4, y: yc, class: "ol-flow q", "text-anchor": "middle", "dominant-baseline": "hanging", transform: `rotate(-90 ${xx + 4} ${yc})` });
+    b.textContent = `${num(q)} MVAr`;
+    text.append(a, b);
+  };
+  // disconnect switch between ya (pivot, bus side) and yb; open blades swing out 35 degrees
+  const discSwitch = (xx, ya, yb, closed) => {
+    const sgn = Math.sign(yb - ya), len = Math.abs(yb - ya);
+    const ex = closed ? xx : xx + len * Math.sin(0.61), ey = closed ? yb : ya + sgn * len * Math.cos(0.61);
+    const grp = sv("g", { class: "ol-switch" + (closed ? "" : " open") });
+    grp.append(sv("line", { x1: xx, y1: ya, x2: ex, y2: ey }),
+      sv("circle", { cx: xx, cy: ya, r: 1.8 }), sv("circle", { cx: xx, cy: yb, r: 1.8 }));
+    if (!closed) grp.append(sv("line", { x1: xx - 4, y1: yb, x2: xx + 4, y2: yb }));
+    wires.append(grp);
+  };
+  const breaker = (xx, yc, closed) =>
+    lines.append(sv("rect", { x: xx - 5, y: yc - 5, width: 10, height: 10, class: "ol-breaker" + (closed ? "" : " open") }));
+  const arrow = (xx, yc, downward) => {
+    const s = downward ? 1 : -1;
+    lines.append(sv("path", { d: `M${xx - 4},${yc - 4 * s} L${xx + 4},${yc - 4 * s} L${xx},${yc + 4 * s} Z`, class: "ol-arrow" }));
+  };
+  // generators: circle with a sine wave above the bar, joined by a pseudo-line and pseudo-switch
+  T.gen.forEach((gr, i) => {
+    const B = L.bar.get(gr[0]), xx = L.gen.get(i);
+    if (!B || xx === undefined) return;
+    const on = gr[7] === 1, yb = B.y, gc = yb - OL.gen + 16;
+    const p = on ? (res && res.gen[i] ? res.gen[i].Pg : gr[1]) : 0, q = on ? (res && res.gen[i] ? res.gen[i].Qg : gr[2]) : 0;
+    wires.append(sv("line", { x1: xx, y1: yb, x2: xx, y2: yb - 12, class: "ol-pseudo" }),
+      sv("line", { x1: xx, y1: yb - 28, x2: xx, y2: gc + 12, class: "ol-pseudo" + (on ? "" : " dead") }));
+    discSwitch(xx, yb - 12, yb - 28, on);
+    const sym = onPick(sv("g", { class: "ol-gen" + (on ? "" : " dead") }), "bus", busIndex.get(gr[0]));
+    sym.append(sv("circle", { cx: xx, cy: gc, r: 12 }),
+      sv("path", { d: `M${xx - 7},${gc} c2,-6 5,-6 7,0 s5,6 7,0`, class: "wave" }));
+    tip(sym, `gen ${i + 1} at bus ${gr[0]} (${on ? "in service" : "out of service"})\nPg ${num(p)} MW, Qg ${num(q)} MVAr`);
+    wires.append(sym);
+    flowLabels(xx, yb - 58, p, q);
+    if (showText) {
+      const t = sv("text", { x: xx, y: gc - 16, class: "ol-name", "text-anchor": "middle" });
+      t.textContent = `G${i + 1}`;
+      text.append(t);
+    }
+  });
+  // loads: arrow below the bar, joined by a pseudo-line and pseudo-switch (open when the bus is NONE)
+  T.bus.forEach((b, i) => {
+    const xx = L.load.get(b[0]);
+    if (xx === undefined) return;
+    const on = b[1] !== 4, yb = L.bar.get(b[0]).y, ya = yb + OL.load - 26;
+    const p = on ? b[2] : 0, q = on ? b[3] : 0;
+    wires.append(sv("line", { x1: xx, y1: yb, x2: xx, y2: yb + 12, class: "ol-pseudo" }),
+      sv("line", { x1: xx, y1: yb + 28, x2: xx, y2: ya, class: "ol-pseudo" + (on ? "" : " dead") }));
+    discSwitch(xx, yb + 12, yb + 28, on);
+    const sym = onPick(sv("path", { d: `M${xx - 7},${ya} L${xx + 7},${ya} L${xx},${ya + 13} Z`, class: "ol-load" + (on ? "" : " dead") }), "bus", i);
+    tip(sym, `load at bus ${b[0]}${on ? "" : " (bus NONE: disconnected)"}\nPd ${num(p)} MW, Qd ${num(q)} MVAr`);
+    wires.append(sym);
+    flowLabels(xx, yb + 57, p, q);
+  });
+  // branches: vertical lines between bars, breakers at both ends, transformer symbol, flow labels
+  T.branch.forEach((b, i) => {
+    const xx = L.branch.get(i);
+    if (xx === undefined) return;
+    const A = L.bar.get(b[0]), Z = L.bar.get(b[1]);
+    const fromTop = A.y <= Z.y, ya = Math.min(A.y, Z.y), yb = Math.max(A.y, Z.y), len = yb - ya;
+    const on = b[10] === 1, xfmr = (b[8] && b[8] !== 0) || b[9];
+    const rb = res && res.branch[i] && on ? res.branch[i] : null;
+    const cls = ["ol-branch"];
+    if (!on) cls.push("out");
+    const sel = S.pick && S.pick.kind === "branch" && S.pick.index === i;
+    if (sel) cls.push("sel");
+    lines.append(sv("line", { x1: xx, y1: ya + 6, x2: xx, y2: yb - 6, class: "ol-halo" }));
+    const line = sv("line", { x1: xx, y1: ya, x2: xx, y2: yb, class: cls.join(" ") });
+    if (rb && rb.loading_pct !== null && !sel) line.style.stroke = loadColor(rb.loading_pct);
+    lines.append(line,
+      sv("circle", { cx: xx, cy: ya, r: 2.8, class: "ol-dot" }), sv("circle", { cx: xx, cy: yb, r: 2.8, class: "ol-dot" }));
+    breaker(xx, ya + 20, on);
+    breaker(xx, yb - 20, on);
+    // symbols and labels go in the first gap below the upper bar, clear of any bar the line crosses
+    const seg = Math.min(len, (L.ys.find(v => v > ya + 1) ?? yb) - ya);
+    if (xfmr) {
+      const ym = ya + seg * 0.3;
+      for (const d of [-5, 5]) lines.append(sv("circle", { cx: xx, cy: ym + d, r: 7, class: "ol-xfmr-bg" }));
+      for (const d of [-5, 5]) lines.append(sv("circle", { cx: xx, cy: ym + d, r: 7, class: "ol-xfmr" }));
+    }
+    const yl = ya + seg * (xfmr ? 0.62 : 0.5);
+    if (rb) {
+      // signed flow from the upper bus toward the lower bus
+      const p = fromTop ? rb.PF : rb.PT, q = fromTop ? rb.QF : rb.QT;
+      flowLabels(xx, yl, p, q);
+      if (Math.abs(p) >= 0.05) arrow(xx, yl, p > 0);
+    }
+    const hit = onPick(sv("line", { x1: xx, y1: ya, x2: xx, y2: yb, class: "edge-hit" }), "branch", i);
+    tip(hit, `branch ${i + 1}: ${b[0]} → ${b[1]}${xfmr ? " (transformer)" : ""}${on ? "" : " OUT"}` +
+      (rb ? `\nPF ${fmt(rb.PF, 1)} MW, QF ${fmt(rb.QF, 1)} MVAr, loading ${rb.loading_pct === null ? "unrated" : fmt(rb.loading_pct, 0) + "%"}` : ""));
+    lines.append(hit);
+  });
+  // bus bars with number and voltage at the left end
+  T.bus.forEach((b, i) => {
+    const B = L.bar.get(b[0]), v = sum.volt.get(b[0]);
+    const cls = ["ol-bar"];
+    if (b[1] === 4 || (T.bus.length > 1 && !sum.conn.has(b[0]))) cls.push("isolated");
+    if (errBus.has(i)) cls.push("err");
+    if (S.pick && S.pick.kind === "bus" && S.pick.index === i) cls.push("sel");
+    bars.append(sv("line", { x1: B.x0, y1: B.y, x2: B.x1, y2: B.y, class: cls.join(" ") }));
+    const hit = onPick(sv("rect", { x: B.x0 - 4, y: B.y - 7, width: B.x1 - B.x0 + 8, height: 14, class: "ol-bar-hit" }), "bus", i);
+    tip(hit, `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]})\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`);
+    bars.append(hit);
+    if (showText) {
+      const t = sv("text", { x: B.x0 - 6, y: B.y - 3, class: "ol-bus", "text-anchor": "end" });
+      const t1 = sv("tspan", { x: B.x0 - 6, class: "num" });
+      t1.textContent = `${b[1] === 3 ? "REF " : ""}${b[0]}`;
+      const t2 = sv("tspan", { x: B.x0 - 6, dy: "1.2em" });
+      t2.textContent = `${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`;
+      t.append(t1, t2);
+      text.append(t);
+    }
+  });
+  g.append(wires, bars, lines, text);
+  svg.replaceChildren(g);
+  renderLegend(!!res, false, true);
+  renderInspector();
+  if (!T.bus.length) {
+    const t = sv("text", { x: svg.clientWidth / 2, y: svg.clientHeight / 2, "text-anchor": "middle", fill: "#69726e" });
+    t.textContent = "Empty case — add buses in the Buses tab, or open a built-in case from New ▾";
+    svg.append(t);
+  }
+}
+
+function renderLegend(solved, classic, oneline = false) {
   const L = $("#legend");
+  if (oneline) {
+    const shape = (svgInner) => {
+      const s = sv("svg", { width: 18, height: 18, viewBox: "-9 -9 18 18" });
+      s.innerHTML = svgInner;
+      return s;
+    };
+    const st = 'stroke="#3d4744" stroke-width="1.3"';
+    L.replaceChildren(
+      h("div", { class: "row" }, shape(`<circle r="7" fill="#fff" ${st}/><path d="M-4.5,0 c1.3,-4 3.2,-4 4.5,0 s3.2,4 4.5,0" fill="none" ${st}/>`), "generator"),
+      h("div", { class: "row" }, shape(`<path d="M-6,-4 L6,-4 L0,6 Z" fill="#3d4744"/>`), "load"),
+      h("div", { class: "row" }, shape(`<circle cy="-3.5" r="5" fill="none" ${st}/><circle cy="3.5" r="5" fill="none" ${st}/>`), "transformer"),
+      h("div", { class: "row" }, shape(`<rect x="-4.5" y="-4.5" width="9" height="9" fill="#b42318" stroke="#7a1810"/>`), "breaker closed",
+        shape(`<rect x="-4.5" y="-4.5" width="9" height="9" fill="#fff" stroke="#2e7d4f" stroke-width="1.6"/>`), "open"),
+      h("div", { class: "row" }, shape(`<line x1="0" y1="-8" x2="0" y2="8" ${st} stroke-dasharray="3 2"/><line x1="0" y1="-5" x2="0" y2="5" ${st}/>`), "switch closed",
+        shape(`<line x1="0" y1="-5" x2="5" y2="2" stroke="#2e7d4f" stroke-width="1.4"/><line x1="-3" y1="5" x2="3" y2="5" stroke="#2e7d4f" stroke-width="1.4"/>`), "open"),
+      h("div", { class: "row" }, shape(`<line x1="-8" y1="0" x2="8" y2="0" stroke="#1d2321" stroke-width="4"/>`), "bus: number, Vm∠Va"),
+      h("div", {}, "Dashed: generator/load connection (pseudo-line)"),
+      h("div", {}, "Flows MW | MVAr, + = downward (into the bus from a"),
+      h("div", {}, "generator, out of it to a load); arrow = MW direction"),
+      h("div", {}, solved ? "Line loading (% of rateA)" : "Branch flows and loading shown after a solve"),
+      ...(solved ? [h("div", { class: "row" }, "0%", h("span", { class: "bar", style: `background:linear-gradient(90deg,${loadColor(0)},${loadColor(50)},${loadColor(100)})` }), "100%+")] : []));
+    return;
+  }
   if (classic) {
     const shape = (svgInner) => {
       const s = sv("svg", { width: 16, height: 16, viewBox: "-8 -8 16 16" });
@@ -566,6 +861,7 @@ function renderLegend(solved, classic) {
 }
 
 function setStyle(style) {
+  if ((style === "oneline") !== (S.style === "oneline")) needFit = true; // different coordinate spaces
   S.style = style;
   try { localStorage.setItem("ppedit.diagram", style); } catch (_) { /* storage unavailable */ }
   renderNetwork();
@@ -835,7 +1131,7 @@ async function onAction(btn) {
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
     else if (a === "del-rows") await deleteRows();
-    else if (a === "relayout") { layout(true); fitView(); renderNetwork(); }
+    else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
   } catch (_) { /* toast already shown */ }
 }

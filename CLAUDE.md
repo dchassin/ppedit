@@ -73,6 +73,11 @@ Nothing needs network or credentials.
   coordinates (symbols and text keep their size when zooming), so pan/zoom
   re-renders through `scheduleRender()`; fine to ~300 buses.
 - Classic style: a bus with generation and load is drawn as a circle.
+- One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
+  layered layout cached by topology signature (`olCache`), drawn in layout
+  units under one transform (so it scales with zoom, unlike the other
+  styles); buses are not draggable. Branches skipping rows cross bus bars
+  (drawn with a white halo gap); dense on case118/case300.
 
 ## Working rules
 
