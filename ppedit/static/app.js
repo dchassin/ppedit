@@ -406,7 +406,7 @@ function renderNetwork() {
   const oneline = S.style === "oneline";
   layout();
   if (needFit && svg.clientWidth) { fitView(); needFit = false; }
-  $$("[data-style]").forEach(b => b.classList.toggle("on", b.dataset.style === S.style));
+  $("#net-style").value = S.style;
   svg.classList.toggle("oneline", oneline);
   // draw in screen coordinates so symbols and text keep their size when zooming
   const { k, x, y } = S.zoom;
@@ -837,7 +837,6 @@ async function onAction(btn) {
     else if (a === "del-rows") await deleteRows();
     else if (a === "relayout") { layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
-    else if (a === "style") setStyle(btn.dataset.style);
   } catch (_) { /* toast already shown */ }
 }
 
@@ -867,6 +866,7 @@ async function init() {
     if (tab) return show(tab.dataset.view);
     if (!e.target.closest(".dropdown")) closeMenus();
   });
+  $("#net-style").addEventListener("change", e => setStyle(e.target.value));
   $("#file-input").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) openFile(f); });
   $("#grid").addEventListener("change", e => { if (e.target.dataset.col) commitCell(e.target); });
   $("#grid").addEventListener("keydown", e => {

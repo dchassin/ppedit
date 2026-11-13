@@ -147,11 +147,8 @@ td.bad input { color: var(--err); }
 .legend .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
 .legend .bar { width: 120px; height: 8px; border-radius: 4px; }
 .net-tools { position: absolute; left: 12px; top: 12px; display: flex; gap: 6px; }
-.seg { display: inline-flex; margin-left: 6px; }
-.seg button { border-radius: 0; margin-left: -1px; }
-.seg button:first-child { border-radius: 5px 0 0 5px; }
-.seg button:last-child { border-radius: 0 5px 5px 0; }
-.seg button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+#net-style { margin-left: 6px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 4px 6px; cursor: pointer; }
+#net-style:hover { border-color: var(--accent); }
 /* one-line style */
 #net.oneline .node .body { stroke: #3d4744; stroke-width: 1.4; cursor: pointer; }
 #net.oneline .node.isolated .body { stroke: #7d8883; stroke-width: 1.6; stroke-dasharray: 2 1.5; }
