@@ -2,7 +2,7 @@
 
 from numpy import array
 
-def wecc240():
+def wecc240_map():
     """Power flow data for 243 bus, 197 generator case.
 
     @return: PYPOWER case dict
