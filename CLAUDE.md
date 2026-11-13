@@ -69,10 +69,18 @@ Nothing needs network or credentials.
 - GLM import keeps only `bus`, `gen`, `branch`, `gencost`; everything else
   is listed in `Case.notes`, and saving over the source file needs `force`.
 - GLM bus names are `pp_bus_<bus_i>`, unlike `py2glm.py` (`pp_bus_<row>`).
-- Network positions are not persisted. The diagram is drawn in screen
+- Force-layout positions are not persisted; only geodata is. The diagram is drawn in screen
   coordinates (symbols and text keep their size when zooming), so pan/zoom
   re-renders through `scheduleRender()`; fine to ~300 buses.
 - Classic style: a bus with generation and load is drawn as a circle.
+- Geodata layout (`geoLayout`/`renderMap` in `app.js`): positions are Web
+  Mercator metres (y down), so `S.zoom.k` is pixels per metre there. Map
+  layers come straight from the browser (no server proxy, no cache):
+  USGS `USGSImageryOnly` tiles (cached to level 16, scaled beyond),
+  TIGERweb `Transportation` export images, and TIGERweb `State_County`
+  layer 0/1 queries (JSON, CORS) drawn as paths. US coverage only; offline
+  they simply don't draw. Buses are not draggable in this layout (geodata
+  is not edited in the diagram). GLM output keeps lat/lon but not geotags.
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
   layered layout cached by topology signature (`olCache`), drawn in layout
   units under one transform (so it scales with zoom, unlike the other

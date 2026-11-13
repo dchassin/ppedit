@@ -27,6 +27,7 @@ Install using `pip`:
 
     ppedit serve                 # new, empty case
     ppedit serve case14.glm      # edit a file; Save writes back to it
+    ppedit serve case14.py --geodata case14_geodata.csv   # add bus locations
     ppedit convert case14.py case14.glm
     ppedit check case14.glm
 
@@ -64,6 +65,22 @@ In the editor:
       and loading colors appear after a solve. This style computes its own
       layout (buses can't be dragged) and scales as a whole when zooming;
       labels are hidden when zoomed far out.
+
+    Two layouts for the simple and classic styles:
+    - *Force layout*: positions computed from the topology (drag to adjust;
+      not saved).
+    - *Geodata*: buses at their latitude/longitude on a map. Available only
+      when the case has geodata: use **Map ▸ Load CSV…** (columns `BUS_I`,
+      `LAT`, `LON` at a minimum; any other columns are kept as auxiliary
+      data and shown in the bus panel), `--geodata`, or a case file with a
+      `geodata` array. The **Map ▸** menu turns on satellite imagery (USGS
+      The National Map), roads, and state and county boundaries and names
+      (U.S. Census Bureau TIGERweb); these need network access and cover the
+      United States. Buses without geodata are drawn dashed next to their
+      neighbors. Saving to `.py` or `.json` stores the data under the case
+      key `geodata` (rows of `BUS_I, LAT, LON, ...`) with the auxiliary
+      column names under `geotags`; `.glm` keeps each bus's `latitude` and
+      `longitude`. **Map ▸ Download CSV** exports the geodata.
   - **Buses / Generators / Branches / Gen costs**: spreadsheet-style
     editing; Enter or Tab commits, Escape cancels. Renumbering a bus updates
     the generators and branches that use it; deleting a bus asks before

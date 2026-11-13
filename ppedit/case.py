@@ -11,6 +11,14 @@ row by row and sent to a browser as JSON. It reads and writes:
   - Arras Energy GridLAB-D models (`.glm`) that use `module pypower`
     (`bus`, `gen`, `branch` and `gencost` objects).
 
+A case may also carry bus locations (`Case.geodata`): rows of `[BUS_I, LAT,
+LON, ...]` in decimal degrees (WGS84), where any further values are
+auxiliary data named by `Case.geotags`. Geodata is read from the case's
+`geodata` key (and `geotags` for the auxiliary names), from GLM bus
+`latitude`/`longitude`, or from a CSV file with at least the columns
+`BUS_I`, `LAT` and `LON` (`Case.load_geodata`); any other CSV columns are
+kept as auxiliary data. The editor draws the network on a map from it.
+
 Examples
 --------
 
@@ -25,6 +33,10 @@ Examples
     >>> result = case.solve("pf")
     >>> result["success"], round(result["bus"][0]["Vm"], 3)
     (True, 1.0)
+    >>> case.load_geodata("geo.csv", "BUS_I,LAT,LON,NAME\\n1,37.42,-122.17,Plant A\\n")
+    1
+    >>> case.geodata, case.geotags
+    ([[1, 37.42, -122.17, 'Plant A']], ['NAME'])
 
 Caveats
 -------
@@ -43,6 +55,12 @@ Caveats
   - PYPOWER result columns (e.g. `PF`, `QF`, `lam_P`) present in an input
     case are dropped on load; only the input columns are edited.
 
+  - Geodata is written to `.py` and `.json` cases as the `geodata` list
+    (a plain list in `.py`, not a numpy array, because auxiliary values may
+    be text) and `geotags`. GLM output keeps only each bus's `latitude` and
+    `longitude`; auxiliary geodata is not written to GLM. Geodata rows are
+    not passed to the solver.
+
 References
 ----------
 
@@ -51,6 +69,7 @@ References
 """
 
 import ast
+import csv
 import io
 import json
 import logging
@@ -168,6 +187,10 @@ GLM_UNITS = {
 FORMATS = {".py":"py",".json":"json",".glm":"glm"}
 """File extensions and the format each is read and written in"""
 
+GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
+"""Required geodata columns (CSV header names are matched ignoring case);
+latitude and longitude are decimal degrees (WGS84)"""
+
 class CaseError(ValueError):
     """Raised for invalid case data or an unreadable case file"""
 
@@ -252,6 +275,10 @@ class Case:
         """Rows of each table, ordered as `COLUMNS[table]`"""
         self.notes = []
         """Messages from loading (e.g. GLM objects that were not kept)"""
+        self.geodata = []
+        """Bus locations: rows of `[BUS_I, LAT, LON, aux...]` (decimal degrees)"""
+        self.geotags = []
+        """Names of the auxiliary geodata values (columns after `LON`)"""
         if data is not None:
             self._from_ppc(data)
 
@@ -285,6 +312,7 @@ class Case:
             costs = costs[:need] if len(costs) >= need else costs
             rows.append([model,startup,shutdown,ncost,_costs_text(costs)])
         self.tables["gencost"] = rows
+        self.geodata,self.geotags = _geo_from_ppc(data)
 
     @classmethod
     def builtin(cls,name:str) -> "Case":
@@ -349,7 +377,8 @@ class Case:
         Arguments
         ---------
 
-          - `arrays`: return numpy arrays (for the solver) instead of lists
+          - `arrays`: return numpy arrays (for the solver) instead of lists;
+            geodata is left out
         """
         data = {"version":self.version,"baseMVA":self.baseMVA}
         for table in ("bus","gen","branch"):
@@ -366,6 +395,9 @@ class Case:
                 if key in data:
                     width = len(COLUMNS[key]) if key != "gencost" else len(data[key][0])
                     data[key] = np.array(data[key],dtype=float).reshape(-1,width)
+        elif self.geodata:
+            data["geodata"] = [list(row) for row in self.geodata]
+            data["geotags"] = list(self.geotags)
         return data
 
     def to_dict(self) -> dict:
@@ -377,6 +409,8 @@ class Case:
             "tables": {t:[[_jsonsafe(v) for v in row] for row in rows]
                 for t,rows in self.tables.items()},
             "notes": self.notes,
+            "geodata": _jsonsafe(self.geodata),
+            "geotags": list(self.geotags),
         }
 
     def dumps(self,fmt:str) -> str:
@@ -388,6 +422,8 @@ class Case:
             return json.dumps(_jsonsafe(data),indent=2) + "\n"
         if fmt == "glm":
             return self._dump_glm()
+        if fmt == "csv":
+            return self.dumps_geodata()
         raise CaseError(f"unknown format '{fmt}'")
 
     def save(self,path:str):
@@ -427,6 +463,12 @@ def {name}():
             rows = [", ".join(_fmt(v) for v in row) for row in data[table]]
             out.write(",\n".join(f"        [{r}]" for r in rows))
             out.write("\n    ])\n")
+        if self.geodata:
+            out.write(f"\n    ## geodata (bus locations, decimal degrees)\n"
+                f"    # {' '.join(GEODATA_COLUMNS+self.geotags)}\n    ppc[\"geodata\"] = [\n")
+            rows = [", ".join(_geo_literal(v) for v in row) for row in self.geodata]
+            out.write(",\n".join(f"        [{r}]" for r in rows))
+            out.write(f"\n    ]\n    ppc[\"geotags\"] = {json.dumps(self.geotags)}\n")
         out.write("\n    return ppc\n")
         return out.getvalue()
 
@@ -436,8 +478,12 @@ def {name}():
         out.write(f"module pypower\n{{\n    version {self.version};\n"
             f"    baseMVA {_fmt(self.baseMVA)};\n}}\n")
         out.write("\n//\n// bus\n//\n")
+        where = self.geomap()
         for row in self.tables["bus"]:
             out.write(f'object pypower.bus\n{{\n    name "pp_bus_{row[0]}";\n')
+            if row[0] in where:
+                lat,lon = where[row[0]][1:3]
+                out.write(f"    latitude {_fmt(float(lat))};\n    longitude {_fmt(float(lon))};\n")
             for col,val in zip(COLUMNS["bus"],row):
                 out.write(f"    {col['name']} {_glm_value('bus',col,val)};\n")
             out.write("}\n")
@@ -540,6 +586,10 @@ def {name}():
                     if branch[j] == old:
                         branch[j] = value
                         cascade = True
+            for geo in self.geodata:
+                if geo[0] == old and value != old:
+                    geo[0] = value
+                    cascade = True
         if table in ("gen","branch") and column in ("bus","fbus","tbus"):
             if not any(r[0] == value for r in self.tables["bus"]):
                 raise CaseError(f"bus {value} does not exist")
@@ -625,7 +675,8 @@ def {name}():
           - `rows`: row indexes to delete
 
           - `cascade`: when deleting buses, also delete the generators and
-            branches connected to them; otherwise refuse if any exist
+            branches connected to them; otherwise refuse if any exist.
+            Geodata rows of deleted buses are always removed.
 
         Returns
         -------
@@ -649,6 +700,7 @@ def {name}():
                 removed[k] += v
             for k,v in self.delete_rows("branch",branches).items():
                 removed[k] += v
+            self.geodata = [g for g in self.geodata if g[0] not in numbers]
         if table == "gen" and self.tables["gencost"]:
             ngen = len(self.tables["gen"])
             costs = self.tables["gencost"]
@@ -661,6 +713,77 @@ def {name}():
             del self.tables[table][r]
             removed[table] += 1
         return removed
+
+    # ----- geodata -----
+
+    def set_geodata(self,rows:list,tags:list|None=None):
+        """Replace the geodata
+
+        Arguments
+        ---------
+
+          - `rows`: rows of `[BUS_I, LAT, LON, aux...]` (decimal degrees),
+            or an empty list to remove the geodata
+
+          - `tags`: names of the auxiliary values (default: none); rows are
+            padded with `""` or truncated to match
+
+        Exceptions
+        ----------
+
+          - `CaseError`: a row has fewer than 3 values, a bus number is not
+            an integer, or a latitude/longitude is not a number in range
+        """
+        self.geodata,self.geotags = _geo_rows(rows,tags or [])
+
+    def load_geodata(self,path:str,text:str|None=None) -> int:
+        """Read geodata from a CSV file, replacing any existing geodata
+
+        Arguments
+        ---------
+
+          - `path`: CSV file name
+
+          - `text`: file contents (read from `path` if `None`)
+
+        The header row must name the columns `BUS_I`, `LAT` and `LON` (in any
+        order, ignoring case); other columns are kept as auxiliary data named
+        by their headers (`Case.geotags`). Auxiliary values that read as
+        numbers are stored as numbers, others as text.
+
+        Returns
+        -------
+
+          - `int`: number of geodata rows read
+
+        Exceptions
+        ----------
+
+          - `CaseError`: missing columns or invalid values
+        """
+        if text is None:
+            with open(path,"r",encoding="utf-8-sig") as fh:
+                text = fh.read()
+        rows,tags = _read_geodata_csv(text)
+        self.set_geodata(rows,tags)
+        _logger.debug("geodata %s: %d rows, tags %s",path,len(rows),tags)
+        return len(self.geodata)
+
+    def dumps_geodata(self) -> str:
+        """Return the geodata as CSV text (`BUS_I,LAT,LON` and the tags)"""
+        out = io.StringIO()
+        writer = csv.writer(out,lineterminator="\n")
+        writer.writerow(GEODATA_COLUMNS+self.geotags)
+        for row in self.geodata:
+            writer.writerow([_fmt(v) if isinstance(v,(int,float)) else v for v in row])
+        return out.getvalue()
+
+    def geomap(self) -> dict:
+        """Return `{bus_i: geodata row}` (the first row of each bus)"""
+        where = {}
+        for row in self.geodata:
+            where.setdefault(row[0],row)
+        return where
 
     def apply_result(self,result:dict):
         """Copy a solution's bus voltages and generator outputs into the case"""
@@ -763,6 +886,20 @@ def {name}():
                         add("error","gencost",n,"costs","piecewise MW points must increase")
                 if startup < 0 or shutdown < 0:
                     add("error","gencost",n,"startup","startup/shutdown cost is negative")
+        if self.geodata:
+            seen = {}
+            for n,row in enumerate(self.geodata):
+                if row[0] not in numbers:
+                    add("warning","bus",None,None,
+                        f"geodata row {n+1}: bus {row[0]} does not exist")
+                elif row[0] in seen:
+                    add("warning","bus",numbers[row[0]],None,
+                        f"bus {row[0]} has more than one geodata row (row {seen[row[0]]+1} is used)")
+                seen.setdefault(row[0],n)
+            missing = [str(r[0]) for r in bus if r[0] not in seen]
+            if missing:
+                add("warning","bus",None,None,f"{len(missing)} bus(es) have no geodata: "
+                    + ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else ""))
         return issues
 
     def solve(self,kind:str="pf",algorithm:str="NR") -> dict:
@@ -902,6 +1039,108 @@ def _jsonsafe(value):
     if isinstance(value,(list,tuple)):
         return [_jsonsafe(v) for v in value]
     return value
+
+# ----- geodata helpers -----
+
+def _geo_value(value):
+    """Return an auxiliary geodata value as a number if it reads as one, else text"""
+    if isinstance(value,bool):
+        return int(value)
+    if isinstance(value,(int,float)):
+        return value if math.isfinite(value) else str(value)
+    text = "" if value is None else str(value).strip()
+    if re.fullmatch(r"[+-]?\d+",text):
+        return int(text)
+    try:
+        number = float(text)
+    except ValueError:
+        return text
+    return number if math.isfinite(number) else text
+
+def _geo_rows(rows,tags):
+    """Check and normalize geodata rows; return `(rows, tags)`"""
+    if hasattr(tags,"tolist"):
+        tags = tags.tolist()
+    if isinstance(tags,str):
+        tags = [tags]
+    tags = [str(x) for x in tags]
+    rows = _tolist(rows) if len(rows) else []
+    width = max((len(r) for r in rows),default=3) - 3
+    tags += [f"col{k+4}" for k in range(len(tags),width)]
+    out = []
+    for n,row in enumerate(rows):
+        if len(row) < 3:
+            raise CaseError(f"geodata row {n+1} has {len(row)} values, "
+                "expected at least 3 (BUS_I, LAT, LON)")
+        try:
+            bus,lat,lon = _number(row[0],"int"),_number(row[1]),_number(row[2])
+        except CaseError as err:
+            raise CaseError(f"geodata row {n+1}: {err}") from err
+        if not -90 <= lat <= 90:
+            raise CaseError(f"geodata row {n+1}: latitude {lat} is not in -90..90")
+        if not -180 <= lon <= 180:
+            raise CaseError(f"geodata row {n+1}: longitude {lon} is not in -180..180")
+        aux = [_geo_value(v) for v in row[3:3+len(tags)]]
+        out.append([bus,lat,lon]+aux+[""]*(len(tags)-len(aux)))
+    return out,tags
+
+def _geo_from_ppc(data):
+    """Read `geodata`/`geotags` from a case dict
+
+    `geodata` is a list of rows (named by `geotags`) or a dict of columns
+    that includes `BUS_I`, `LAT` and `LON`.
+    """
+    geo = data.get("geodata")
+    if geo is None:
+        return [],[]
+    if isinstance(geo,dict):
+        keys = {str(k).upper():k for k in geo}
+        missing = [c for c in GEODATA_COLUMNS if c not in keys]
+        if missing:
+            raise CaseError(f"geodata is missing column(s) {', '.join(missing)}")
+        tags = [k for k in geo if str(k).upper() not in GEODATA_COLUMNS]
+        cols = [geo[keys[c]] for c in GEODATA_COLUMNS] + [geo[k] for k in tags]
+        cols = [x.tolist() if hasattr(x,"tolist") else list(x) for x in cols]
+        if len({len(x) for x in cols}) > 1:
+            raise CaseError("geodata columns have different lengths")
+        return _geo_rows([list(r) for r in zip(*cols)],tags)
+    if not isinstance(geo,(list,tuple)) and not hasattr(geo,"tolist"):
+        raise CaseError("geodata must be a list of rows or a dict of columns")
+    return _geo_rows(geo,data.get("geotags") or [])
+
+def _read_geodata_csv(text):
+    """Parse geodata CSV text; return `(rows, tags)` before checking"""
+    lines = [r for r in csv.reader(io.StringIO(text.lstrip("\ufeff"))) if any(c.strip() for c in r)]
+    if not lines:
+        raise CaseError("geodata CSV is empty")
+    header = [x.strip() for x in lines[0]]
+    upper = [x.upper() for x in header]
+    missing = [c for c in GEODATA_COLUMNS if c not in upper]
+    if missing:
+        raise CaseError(f"geodata CSV is missing column(s) {', '.join(missing)} "
+            f"(found {', '.join(header)})")
+    index = [upper.index(c) for c in GEODATA_COLUMNS]
+    aux = [k for k,x in enumerate(upper) if x not in GEODATA_COLUMNS]
+    rows = []
+    for line in lines[1:]:
+        line = line + [""]*(len(header)-len(line))
+        rows.append([line[k] for k in index] + [line[k] for k in aux])
+    return rows,[header[k] for k in aux]
+
+def _geo_literal(value):
+    """Format a geodata value as a Python literal"""
+    return _fmt(value) if isinstance(value,(int,float)) else json.dumps(value)
+
+_LATLON = re.compile(r"^\s*(\d+(?:\.\d*)?)\s*([NSEW])\s*(\d+(?:\.\d*)?)(?:\s*:\s*(\d+(?:\.\d*)?))?\s*$",re.I)
+
+def _glm_angle(text,hemispheres):
+    """Read a GLM latitude/longitude: decimal degrees or `37N25:12.3` style"""
+    text = _unquote(text)
+    m = _LATLON.match(text)
+    if m and m.group(2).upper() in hemispheres:
+        value = float(m.group(1)) + float(m.group(3))/60 + float(m.group(4) or 0)/3600
+        return -value if m.group(2).upper() == hemispheres[1] else value
+    return _number(text)
 
 def _glm_value(table,col,val):
     if col["kind"] == "enum":
@@ -1090,6 +1329,7 @@ def _parse_glm(text):
     directives = sum(1 for line in text.splitlines() if line.strip().startswith("#"))
     text = "\n".join("" if line.strip().startswith("#") else line for line in text.splitlines())
     data = {"version":"2","baseMVA":100.0,"bus":[],"gen":[],"branch":[],"gencost":[]}
+    geodata = []
     names = {"bus":{},"gen":{}}
     objects = {t:[] for t in _SOLVER_CLASSES}
     others = {}
@@ -1138,6 +1378,12 @@ def _parse_glm(text):
             row[0] = n+1
         names["bus"][_unquote(props.get("name",f"pp_bus_{n+1}"))] = row[0]
         data["bus"].append(row)
+        if "latitude" in props and "longitude" in props:
+            try:
+                geodata.append([row[0],_glm_angle(props["latitude"],"NS"),
+                    _glm_angle(props["longitude"],"EW")])
+            except CaseError as err:
+                raise CaseError(f"bus object {n+1} location: {err}") from err
     # generators
     for n,props in enumerate(objects["gen"]):
         row = []
@@ -1176,6 +1422,8 @@ def _parse_glm(text):
         costs.append((seen[index],index,n,[model,_glm_number(props.get("startup","0")),
             _glm_number(props.get("shutdown","0")),ncost]+values))
     data["gencost"] = [x[3] for x in sorted(costs)]
+    if geodata:
+        data["geodata"] = geodata
     notes = []
     if directives:
         others["# directive"] = directives

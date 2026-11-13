@@ -30,11 +30,15 @@ last edit changed cells other than the one edited). Errors return
   - `POST /api/undo`, `POST /api/redo`
   - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm": "NR"|...}`
   - `POST /api/apply`: copy the last solution into the case
+  - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
+    `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the
+    case geodata (see `ppedit.Case.load_geodata`) as one undoable edit
   - `POST /api/save`: `{"path"?, "force"?}` write to the open file or to
     `path`; when the case was read from a GLM file with content ppedit does
     not edit (`case.notes`), overwriting an existing file returns status 409
     with `"confirm": true` unless `force` is true
-  - `GET  /api/export?format=py|json|glm`: download the case
+  - `GET  /api/export?format=py|json|glm|csv`: download the case (`csv`:
+    its geodata)
 
 Caveats
 -------
@@ -88,12 +92,14 @@ class Editor:
 
     def _snapshot(self):
         return (copy.deepcopy(self.case.tables),self.case.baseMVA,
-            self.case.version,self.case.name)
+            self.case.version,self.case.name,
+            copy.deepcopy(self.case.geodata),list(self.case.geotags))
 
     def _restore(self,snap):
-        tables,base,version,name = snap
+        tables,base,version,name,geodata,geotags = snap
         self.case.tables = copy.deepcopy(tables)
         self.case.baseMVA,self.case.version,self.case.name = base,version,name
+        self.case.geodata,self.case.geotags = copy.deepcopy(geodata),list(geotags)
 
     def edit(self,func):
         """Run `func()` as one undoable edit; roll back if it raises"""
@@ -300,6 +306,21 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -
             editor.edit(lambda: editor.case.apply_result(result))
             return jsonify(editor.state(True))
 
+    @app.post("/api/geodata")
+    def geodata():
+        data = body()
+        with editor.lock:
+            if data.get("clear"):
+                editor.edit(lambda: editor.case.set_geodata([]))
+            elif "text" in data:
+                editor.edit(lambda: editor.case.load_geodata(data.get("filename","geodata.csv"),data["text"]))
+            else:
+                path = os.path.abspath(os.path.expanduser(data["path"]))
+                if not os.path.isfile(path):
+                    raise CaseError(f"'{path}' not found")
+                editor.edit(lambda: editor.case.load_geodata(path))
+            return jsonify(editor.state(True))
+
     @app.post("/api/save")
     def save():
         data = body()
@@ -322,8 +343,9 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False) -
         with editor.lock:
             text = editor.case.dumps(fmt)
             name = editor.case.name
-        ext = {v:k for k,v in FORMATS.items()}[fmt]
-        mime = "application/json" if fmt == "json" else "text/plain"
+        ext = {v:k for k,v in FORMATS.items()}.get(fmt,".csv")
+        name = name + "_geodata" if fmt == "csv" else name
+        mime = {"json":"application/json","csv":"text/csv"}.get(fmt,"text/plain")
         return Response(text,mimetype=mime,headers={
             "Content-Disposition":f'attachment; filename="{name}{ext}"'})
 
