@@ -1,0 +1,108 @@
+// 3-bus test model in the style written by `gridlabd convert -t pypower`
+// (numeric enumerations, autonamed objects), plus objects ppedit does not edit
+module pypower
+{
+    version 2;
+    baseMVA 100;
+}
+object pypower.bus
+{
+    name "pp_bus_1";
+    bus_i 1;
+    type 3;
+    Pd 0 MW;
+    Qd 0 MVAr;
+    Vm 1.02 pu.kV;
+    baseKV 230 kV;
+    Vmax 1.1 pu.kV;
+    Vmin 0.9 pu.kV;
+}
+object pypower.bus
+{
+    name "pp_bus_2";
+    bus_i 2;
+    type PV;
+    Pd 20 MW;
+    Qd 5 MVAr;
+    baseKV 230 kV;
+}
+object pypower.bus
+{
+    name "pp_bus_3";
+    bus_i 3;
+    type PQ;
+    Pd 80 MW;   // main load
+    Qd 30 MVAr;
+    baseKV 230 kV;
+    object pypower.load
+    {
+        name "load_3";
+        status ONLINE;
+    };
+}
+object pypower.gen
+{
+    name "pp_gen_1";
+    parent "pp_bus_1";
+    Pmax 200 MW;
+    Qmax 100 MVAr;
+    Qmin -100 MVAr;
+    Vg 1.02 pu.kV;
+    status IN_SERVICE;
+}
+object pypower.gen
+{
+    name "pp_gen_2";
+    bus 2;
+    parent "pp_bus_2";
+    Pg 40 MW;
+    Pmax 100 MW;
+    status 1;
+}
+object pypower.branch
+{
+    name "pp_branch_1";
+    from "pp_bus_1";
+    to "pp_bus_2";
+    r 0.01 pu.Ohm;
+    x 0.1 pu.Ohm;
+    b 0.02 pu.S;
+    rateA 150 MVA;
+    status IN;
+}
+object pypower.branch
+{
+    from "pp_bus_2";
+    to "pp_bus_3";
+    r 0.02 pu.Ohm;
+    x 0.15 pu.Ohm;
+    rateA 100 MVA;
+}
+object pypower.branch
+{
+    fbus 1;
+    tbus 3;
+    r 0.015 pu.Ohm;
+    x 0.12 pu.Ohm;
+    rateA 100 MVA;
+    status 1;
+}
+object pypower.gencost
+{
+    parent "pp_gen_2";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0.02,25,0";
+}
+object pypower.gencost
+{
+    parent "pp_gen_1";
+    model 2;
+    costs "0.01,20,0";
+}
+object powerplant
+{
+    name "pp_plant_1";
+    parent "pp_bus_1";
+}

@@ -1,0 +1,5 @@
+# third-party packages (unpinned unless a pin is needed)
+flask
+numpy
+scipy
+pypower

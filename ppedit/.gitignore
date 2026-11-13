@@ -1,0 +1,2 @@
+# ppedit/.gitignore: generated output that must never be committed
+_test/output/

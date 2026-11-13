@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ppedit</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 16 16%22%3E%3Crect width=%2216%22 height=%2216%22 rx=%223%22 fill=%22%231f6f5c%22/%3E%3Ccircle cx=%225%22 cy=%2211%22 r=%222%22 fill=%22white%22/%3E%3Ccircle cx=%2211%22 cy=%225%22 r=%222%22 fill=%22white%22/%3E%3Cpath d=%22M5 11L11 5%22 stroke=%22white%22/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="mark">pp</span>edit</div>
+  <div class="docinfo">
+    <input id="case-name" class="name-input" spellcheck="false" title="Case name">
+    <span id="dirty" class="dirty" title="Unsaved changes" hidden>●</span>
+    <span id="case-path" class="path"></span>
+  </div>
+  <div class="actions">
+    <div class="menu">
+      <button data-menu="new-menu">New ▾</button>
+      <div id="new-menu" class="dropdown">
+        <button data-action="new-empty">Empty case</button>
+        <div class="sep">PYPOWER built-in cases</div>
+        <div id="builtin-list"></div>
+      </div>
+    </div>
+    <button data-action="open" title="Open a .py, .json or .glm case">Open…</button>
+    <input type="file" id="file-input" accept=".py,.json,.glm" hidden>
+    <button data-action="save" id="save-btn" title="Save to the open file (Ctrl+S)">Save</button>
+    <div class="menu">
+      <button data-menu="save-menu">Save as ▾</button>
+      <div id="save-menu" class="dropdown">
+        <div class="sep">Download</div>
+        <button data-action="download" data-format="py">PYPOWER case (.py)</button>
+        <button data-action="download" data-format="json">PYPOWER JSON (.json)</button>
+        <button data-action="download" data-format="glm">GridLAB-D module pypower (.glm)</button>
+        <div class="sep">On the server machine</div>
+        <button data-action="save-as">Save to path…</button>
+      </div>
+    </div>
+    <span class="divider"></span>
+    <button data-action="undo" id="undo-btn" title="Undo (Ctrl+Z)">↶</button>
+    <button data-action="redo" id="redo-btn" title="Redo (Ctrl+Shift+Z)">↷</button>
+    <span class="divider"></span>
+    <select id="algorithm" title="Power flow algorithm">
+      <option value="NR">Newton</option>
+      <option value="FDXB">Fast-decoupled XB</option>
+      <option value="FDBX">Fast-decoupled BX</option>
+      <option value="GS">Gauss-Seidel</option>
+    </select>
+    <button class="primary" data-action="solve" data-kind="pf">Run PF</button>
+    <button class="primary alt" data-action="solve" data-kind="opf">Run OPF</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-view="network">Network</button>
+  <button data-view="bus">Buses <span class="count" data-count="bus"></span></button>
+  <button data-view="gen">Generators <span class="count" data-count="gen"></span></button>
+  <button data-view="branch">Branches <span class="count" data-count="branch"></span></button>
+  <button data-view="gencost">Gen costs <span class="count" data-count="gencost"></span></button>
+  <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
+  <button data-view="issues">Issues <span class="count issues" id="issue-count"></span></button>
+  <div class="globals">
+    <label>baseMVA <input id="baseMVA" class="num" size="6"></label>
+    <label>version <input id="version" class="num" size="2"></label>
+  </div>
+</nav>
+
+<main id="main">
+  <section id="view-network" class="view">
+    <div class="network-wrap">
+      <svg id="net" tabindex="0"></svg>
+      <div class="legend" id="legend"></div>
+      <div class="net-tools">
+        <button data-action="relayout" title="Recompute layout">Re-layout</button>
+        <button data-action="fit" title="Fit to window">Fit</button>
+        <span class="seg" role="group" aria-label="Diagram style">
+          <button data-action="style" data-style="classic" title="Classic view: bus type colors">Classic</button>
+          <button data-action="style" data-style="oneline" title="Utility one-line diagram: shapes by equipment, angles, MW and flows">One-line</button>
+        </span>
+      </div>
+      <aside id="inspector" class="inspector" hidden></aside>
+    </div>
+  </section>
+  <section id="view-table" class="view">
+    <div class="table-tools">
+      <button data-action="add-row">+ Add row</button>
+      <button data-action="dup-row" title="Duplicate selected rows">Duplicate</button>
+      <button data-action="del-rows" class="danger">Delete selected</button>
+      <input id="filter" type="search" placeholder="Filter rows…">
+      <span class="hint" id="table-hint"></span>
+    </div>
+    <div class="table-wrap"><table id="grid"></table></div>
+  </section>
+  <section id="view-results" class="view"></section>
+  <section id="view-issues" class="view"></section>
+</main>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

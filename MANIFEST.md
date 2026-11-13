@@ -1,0 +1,67 @@
+# MANIFEST
+
+Map of the `dchassin/ppedit` repository. Every tracked file is covered by
+one row or glob below; check with `python .github/check_manifest.py`.
+Update this file in the same PR that adds, moves, or deletes a file.
+
+## Start here
+
+1. `CLAUDE.md` — conventions and working rules
+2. `ppedit/__init__.py` — package docs (spec, limits) and public API
+3. `ppedit/case.py` — case model, formats, validation, solver
+4. `ppedit/server.py` — Flask app and JSON API
+
+## Task index
+
+- Add or change a table column: `COLUMNS` (and `GLM_UNITS`) in `ppedit/case.py`; validation in `Case.validate`; `ppedit/_test/test_case.py`
+- Add a validation rule: `Case.validate`; test in `test_validate_finds_errors`
+- Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
+- Add an API route: `ppedit/server.py` (and its docstring API list); `ppedit/_test/test_server.py`; call it from `ppedit/static/app.js`
+- Change the UI: `ppedit/static/{index.html,style.css,app.js}`
+- Add a CLI command or option: `ppedit/cli.py`, `ppedit/__init__.py` Syntax section, `README.md`
+- Release: `pyproject.toml` version; see the eudoxys-package skill checklist
+
+## Package
+
+| Path | Purpose | Notes |
+|---|---|---|
+| `ppedit/__init__.py` | package docs, re-exports | pdoc landing page |
+| `ppedit/cli.py` | CLI `main()`: serve, convert, check | entry point `ppedit`; tested by `_test/test_cli.py` |
+| `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O, edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
+| `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
+| `ppedit/static/index.html` | editor page layout | |
+| `ppedit/static/style.css` | editor styles | |
+| `ppedit/static/app.js` | editor logic: tables, network diagram (classic and one-line styles), results, issues | checked by hand (see `CLAUDE.md`) |
+| `ppedit/.gitignore` | generated-output ignores | |
+
+## Tests
+
+| Path | Purpose | Notes |
+|---|---|---|
+| `ppedit/_test/README.md` | how to run tests | |
+| `ppedit/_test/conftest.py` | `client` and `post` fixtures | |
+| `ppedit/_test/test_*.py` | tests | all fast, no network |
+| `ppedit/_test/data/README.md` | test data provenance | |
+| `ppedit/_test/data/case3.glm` | 3-bus GLM test model | curated, hand-written |
+
+## Repository
+
+| Path | Purpose | Notes |
+|---|---|---|
+| `README.md` | user overview | |
+| `CLAUDE.md` | assistant guidance | |
+| `MANIFEST.md` | this file | |
+| `CONTRIBUTING.md` | contributor guide | approved-issue rule |
+| `TODO.md` | roadmap | |
+| `pyproject.toml` | packaging | version here; static files in package-data |
+| `requirements.txt` | dependencies | |
+| `Makefile` | `make docs`, `make test` | |
+| `LICENSE` | MIT | |
+| `.gitignore` | | |
+| `.gitattributes` | | |
+| `.github/workflows/*.yaml` | CI: tests, docs, approved-issue check, issue assignment | |
+| `.github/check_manifest.py` | checks this file | |
+
+## Don't read
+
+`docs/` (generated), `.venv/`, `*.egg-info/`.

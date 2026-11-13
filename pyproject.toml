@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["ppedit"]
+
+[tool.setuptools.package-data]
+# list every file pattern the package reads at run time
+ppedit = ["*.py", "static/*.html", "static/*.css", "static/*.js"]
+
+[tool.setuptools.dynamic]
+dependencies = {file=["requirements.txt"]}
+
+[project]
+name = "ppedit"
+version = "0.0.0" # 0.0.0 = unreleased (hidden by `epm index`)
+description = "Browser-based editor for PYPOWER and Arras Energy module pypower models"
+authors = [
+    {name = "David P. Chassin"},
+    ]
+maintainers = [
+    {name = "David P. Chassin"},
+    ]
+readme = "README.md"
+requires-python = ">=3.10" # CI runs 3.12
+keywords = ["eudoxys","python","pypower","gridlabd","arras-energy","power-flow","editor"]
+license-files = ["LICENSE"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3 :: Only",
+    "Topic :: Scientific/Engineering",
+    "Framework :: Flask",
+    ]
+dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/dchassin/ppedit"
+Documentation = "https://dchassin.github.io/ppedit"
+Repository = "https://github.com/dchassin/ppedit.git"
+Issues = "https://github.com/dchassin/ppedit/issues"
+
+[project.scripts]
+ppedit = "ppedit.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["ppedit/_test", "ppedit/case.py"]
+addopts = "--doctest-modules"
