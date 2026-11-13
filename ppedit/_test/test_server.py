@@ -91,3 +91,14 @@ def test_dcline_api(client,post):
     assert st["removed"]["dcline"] == 1 and st["case"]["tables"]["dcline"] == []
     _,st = post("/api/undo")
     assert len(st["case"]["tables"]["dcline"]) == 1
+
+def test_exit():
+    import threading # pylint: disable=import-outside-toplevel
+    from ppedit import Case,create_app # pylint: disable=import-outside-toplevel
+    stopped = threading.Event()
+    app = create_app(Case.builtin("case9"),shutdown=stopped.set)
+    res = app.test_client().post("/api/exit",json={},headers={"X-PPEdit":"1"})
+    assert res.status_code == 200 and res.get_json() == {"exit":True}
+    assert stopped.wait(2)
+    res = app.test_client().post("/api/exit",json={})
+    assert res.status_code == 403

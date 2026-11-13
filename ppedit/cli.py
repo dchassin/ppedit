@@ -96,6 +96,7 @@ def main(argv:list[str]|None=None) -> int:
         if not args.no_browser:
             threading.Timer(1.0,lambda: webbrowser.open(url)).start()
         app.run(host=args.host,port=args.port,debug=False,use_reloader=False)
+        print("ppedit: server stopped")
         return 0
     except Exception as err: # pylint: disable=broad-exception-caught
         if args.debug:
