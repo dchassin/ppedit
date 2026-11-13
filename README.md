@@ -79,6 +79,14 @@ The tests need no network or credentials; see
 
 # Examples
 
+## PYPOWER cases
+
+[`examples/pypower/`](examples/pypower/) holds the PYPOWER standard test
+cases (`case4gs` to `case300`) as the original `.py` files and as Arras
+Energy `module pypower` GLM models, for example:
+
+    ppedit serve examples/pypower/case118.glm
+
 ## Command line
 
     ppedit check ppedit/_test/data/case3.glm

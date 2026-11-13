@@ -4,6 +4,7 @@
 - [x] Read/write PYPOWER `.py` and `.json`, and Arras Energy `module pypower` `.glm`
 - [x] Network diagram with inspector; PF/OPF results overlay
 - [x] Undo/redo; save guard for GLM content that is not kept
+- [x] PYPOWER example cases in `.py` and `.glm` (see `examples/pypower/`)
 - [x] Utility one-line diagram style (shapes by equipment, angle/MW labels, loading colors, MW flow labels)
 
 - [ ] Preserve non-solver GLM objects (`load`, `powerplant`, `powerline`, `shunt`, ...) on round trip, ideally by editing them too
