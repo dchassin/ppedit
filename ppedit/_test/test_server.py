@@ -73,3 +73,21 @@ def test_save_guard_for_dropped_content(tmp_path):
     assert res.status_code == 200 # new file is fine
     res = client.post("/api/save",json={"path":str(path),"force":True},headers={"X-PPEdit":"1"})
     assert res.status_code == 200 and "powerplant" not in path.read_text()
+
+def test_dcline_api(client,post):
+    """DC lines are edited, solved, applied, undone and exported through the API"""
+    meta = client.get("/api/meta").get_json()
+    assert "dcline" in meta["tables"] and "dclinecost" in meta["tables"]
+    status,st = post("/api/rows",{"table":"dcline","values":{"fbus":2,"tbus":9,"Pf":20}})
+    assert status == 200 and st["case"]["tables"]["dcline"][0][:4] == [2,9,1,20.0]
+    status,st = post("/api/cell",{"table":"dcline","row":0,"column":"tbus","value":"99"})
+    assert status == 400 and "does not exist" in st["error"]
+    _,st = post("/api/solve",{"kind":"pf"})
+    assert st["result"]["success"] and st["result"]["dcline"][0]["Pt"] == 20.0
+    _,st = post("/api/apply")
+    assert st["case"]["tables"]["dcline"][0][4] == 20.0
+    assert "object pypower.dcline" in client.get("/api/export?format=glm").get_data(as_text=True)
+    _,st = post("/api/rows/delete",{"table":"bus","rows":[1],"cascade":True})
+    assert st["removed"]["dcline"] == 1 and st["case"]["tables"]["dcline"] == []
+    _,st = post("/api/undo")
+    assert len(st["case"]["tables"]["dcline"]) == 1
