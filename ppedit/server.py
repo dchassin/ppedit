@@ -70,7 +70,9 @@ HISTORY = 200
 _LOOPBACK = {"localhost","127.0.0.1","::1","[::1]"}
 
 def _shutdown():
-    """Stop `ppedit serve` as Ctrl-C would"""
+    """Stop the server process as Ctrl-C would, or exit if `SIGINT` is ignored"""
+    if signal.getsignal(signal.SIGINT) in (signal.SIG_IGN,None):
+        os._exit(0) # e.g. started in the background, where SIGINT is ignored
     signal.raise_signal(signal.SIGINT)
 
 class Editor:
@@ -176,8 +178,9 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
       - `allow_remote`: accept requests whose `Host` is not a loopback name
 
       - `shutdown`: function called (shortly after responding) by
-        `POST /api/exit` to stop the server; default raises `SIGINT` in
-        the server process
+        `POST /api/exit` to stop the server (`ppedit serve` passes its
+        server's `shutdown`); default raises `SIGINT` in the server
+        process, or exits it if `SIGINT` is ignored
 
     Returns
     -------

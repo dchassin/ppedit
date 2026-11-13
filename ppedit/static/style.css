@@ -23,7 +23,7 @@
 html, body { height: 100%; margin: 0; }
 body {
   font: 13px/1.4 var(--sans); color: var(--ink); background: var(--bg);
-  display: grid; grid-template-rows: auto auto 1fr; overflow: hidden;
+  display: grid; grid-template-rows: auto auto 1fr; grid-template-columns: minmax(0,1fr); overflow: hidden;
 }
 button, select, input { font: inherit; color: inherit; }
 button {
@@ -38,7 +38,7 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 
 /* top bar */
 .topbar {
-  display: flex; align-items: center; gap: 16px; padding: 8px 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 8px 14px;
   background: var(--bar); color: var(--bar-ink);
 }
 .topbar button, .topbar select {
@@ -56,7 +56,7 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .name-input:hover, .name-input:focus { border-color: #3a4642; outline: none; }
 .dirty { color: #e3a33b; font-size: 11px; }
 .path { color: #9aa6a1; font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.actions { display: flex; align-items: center; gap: 6px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; }
 .divider { width: 1px; height: 20px; background: #3a4642; margin: 0 4px; }
 .menu { position: relative; }
 .dropdown {

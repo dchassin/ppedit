@@ -1787,6 +1787,8 @@ async function exitServer() {
     h("h1", {}, "ppedit server stopped"),
     h("p", {}, "You can close this tab. Run ppedit serve to start the editor again.")));
   document.title = "ppedit (stopped)";
+  S.exited = true; // already confirmed: skip the unsaved-changes prompt on close
+  window.close(); // browsers allow this only for some tabs (e.g. no back history); otherwise the page above stays
 }
 
 function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("open")); }
@@ -1839,7 +1841,7 @@ async function init() {
     const inField = ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement.tagName);
     if (mod && e.key.toLowerCase() === "z" && !inField) { e.preventDefault(); act(e.shiftKey ? "/api/redo" : "/api/undo").catch(() => {}); }
   });
-  window.addEventListener("beforeunload", e => { if (S.state && S.state.dirty) { e.preventDefault(); e.returnValue = ""; } });
+  window.addEventListener("beforeunload", e => { if (S.state && S.state.dirty && !S.exited) { e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("resize", () => { if (S.view === "network") renderNetwork(); });
   setupNetworkEvents();
   setState(await api("/api/state"));
