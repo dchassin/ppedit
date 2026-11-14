@@ -110,7 +110,7 @@ In the editor:
     Vm/Va/Pg/Qg and DC line flows into the model.
   - **Issues**: every validation error and warning; click one to jump to
     the cell.
-  - **Claude**: any number of side-by-side conversations with Claude (the
+  - **Claude**: any number of conversations with Claude, each in its own tab (the
     Anthropic Messages API) that read and edit the open case, check it and
     run PF/OPF. Each session chooses a model and its data sources: the case
     only, the web (search and public data downloads), and/or the files in

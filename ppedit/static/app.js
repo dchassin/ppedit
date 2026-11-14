@@ -1716,6 +1716,7 @@ function renderIssues() {
 // editor state when the case changed (or a session solved it).
 
 const claudePanels = new Map(); // session id -> {el, log, n, status, input}
+let claudeTab = null;           // id of the session shown
 let claudeSeen = 0;             // transcript items seen (to spot solves)
 
 function claudeBusy() { return !!(S.claude && S.claude.sessions.some(s => s.status !== "idle")); }
@@ -1778,8 +1779,7 @@ function claudePanel(s) {
   p.sources = h("div", { class: "claude-sources" });
   p.log = h("div", { class: "claude-log" });
   p.el = h("div", { class: "claude-session" },
-    h("div", { class: "claude-head" }, p.title, p.meta, p.stop,
-      h("button", { title: "Close this session", onclick: () => { if (confirm(`Close "${s.title}"? Its conversation is discarded; its edits stay.`)) claudeAct("/api/claude/delete", { id: s.id }).catch(() => {}); } }, "×")),
+    h("div", { class: "claude-head" }, p.title, p.meta, p.stop),
     p.sources, p.log, h("div", { class: "claude-input" }, input, p.send));
   return p;
 }
@@ -1799,6 +1799,14 @@ function renderClaude() {
     : "No Anthropic API key: set ANTHROPIC_API_KEY or put the key in ~/.anthropic, then restart ppedit.";
   const box = $("#claude-sessions");
   const ids = new Set(c.sessions.map(s => s.id));
+  if (!ids.has(claudeTab)) claudeTab = c.sessions.length ? c.sessions[c.sessions.length - 1].id : null;
+  $("#claude-tabs").replaceChildren(...c.sessions.map(s => h("button", {
+    class: s.id === claudeTab ? "active" : "", title: `${s.title} (${s.model})`,
+    onclick: e => { if (!e.target.closest(".x")) { claudeTab = s.id; renderClaude(); claudePanels.get(s.id)?.input.focus(); } },
+  }, h("span", { class: "status-dot" + (s.status !== "idle" ? " ok" : "") }), h("span", { class: "t" }, s.title),
+    h("span", { class: "x", title: "Close this session", onclick: () => {
+      if (confirm(`Close "${s.title}"? Its conversation is discarded; its edits stay.`)) claudeAct("/api/claude/delete", { id: s.id }).catch(() => {});
+    } }, "×"))));
   for (const [id, p] of claudePanels) if (!ids.has(id)) { p.el.remove(); claudePanels.delete(id); }
   for (const s of c.sessions) {
     let p = claudePanels.get(s.id);
@@ -1811,6 +1819,9 @@ function renderClaude() {
     p.sources.title = p.sources.textContent;
     const busy = s.status !== "idle";
     p.el.classList.toggle("running", busy);
+    const shown = s.id === claudeTab, wasShown = p.el.classList.contains("active");
+    p.el.classList.toggle("active", shown);
+    if (shown && !wasShown) p.n = -1; // scroll to the end when the tab is opened
     p.stop.disabled = s.status !== "running";
     p.send.disabled = busy;
     if (p.n !== s.transcript.length || p.status !== s.status) {
@@ -1822,20 +1833,19 @@ function renderClaude() {
   }
   if (!c.sessions.length) {
     if (!$(".empty", box)) box.replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No Claude sessions"),
-      "Start one or more sessions above; each can read and edit this case, optionally using web or local data."));
+      "Start one or more sessions above; each opens in its own tab and can read and edit this case, optionally using web or local data."));
   } else $$(":scope > .empty", box).forEach(e => e.remove());
 }
 
 async function newClaudeSession() {
-  const local = $("#claude-local").checked;
+  const local = $("#claude-local").checked, title = $("#claude-title").value;
   await claudeAct("/api/claude/new", {
-    title: $("#claude-title").value.trim(), model: $("#claude-model").value,
+    title: title.trim(), model: $("#claude-model").value,
     web: $("#claude-web").checked, local, root: local ? $("#claude-root").value.trim() : null,
   });
-  $("#claude-title").value = "";
+  if ($("#claude-title").value === title) $("#claude-title").value = "";
   const last = S.claude.sessions[S.claude.sessions.length - 1];
-  const p = last && claudePanels.get(last.id);
-  if (p) { p.el.scrollIntoView({ inline: "end" }); p.input.focus(); }
+  if (last) { claudeTab = last.id; renderClaude(); claudePanels.get(last.id)?.input.focus(); }
 }
 
 // ---------------------------------------------------------------- actions

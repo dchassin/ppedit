@@ -312,8 +312,17 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 .claude-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .claude-tools input:not([type=checkbox]), .claude-tools select { border: 1px solid var(--line-strong); border-radius: 5px; padding: 4px 8px; background: var(--panel); }
 .claude-tools input:disabled { opacity: .5; }
-.claude-sessions { flex: 1; display: flex; gap: 12px; padding: 12px 14px; overflow-x: auto; overflow-y: hidden; min-height: 0; }
-.claude-session { flex: 0 0 420px; display: flex; flex-direction: column; min-height: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.claude-tabs { display: flex; gap: 2px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.claude-tabs:empty { display: none; }
+.claude-tabs > button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 7px 10px 6px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 240px; }
+.claude-tabs > button span.t { overflow: hidden; text-overflow: ellipsis; }
+.claude-tabs > button.active { color: var(--ink); border-bottom-color: var(--accent); }
+.claude-tabs > button:hover { color: var(--ink); }
+.claude-tabs .x { color: var(--muted); padding: 0 2px; border-radius: 3px; }
+.claude-tabs .x:hover { background: var(--err-bg); color: var(--err); }
+.claude-sessions { flex: 1; display: flex; padding: 12px 14px; min-height: 0; }
+.claude-session { flex: 1; display: none; flex-direction: column; min-height: 0; max-width: 1000px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.claude-session.active { display: flex; }
 .claude-session.running { border-color: var(--accent); }
 .claude-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
 .claude-head .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
