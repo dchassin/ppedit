@@ -307,3 +307,38 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 .topbar button.exit:hover { background: #8a2e2e; border-color: #a33a3a; }
 .stopped { max-width: 32em; margin: 20vh auto; text-align: center; color: #44514d; }
 .stopped h1 { font-size: 1.4em; color: #1f6f5c; }
+
+/* claude */
+.claude-tools { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; padding: 8px 14px; border-bottom: 1px solid var(--line); background: var(--panel); }
+.claude-tools input:not([type=checkbox]), .claude-tools select { border: 1px solid var(--line-strong); border-radius: 5px; padding: 4px 8px; background: var(--panel); }
+.claude-tools input:disabled { opacity: .5; }
+.claude-tabs { display: flex; gap: 2px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
+.claude-tabs:empty { display: none; }
+.claude-tabs > button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 7px 10px 6px; color: var(--muted); display: flex; align-items: center; gap: 6px; white-space: nowrap; max-width: 240px; }
+.claude-tabs > button span.t { overflow: hidden; text-overflow: ellipsis; }
+.claude-tabs > button.active { color: var(--ink); border-bottom-color: var(--accent); }
+.claude-tabs > button:hover { color: var(--ink); }
+.claude-tabs .x { color: var(--muted); padding: 0 2px; border-radius: 3px; }
+.claude-tabs .x:hover { background: var(--err-bg); color: var(--err); }
+.claude-sessions { flex: 1; display: flex; padding: 12px 14px; min-height: 0; }
+.claude-session { flex: 1; display: none; flex-direction: column; min-height: 0; max-width: 1000px; margin: 0 auto; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.claude-session.active { display: flex; }
+.claude-session.running { border-color: var(--accent); }
+.claude-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.claude-head .title { font-weight: 600; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.claude-head .meta { color: var(--muted); font-size: 11px; }
+.claude-head button { padding: 2px 8px; }
+.claude-sources { padding: 4px 10px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--line); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.claude-log { flex: 1; overflow-y: auto; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
+.claude-log .msg { white-space: pre-wrap; word-wrap: break-word; padding: 7px 10px; border-radius: 6px; }
+.claude-log .msg.user { background: var(--sel); align-self: flex-end; max-width: 90%; }
+.claude-log .msg.assistant { background: var(--bg); }
+.claude-log .msg.error { background: var(--err-bg); color: var(--err); }
+.claude-log details.tool { font-family: var(--mono); font-size: 11px; color: var(--muted); border-left: 3px solid var(--line-strong); padding: 2px 8px; }
+.claude-log details.tool.changed { border-left-color: var(--accent); color: var(--ink); }
+.claude-log details.tool.failed { border-left-color: var(--err); color: var(--err); }
+.claude-log details.tool summary { cursor: pointer; word-break: break-all; }
+.claude-log details.tool pre { white-space: pre-wrap; word-break: break-all; margin: 4px 0; max-height: 240px; overflow: auto; }
+.claude-log .working { color: var(--muted); font-style: italic; }
+.claude-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
+.claude-input textarea { flex: 1; resize: vertical; min-height: 38px; max-height: 200px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font: inherit; }

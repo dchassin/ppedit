@@ -14,8 +14,9 @@ app was created with `allow_remote=True`.
 
 Every successful call returns the editor state: `case` (see
 `ppedit.Case.to_dict`), `path`, `format`, `dirty`, `issues`, `can_undo`,
-`can_redo`, `result` (last solution or `null`), and `cascade` (whether the
-last edit changed cells other than the one edited). Errors return
+`can_redo`, `result` (last solution or `null`), `cascade` (whether the
+last edit changed cells other than the one edited), and `revision` (a
+counter that changes whenever the case changes). Errors return
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats, version
@@ -42,6 +43,16 @@ last edit changed cells other than the one edited). Errors return
   - `POST /api/exit`: `{}` stop the server (unsaved changes are lost);
     returns `{"exit": true}` and shuts down shortly after responding
 
+Claude sessions (see `ppedit.claude`); each returns the editor state plus
+`claude`, the list of sessions (`ppedit.claude.Sessions.to_dict`):
+
+  - `GET  /api/claude`: the sessions only (polled by the Claude tab)
+  - `POST /api/claude/new`: `{"title"?, "model"?, "web"?, "local"?, "root"?}`
+  - `POST /api/claude/send`: `{"id", "text"}` add a message; Claude works on
+    it in the background, editing the case through undoable edits
+  - `POST /api/claude/stop`: `{"id"}` stop after the current step
+  - `POST /api/claude/delete`: `{"id"}` stop and remove the session
+
 Caveats
 -------
 
@@ -58,6 +69,7 @@ import threading
 from flask import Flask, jsonify, request, send_from_directory, Response
 
 from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, builtin_cases
+from ppedit.claude import Sessions
 
 _logger = logging.getLogger(__file__)
 
@@ -97,7 +109,9 @@ class Editor:
         """Last solver result (cleared by any edit)"""
         self.undo_stack = []
         self.redo_stack = []
-        self.lock = threading.Lock()
+        self.revision = 0
+        """Counter incremented whenever the case changes (edit, undo, redo, open)"""
+        self.lock = threading.RLock()
 
     def _snapshot(self):
         return (copy.deepcopy(self.case.tables),self.case.baseMVA,
@@ -124,6 +138,7 @@ class Editor:
             self.redo_stack.clear()
             self.dirty = True
             self.result = None
+            self.revision += 1
         return out
 
     def replace(self,case:Case,path:str|None):
@@ -132,6 +147,7 @@ class Editor:
         self.dirty,self.result = False,None
         self.undo_stack.clear()
         self.redo_stack.clear()
+        self.revision += 1
 
     def undo(self):
         """Undo the last edit"""
@@ -140,6 +156,7 @@ class Editor:
         self.redo_stack.append(self._snapshot())
         self._restore(self.undo_stack.pop())
         self.dirty,self.result = True,None
+        self.revision += 1
 
     def redo(self):
         """Redo the last undone edit"""
@@ -148,6 +165,7 @@ class Editor:
         self.undo_stack.append(self._snapshot())
         self._restore(self.redo_stack.pop())
         self.dirty,self.result = True,None
+        self.revision += 1
 
     def state(self,cascade:bool=False) -> dict:
         """Return the editor state sent to the browser"""
@@ -162,10 +180,11 @@ class Editor:
             "can_redo": bool(self.redo_stack),
             "result": self.result,
             "cascade": cascade,
+            "revision": self.revision,
         }
 
 def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
-        shutdown=None) -> Flask:
+        shutdown=None,claude_client=None) -> Flask:
     """Create the editor application
 
     Arguments
@@ -190,6 +209,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     app = Flask(__name__,static_folder=None)
     editor = Editor(case,path)
     app.config["EDITOR"] = editor
+    claude = Sessions(editor,claude_client)
+    app.config["CLAUDE"] = claude
     app.config["SHUTDOWN"] = shutdown or _shutdown
 
     @app.before_request
@@ -364,6 +385,39 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         mime = {"json":"application/json","csv":"text/csv"}.get(fmt,"text/plain")
         return Response(text,mimetype=mime,headers={
             "Content-Disposition":f'attachment; filename="{name}{ext}"'})
+
+    def claude_state():
+        with editor.lock:
+            out = editor.state()
+        out["claude"] = claude.to_dict()
+        return jsonify(out)
+
+    @app.get("/api/claude")
+    def claude_list():
+        return jsonify(claude=claude.to_dict())
+
+    @app.post("/api/claude/new")
+    def claude_new():
+        data = body()
+        claude.create(title=str(data.get("title") or ""),model=data.get("model"),
+            web=bool(data.get("web")),local=bool(data.get("local")),root=data.get("root") or None)
+        return claude_state()
+
+    @app.post("/api/claude/send")
+    def claude_send():
+        data = body()
+        claude.get(data["id"]).send(str(data.get("text","")))
+        return claude_state()
+
+    @app.post("/api/claude/stop")
+    def claude_stop():
+        claude.get(body()["id"]).stop()
+        return claude_state()
+
+    @app.post("/api/claude/delete")
+    def claude_delete():
+        claude.delete(body()["id"])
+        return claude_state()
 
     @app.post("/api/exit")
     def exit_server():

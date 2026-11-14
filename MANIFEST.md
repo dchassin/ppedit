@@ -23,6 +23,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Change geodata handling or map layers: `Case.load_geodata`/`_geo_*` helpers in `ppedit/case.py`; `geoLayout`/`renderMap` in `ppedit/static/app.js`; `ppedit/_test/test_geodata.py`
 - Add a CLI command or option: `ppedit/cli.py`, `ppedit/__init__.py` Syntax section, `README.md`
 - Refresh the PYPOWER example cases: `python3 examples/import_pypower_cases.py` (after upgrading `pypower`)
+- Change the Claude sessions (tools, data sources, models): `ppedit/claude.py`; `/api/claude*` routes in `ppedit/server.py`; Claude section of `ppedit/static/app.js`; `ppedit/_test/test_claude.py`
 - Release: `pyproject.toml` version; see the eudoxys-package skill checklist
 
 ## Package
@@ -33,10 +34,11 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/cli.py` | CLI `main()`: serve, convert, check | entry point `ppedit`; tested by `_test/test_cli.py` |
 | `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O, edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
 | `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
+| `ppedit/claude.py` | `Sessions`: Claude API conversations with tools that edit the case, web and local data sources | tested by `_test/test_claude.py` with a fake client |
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
 | `ppedit/static/index.html` | editor page layout | |
 | `ppedit/static/style.css` | editor styles | |
-| `ppedit/static/app.js` | editor logic: tables, network diagram (simple, classic and one-line styles; force and geodata layouts with map layers), results, issues | checked by hand (see `CLAUDE.md`) |
+| `ppedit/static/app.js` | editor logic: tables, network diagram (simple, classic and one-line styles; force and geodata layouts with map layers), results, issues, Claude sessions | checked by hand (see `CLAUDE.md`) |
 | `ppedit/.gitignore` | generated-output ignores | |
 
 ## Tests

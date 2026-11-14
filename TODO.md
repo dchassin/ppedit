@@ -17,6 +17,8 @@
 - [x] `dcline` and `dclinecost` tables (edit, validate, draw, solve; GLM `dcline` objects)
 - [x] `areas` table (edit, validate, area colors in the diagram, per-area results)
 - [ ] Copy/paste of cell ranges to and from spreadsheets
+- [x] Claude tab: multiple Claude API sessions that edit the case, with web and local data sources
+- [ ] Claude sessions: stream responses, persist conversations, show a diff of each session's edits
 - [ ] Multiple open cases (tabs) and a recent-files list
 
 # Release

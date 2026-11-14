@@ -110,6 +110,13 @@ In the editor:
     Vm/Va/Pg/Qg and DC line flows into the model.
   - **Issues**: every validation error and warning; click one to jump to
     the cell.
+  - **Claude**: any number of conversations with Claude, each in its own tab (the
+    Anthropic Messages API) that read and edit the open case, check it and
+    run PF/OPF. Each session chooses a model and its data sources: the case
+    only, the web (search and public data downloads), and/or the files in
+    one folder on the server machine. Every change Claude makes is one
+    undoable edit and shows up in the other tabs as it happens. Needs an
+    API key in `ANTHROPIC_API_KEY` or `~/.anthropic` (see `ppedit.claude`).
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 
 DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are

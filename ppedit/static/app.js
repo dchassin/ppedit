@@ -7,6 +7,7 @@ const S = {
   view: "network",
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
+  claude: null,        // Claude sessions from /api/claude
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch"|"dcline", index}
@@ -136,6 +137,9 @@ function renderChrome() {
   ic.title = `${errs} error(s), ${warns} warning(s)`;
   const dot = $("#result-dot");
   dot.className = "status-dot" + (st.result ? (st.result.success ? " ok" : " fail") : "");
+  const busy = claudeBusy();
+  $("#claude-dot").className = "status-dot" + (busy ? " ok" : "");
+  $("#claude-dot").title = busy ? "Claude is working" : "";
   document.title = `${st.dirty ? "• " : ""}${c.name} — ppedit`;
   $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
 }
@@ -152,6 +156,7 @@ function renderView() {
   if (isTable) { $("#view-table").classList.add("active"); renderTable(S.view); }
   else if (S.view === "network") { $("#view-network").classList.add("active"); renderNetwork(); }
   else if (S.view === "results") { $("#view-results").classList.add("active"); renderResults(); }
+  else if (S.view === "claude") { $("#view-claude").classList.add("active"); renderClaude(); }
   else { $("#view-issues").classList.add("active"); renderIssues(); }
 }
 
@@ -1705,6 +1710,144 @@ function renderIssues() {
   box.replaceChildren(...kids);
 }
 
+// ---------------------------------------------------------------- claude
+// Claude sessions run on the server (ppedit/claude.py); the page polls
+// /api/claude while the tab is open or a session is working, and reloads the
+// editor state when the case changed (or a session solved it).
+
+const claudePanels = new Map(); // session id -> {el, log, n, status, input}
+let claudeTab = null;           // id of the session shown
+let claudeSeen = 0;             // transcript items seen (to spot solves)
+
+function claudeBusy() { return !!(S.claude && S.claude.sessions.some(s => s.status !== "idle")); }
+
+async function claudeAct(path, body) {
+  try {
+    const data = await api(path, body);
+    S.claude = data.claude;
+    setState(data);
+    return data;
+  } catch (err) { toast(err.message, true); throw err; }
+}
+
+async function pollClaude() {
+  if (S.exited || !S.state || (S.view !== "claude" && !claudeBusy())) return;
+  let data;
+  try { data = await api("/api/claude"); } catch (_) { return; }
+  const was = claudeBusy();
+  S.claude = data.claude;
+  const items = S.claude.sessions.flatMap(s => s.transcript);
+  const solved = items.slice(claudeSeen).some(t => t.kind === "tool" && t.name === "solve");
+  claudeSeen = items.length;
+  if (S.claude.revision !== S.state.revision || solved) setState(await api("/api/state"));
+  else { if (was !== claudeBusy()) renderChrome(); if (S.view === "claude") renderClaude(); }
+}
+
+function claudeToolText(t) {
+  const args = t.input && Object.keys(t.input).length ? JSON.stringify(t.input) : "";
+  return `${t.name}(${args.length > 120 ? args.slice(0, 117) + "…" : args})`;
+}
+
+function claudeLogItems(s) {
+  const kids = s.transcript.map(t => {
+    if (t.kind === "tool") {
+      return h("details", { class: "tool" + (t.changed ? " changed" : "") + (t.ok === false ? " failed" : "") },
+        h("summary", {}, (t.changed ? "✎ " : "· ") + claudeToolText(t)),
+        h("pre", {}, JSON.stringify(t.input, null, 1)), h("pre", {}, t.result || ""));
+    }
+    return h("div", { class: "msg " + t.kind }, t.text);
+  });
+  if (!kids.length) kids.push(h("div", { class: "empty" }, "Ask Claude to change the case, e.g. ",
+    h("i", {}, "\"add a 50 MW load at bus 5\""), " or ", h("i", {}, "\"raise all branch ratings by 10%\"")));
+  if (s.status !== "idle") kids.push(h("div", { class: "working" }, s.status === "stopping" ? "Stopping…" : "Working…"));
+  return kids;
+}
+
+function claudePanel(s) {
+  const input = h("textarea", { placeholder: "Message Claude (Ctrl+Enter to send)", rows: 2 });
+  const send = async () => {
+    const text = input.value.trim();
+    if (!text) return;
+    try { await claudeAct("/api/claude/send", { id: s.id, text }); input.value = ""; } catch (_) { /* toast shown */ }
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); send(); } });
+  const p = { input, n: -1, status: null };
+  p.title = h("span", { class: "title" });
+  p.meta = h("span", { class: "meta" });
+  p.stop = h("button", { title: "Stop after the current step", onclick: () => claudeAct("/api/claude/stop", { id: s.id }).catch(() => {}) }, "Stop");
+  p.send = h("button", { class: "primary", onclick: send }, "Send");
+  p.sources = h("div", { class: "claude-sources" });
+  p.log = h("div", { class: "claude-log" });
+  p.el = h("div", { class: "claude-session" },
+    h("div", { class: "claude-head" }, p.title, p.meta, p.stop),
+    p.sources, p.log, h("div", { class: "claude-input" }, input, p.send));
+  return p;
+}
+
+function renderClaude() {
+  const c = S.claude;
+  if (!c) { api("/api/claude").then(d => { S.claude = d.claude; renderClaude(); }).catch(err => toast(err.message, true)); return; }
+  const model = $("#claude-model");
+  if (!model.options.length) {
+    model.replaceChildren(...c.models.map(m => h("option", { value: m, selected: m === c.default_model }, m)));
+  }
+  const root = $("#claude-root");
+  if (!root.value && document.activeElement !== root) root.placeholder = c.default_root;
+  root.disabled = !$("#claude-local").checked;
+  $("[data-action=claude-new]").disabled = !c.available;
+  $("#claude-hint").textContent = c.available ? "Each change Claude makes is one undoable edit."
+    : "No Anthropic API key: set ANTHROPIC_API_KEY or put the key in ~/.anthropic, then restart ppedit.";
+  const box = $("#claude-sessions");
+  const ids = new Set(c.sessions.map(s => s.id));
+  if (!ids.has(claudeTab)) claudeTab = c.sessions.length ? c.sessions[c.sessions.length - 1].id : null;
+  $("#claude-tabs").replaceChildren(...c.sessions.map(s => h("button", {
+    class: s.id === claudeTab ? "active" : "", title: `${s.title} (${s.model})`,
+    onclick: e => { if (!e.target.closest(".x")) { claudeTab = s.id; renderClaude(); claudePanels.get(s.id)?.input.focus(); } },
+  }, h("span", { class: "status-dot" + (s.status !== "idle" ? " ok" : "") }), h("span", { class: "t" }, s.title),
+    h("span", { class: "x", title: "Close this session", onclick: () => {
+      if (confirm(`Close "${s.title}"? Its conversation is discarded; its edits stay.`)) claudeAct("/api/claude/delete", { id: s.id }).catch(() => {});
+    } }, "×"))));
+  for (const [id, p] of claudePanels) if (!ids.has(id)) { p.el.remove(); claudePanels.delete(id); }
+  for (const s of c.sessions) {
+    let p = claudePanels.get(s.id);
+    if (!p) { p = claudePanel(s); claudePanels.set(s.id, p); }
+    if (p.el.parentNode !== box) box.append(p.el);
+    p.title.textContent = s.title; p.title.title = s.title;
+    p.meta.textContent = `${s.model.replace(/^claude-/, "")} · ${s.edits} edit${s.edits === 1 ? "" : "s"}`;
+    p.meta.title = `${s.usage.input_tokens} input / ${s.usage.output_tokens} output tokens`;
+    p.sources.textContent = "Data: case" + (s.web ? " · web" : "") + (s.local ? ` · files in ${s.root}` : "");
+    p.sources.title = p.sources.textContent;
+    const busy = s.status !== "idle";
+    p.el.classList.toggle("running", busy);
+    const shown = s.id === claudeTab, wasShown = p.el.classList.contains("active");
+    p.el.classList.toggle("active", shown);
+    if (shown && !wasShown) p.n = -1; // scroll to the end when the tab is opened
+    p.stop.disabled = s.status !== "running";
+    p.send.disabled = busy;
+    if (p.n !== s.transcript.length || p.status !== s.status) {
+      const atEnd = p.log.scrollHeight - p.log.scrollTop - p.log.clientHeight < 40;
+      p.log.replaceChildren(...claudeLogItems(s));
+      if (atEnd || p.n < 0) p.log.scrollTop = p.log.scrollHeight;
+      p.n = s.transcript.length; p.status = s.status;
+    }
+  }
+  if (!c.sessions.length) {
+    if (!$(".empty", box)) box.replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No Claude sessions"),
+      "Start one or more sessions above; each opens in its own tab and can read and edit this case, optionally using web or local data."));
+  } else $$(":scope > .empty", box).forEach(e => e.remove());
+}
+
+async function newClaudeSession() {
+  const local = $("#claude-local").checked, title = $("#claude-title").value;
+  await claudeAct("/api/claude/new", {
+    title: title.trim(), model: $("#claude-model").value,
+    web: $("#claude-web").checked, local, root: local ? $("#claude-root").value.trim() : null,
+  });
+  if ($("#claude-title").value === title) $("#claude-title").value = "";
+  const last = S.claude.sessions[S.claude.sessions.length - 1];
+  if (last) { claudeTab = last.id; renderClaude(); claudePanels.get(last.id)?.input.focus(); }
+}
+
 // ---------------------------------------------------------------- actions
 
 async function openFile(file) {
@@ -1760,6 +1903,7 @@ async function onAction(btn) {
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
+    else if (a === "claude-new") await newClaudeSession();
     else if (a === "exit") await exitServer();
   } catch (_) { /* toast already shown */ }
 }
@@ -1843,7 +1987,9 @@ async function init() {
   });
   window.addEventListener("beforeunload", e => { if (S.state && S.state.dirty && !S.exited) { e.preventDefault(); e.returnValue = ""; } });
   window.addEventListener("resize", () => { if (S.view === "network") renderNetwork(); });
+  $("#claude-local").addEventListener("change", e => { $("#claude-root").disabled = !e.target.checked; });
   setupNetworkEvents();
+  setInterval(pollClaude, 1000);
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");
 }
