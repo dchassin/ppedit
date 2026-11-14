@@ -14,7 +14,7 @@ dependencies = {file=["requirements.txt"]}
 
 [project]
 name = "ppedit"
-version = "0.0.0" # 0.0.0 = unreleased (hidden by `epm index`)
+version = "0.2.0" # 0.0.0 = unreleased (hidden by `epm index`)
 description = "Browser-based editor for PYPOWER and Arras Energy module pypower models"
 authors = [
     {name = "David P. Chassin"},
