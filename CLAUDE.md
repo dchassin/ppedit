@@ -100,16 +100,22 @@ API key to start sessions; tests use a fake client).
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
   layered layout cached by topology signature (`olCache`), drawn in layout
   units under one transform (so it scales with zoom, unlike the other
-  styles); buses are not draggable. Branches skipping rows cross bus bars
-  (drawn with a white halo gap); dense on case118/case300.
+  styles); buses are not draggable. Each branch and DC line gets a column
+  in each of its two bars (on the side facing the other bus) joined by one
+  horizontal jog (`routes` in `onelineLayout`, `route` in `renderOneline`);
+  the two merge into one straight column when they are neighbors. Jogs lie
+  in the free band of the first gap below the upper bar, one track each
+  where they overlap (longer jogs higher), and that gap grows to fit its
+  tracks. Branches skipping rows cross bus bars below their jog (drawn
+  with a white halo gap); wide and dense on case118/case300.
 - Areas check box (`S.areas`, `showAreas()` in `app.js`): draws each area
   as the union of per-site discs clipped to the half-planes nearer than any
   other area's site (`areaRegions`; sites are buses plus points along
   internal lines), so regions never overlap; bus colors don't change.
   Turning it on re-runs the force layout with area cohesion and gives each
   area its own column strip (box) in the one-line layout (part of the
-  `olCache` signature), where ties get a column in each box and a jog
-  (`route` in `renderOneline`). Geodata positions are fixed, so an area may
+  `olCache` signature), where ties always keep a column in each box and
+  a jog (never merged). Geodata positions are fixed, so an area may
   show as several patches there.
 - A case without an `areas` table gets default rows from the bus areas on
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not

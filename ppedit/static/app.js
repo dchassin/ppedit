@@ -733,8 +733,9 @@ function renderNetwork() {
 // are horizontal and branches vertical. Rows are the hop distance from the nearest
 // generator bus (sources on top), split so that no branch joins two buses of the
 // same row; buses are ordered within rows by barycenter sweeps (crossing reduction).
-// Every generator, load, branch and DC line gets its own column and each bus bar spans its
-// own columns; bars that would overlap in a row move to an extra track. The diagram
+// Every generator and load gets its own column, and every branch and DC line a column at
+// each end, joined by one horizontal jog (or one shared column when the two are neighbors);
+// each bus bar spans its own columns; bars that would overlap in a row move to an extra track. The diagram
 // is drawn in layout units under one transform, so it scales as a whole.
 
 const OL = { dx: 34, gen: 112, load: 112, bare: 30, gap: 84, label: 80, pad: 12 };
@@ -822,17 +823,31 @@ function onelineLayout() {
   };
   T.gen.forEach((g, i) => { if (ids.has(g[0])) add(u.get(g[0]) - 1e-9, "gen", i, g[0]); });
   T.bus.forEach(b => { if (b[2] !== 0 || b[3] !== 0) add(u.get(b[0]) + 1e-9, "load", b[0], b[0]); });
-  // with areas shown, a line between two areas (a tie) gets a column at each end, in its
-  // own bus's strip, and is drawn with a jog between them, so no bus bar leaves its area
+  // every line gets a column at each end, inside its own bus's bar on the side facing the
+  // other bus (lines going farther sit farther out), and is drawn with one horizontal jog
+  // between them, so bars span only their own equipment; with areas shown, a line between
+  // two areas (a tie) is always drawn this way, so no bus bar leaves its area
   const tie = (b) => grouped && area.get(b[0]) !== area.get(b[1]);
-  const ties = new Map();
+  const ends = new Map();
   for (const [kind, list] of [["branch", brs], ["dcline", dcs]]) list.forEach(([b, i]) => {
-    if (!tie(b)) { add((u.get(b[0]) + u.get(b[1])) / 2, kind, i, b[0], b[1]); return; }
-    const toward = (me, other) => u.get(me) + (u.get(other) > u.get(me) ? 2e-7 : -2e-7); // the bar end facing the other area
-    ties.set(`${kind}:${i}`, [add(toward(b[0], b[1]), "tie", null, b[0]), add(toward(b[1], b[0]), "tie", null, b[1])]);
+    const toward = (me, other) => { // the bar end facing the other bus
+      const d = u.get(other) - u.get(me);
+      return u.get(me) + (d > 0 ? 1 : -1) * (2e-7 + 1e-8 * Math.abs(d));
+    };
+    ends.set(`${kind}:${i}`, { b, tie: tie(b), at: [add(toward(b[0], b[1]), kind, i, b[0]), add(toward(b[1], b[0]), kind, i, b[1])] });
   });
   buses.forEach(b => { if (!own.get(b).length) add(u.get(b), "bare", b, b); });
   slots.sort((a, b) => a.key - b.key);
+  // a line whose two end columns are neighbors is drawn straight down one shared column
+  ends.forEach(E => {
+    if (E.tie) return;
+    const [p, q] = E.at, ip = slots.indexOf(p), iq = slots.indexOf(q);
+    if (Math.abs(ip - iq) !== 1) return;
+    slots.splice(iq, 1);
+    const mine = own.get(E.b[1]);
+    mine[mine.indexOf(q)] = p;
+    E.at = [p, p];
+  });
   slots.forEach((s, i) => (s.x = i * OL.dx));
   if (grouped) { // a gap between area strips leaves room for the bus labels and the box edges
     let shift = 0, prev = null;
@@ -860,13 +875,40 @@ function onelineLayout() {
     });
     ends.forEach((_, t) => bands.push(r.filter(b => track.get(b) === t)));
   }
+  // routes: [x at the upper bus, x at the lower bus, y of the jog or null]. A jog lies in the
+  // first gap below the upper bar, between that band's loads and the next band's generators;
+  // jogs sharing a gap get their own tracks (longer jogs higher, so lines fanning out from
+  // one bar nest without crossing), and a gap grows to fit its tracks
+  const bandOf = new Map();
+  bands.forEach((band, i) => band.forEach(b => bandOf.set(b, i)));
+  const routes = new Map(), jogs = bands.map(() => []);
+  ends.forEach((E, key) => {
+    const up = bandOf.get(E.b[0]) <= bandOf.get(E.b[1]);
+    const x1 = E.at[up ? 0 : 1].x, x2 = E.at[up ? 1 : 0].x;
+    routes.set(key, [x1, x2, null]);
+    if (x1 !== x2) jogs[Math.min(bandOf.get(E.b[0]), bandOf.get(E.b[1]))].push({ key, lo: Math.min(x1, x2), hi: Math.max(x1, x2) });
+  });
+  const ntracks = jogs.map(list => {
+    const tracks = [];
+    list.sort((a, b) => (b.hi - b.lo) - (a.hi - a.lo) || a.lo - b.lo).forEach(j => {
+      let t = tracks.findIndex(tr => tr.every(o => j.hi < o.lo - 4 || j.lo > o.hi + 4));
+      if (t < 0) { t = tracks.length; tracks.push([]); }
+      tracks[t].push(j);
+      j.t = t;
+    });
+    return tracks.length;
+  });
   let y = 0;
-  for (const band of bands) {
+  bands.forEach((band, i) => {
     const has = kind => band.some(b => own.get(b).some(s => s.kind === kind));
     y += has("gen") ? OL.gen : OL.bare;
     band.forEach(b => (bar.get(b).y = y));
-    y += (has("load") ? OL.load : OL.bare) + OL.gap;
-  }
+    y += has("load") ? OL.load : OL.bare;
+    const nt = ntracks[i], gap = Math.max(OL.gap, 6 * nt + 30);
+    const span = Math.min(10 * nt, gap - 30), yc = Math.min(y + 0.7 * gap, y + gap - 15 - span / 2);
+    jogs[i].forEach(j => (routes.get(j.key)[2] = yc - span / 2 + span * (j.t + 0.5) / nt));
+    y += gap;
+  });
   const xs0 = [...bar.values()].map(B => B.x0 - OL.label), xs1 = [...bar.values()].map(B => B.x1);
   const corners = buses.length ? [{ x: Math.min(...xs0), y: 0 }, { x: Math.max(...xs1), y: y - OL.gap }] : [];
   const col = kind => new Map(slots.filter(s => s.kind === kind).map(s => [s.ref, s.x]));
@@ -887,8 +929,7 @@ function onelineLayout() {
     corners[0] = { x: Math.min(corners[0].x, B.x0), y: Math.min(corners[0].y, B.y0 - 30) };
     corners[1] = { x: Math.max(corners[1].x, B.x1), y: Math.max(corners[1].y, B.y1) };
   });
-  const tieX = new Map([...ties].map(([key, [p, q]]) => [key, [p.x, q.x]]));
-  olCache = { sig, bar, ys, corners, boxes, ties: tieX, gen: col("gen"), load: col("load"), branch: col("branch"), dcline: col("dcline") };
+  olCache = { sig, bar, ys, corners, boxes, routes, gen: col("gen"), load: col("load") };
   return olCache;
 }
 
@@ -974,17 +1015,15 @@ function renderOneline() {
     wires.append(sym);
     flowLabels(xx, yb + 57, p, q);
   });
-  // a line's route: straight down its column, or for a tie between areas (areas shown),
-  // down its column in the upper bus's area, across, and down its column in the lower one's
+  // a line's route: straight down one column, or down its column at the upper bus, across
+  // (one horizontal jog, in the first gap below the upper bar), and down its column at the lower bus
   const route = (kind, i, A, Z) => {
-    const t = L.ties.get(`${kind}:${i}`), xx = L[kind].get(i);
-    if (xx === undefined && !t) return null;
-    const up = A.y <= Z.y, ya = Math.min(A.y, Z.y), yb = Math.max(A.y, Z.y);
-    const x1 = t ? t[up ? 0 : 1] : xx, x2 = t ? t[up ? 1 : 0] : xx;
+    const r = L.routes.get(`${kind}:${i}`);
+    if (!r) return null;
+    const [x1, x2, yj] = r, ya = Math.min(A.y, Z.y), yb = Math.max(A.y, Z.y);
     const seg = Math.min(yb - ya, (L.ys.find(v => v > ya + 1) ?? yb) - ya); // first gap below the upper bar
-    const yj = ya + seg * 0.82;
     const path = (y0, y1) => x1 === x2 ? `M${x1},${y0}V${y1}` : `M${x1},${y0}V${yj}H${x2}V${y1}`;
-    return { x1, x2, ya, yb, seg, path };
+    return { x1, x2, ya, yb, seg, yj, path };
   };
   // branches: vertical lines between bars, breakers at both ends, transformer symbol, flow labels
   T.branch.forEach((b, i) => {
@@ -1005,8 +1044,9 @@ function renderOneline() {
       sv("circle", { cx: xx, cy: ya, r: 2.8, class: "ol-dot" }), sv("circle", { cx: R.x2, cy: yb, r: 2.8, class: "ol-dot" }));
     breaker(xx, ya + 20, on);
     breaker(R.x2, yb - 20, on);
-    // symbols and labels go in the first gap below the upper bar, clear of any bar the line crosses
-    const seg = R.seg;
+    // symbols and labels go in the first gap below the upper bar, clear of any bar the line
+    // crosses, and above the jog of a line that has one
+    const seg = R.yj === null ? R.seg : Math.min(R.seg, (R.yj - ya) * 1.1);
     if (xfmr) {
       const ym = ya + seg * 0.3;
       for (const d of [-5, 5]) lines.append(sv("circle", { cx: xx, cy: ym + d, r: 7, class: "ol-xfmr-bg" }));
@@ -1044,7 +1084,7 @@ function renderOneline() {
       sv("circle", { cx: xx, cy: ya, r: 2.8, class: "ol-dot" }), sv("circle", { cx: R.x2, cy: yb, r: 2.8, class: "ol-dot" }));
     converter(xx, ya + 20, on);
     converter(R.x2, yb - 20, on);
-    const seg = R.seg;
+    const seg = R.yj === null ? R.seg : Math.min(R.seg, (R.yj - ya) * 1.1);
     const yl = ya + seg * 0.5;
     if (rd) {
       // signed flow from the upper bus toward the lower bus (Qf, Qt are injections into the buses)
