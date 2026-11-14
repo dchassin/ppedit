@@ -120,8 +120,9 @@ What is not promised
     locations but not auxiliary geodata. In the classic style a bus with both generation and load
     is drawn as a generator (circle); its label shows both MW values. The
     one-line style computes its own layered layout from the topology (it
-    is not dragged); on large meshed cases its bus bars get long and
-    branches cross many of them.
+    is not dragged); each line has a column at each of its buses joined by
+    one horizontal segment, which keeps bus bars short but makes large
+    meshed cases wide, and lines that skip rows still cross bus bars.
 
   - Claude sessions send the case data they read, and the files and web
     pages they use, to the Anthropic API; they are kept in server memory

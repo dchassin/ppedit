@@ -66,7 +66,10 @@ In the editor:
       loads are labeled with MW and MVAr, positive downward (from the upper
       bus to the lower one, into a bus from a generator, out of a bus to a
       load), with an arrow in the direction of real power; branch flows
-      and loading colors appear after a solve. This style computes its own
+      and loading colors appear after a solve. Each branch and DC line
+      leaves its bus bar near that bar's end facing the other bus and
+      reaches the other bar with at most one horizontal segment, so each
+      bar spans only its own equipment. This style computes its own
       layout (buses can't be dragged) and scales as a whole when zooming;
       labels are hidden when zoomed far out.
 
