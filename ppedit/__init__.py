@@ -76,6 +76,11 @@ Given a case file, `ppedit.Case` is expected to satisfy:
      the same keys. Renumbering a bus renumbers its geodata and deleting a
      bus deletes its geodata.
 
+The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
+read and edit the case through the same checked, undoable edits as the
+browser, optionally using web data or local files, when an Anthropic API
+key is configured.
+
 The network diagram has a *Geodata* layout, available when the case has
 geodata, that places buses at their locations on a map (Web Mercator) with
 optional USGS satellite imagery, Census TIGERweb roads, and state and county
@@ -118,6 +123,12 @@ What is not promised
     is not dragged); on large meshed cases its bus bars get long and
     branches cross many of them.
 
+  - Claude sessions send the case data they read, and the files and web
+    pages they use, to the Anthropic API; they are kept in server memory
+    only and end when the server stops. Changes Claude makes are checked
+    like any other edit but not reviewed: look at them (and undo them)
+    before saving.
+
   - Buses with no in-service branch are solved as isolated (type NONE)
     without changing the case.
 
@@ -134,6 +145,10 @@ flowchart LR
     Case <-->|JSON API| server[Flask server]
     server <--> browser[Browser editor]
     Case --> solver[PYPOWER runpf / runopf]
+    server <-->|tools| claude[Claude sessions]
+    claude <--> api[Anthropic API]
+    web[(web data)] --> claude
+    files[(local files)] --> claude
 ```
 """
 

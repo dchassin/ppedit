@@ -66,6 +66,7 @@
   <button data-view="areas">Areas <span class="count" data-count="areas"></span></button>
   <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
   <button data-view="issues">Issues <span class="count issues" id="issue-count"></span></button>
+  <button data-view="claude" title="Claude sessions that edit the case">Claude <span class="status-dot" id="claude-dot"></span></button>
   <div class="globals">
     <label>baseMVA <input id="baseMVA" class="num" size="6"></label>
     <label>version <input id="version" class="num" size="2"></label>
@@ -125,6 +126,18 @@
   </section>
   <section id="view-results" class="view"></section>
   <section id="view-issues" class="view"></section>
+  <section id="view-claude" class="view">
+    <div class="claude-tools">
+      <input id="claude-title" placeholder="Session title (optional)" size="22">
+      <select id="claude-model" title="Claude model"></select>
+      <label title="Let Claude search the web and download public data"><input type="checkbox" id="claude-web"> Web data</label>
+      <label title="Let Claude read files in a folder on the server machine"><input type="checkbox" id="claude-local"> Local files</label>
+      <input id="claude-root" placeholder="Local data folder" size="30" title="Folder Claude may read (default: the case file's folder)">
+      <button class="primary" data-action="claude-new">+ New session</button>
+      <span class="hint" id="claude-hint">Each change Claude makes is one undoable edit.</span>
+    </div>
+    <div class="claude-sessions" id="claude-sessions"></div>
+  </section>
 </main>
 
 <div id="toast" class="toast" hidden></div>

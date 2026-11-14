@@ -61,7 +61,8 @@ make docs
 ppedit serve ppedit/_test/data/case3.glm   # manual UI check
 ```
 
-Nothing needs network or credentials.
+Nothing needs network or credentials (the Claude tab needs an Anthropic
+API key to start sessions; tests use a fake client).
 
 ## Known rough edges (don't "fix" silently; mention or ask)
 
@@ -113,6 +114,16 @@ Nothing needs network or credentials.
 - A case without an `areas` table gets default rows from the bus areas on
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
   written" comment only when the rows differ from those defaults.
+
+- Claude tab (`ppedit/claude.py`, `renderClaude` in `app.js`): sessions
+  call the Messages API with `urllib` (no SDK dependency) in background
+  threads; each tool call that changes the case is one `Editor.edit()`
+  under `editor.lock` (an `RLock`). The page polls `GET /api/claude` each
+  second while the tab is open or a session works, and reloads the state
+  when `revision` changes or a session ran `solve`. Web search uses the
+  server-side `web_search_20250305` tool (must be enabled for the API
+  organization); `fetch_url` and local file reads run in the ppedit
+  server, local reads confined to the session's `root`.
 
 ## Working rules
 
