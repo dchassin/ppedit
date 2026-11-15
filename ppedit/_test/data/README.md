@@ -13,3 +13,7 @@ demand), 2 generators on buses 1 and 2, 3 branches, 2 polynomial cost rows
 ordered gen 1 (`0.01,20,0`) then gen 2 (`0.02,25,0`), one DC line from bus
 1 to bus 3 (`Pf` 10 MW, `Pt` 9.8 MW, `Pmax` 50 MW, `loss1` 0.02), and one
 note listing the `load` and `powerplant` objects that are not kept.
+
+# Source
+
+IEEE test files downloaded from https://www.3phaseee.com/raw_files.
