@@ -74,11 +74,16 @@ Caveats
     (real and imaginary parts in PYPOWER column order, `module/pypower/
     pypower.cpp`) and how `gridlabd convert -t pypower` writes them, so the
     matrix GridLAB-D solves matches the case; it differs from the property
-    descriptions in `dcline.cpp` (MVA flow at each end). `dclinecost` is
-    not written to GLM; a comment in the output says how many rows were
-    left out. GridLAB-D replaces `loss1 = 0` with its default loss factor
+    descriptions in `dcline.cpp` (MVA flow at each end). GridLAB-D replaces `loss1 = 0` with its default loss factor
     (`pypower::default_dcline_loss1`, 0.05) unless it can infer one from
     `Sfrom` and `Sto`.
+
+  - `module pypower` has no DC line cost class, so GLM output declares a
+    runtime class `pp_dclinecost` with the properties of `pypower.gencost`
+    (`model`, `startup`, `shutdown`, `costs`) and writes one object per
+    `dclinecost` row, named `pp_dclinecost_<n>` with its DC line as parent
+    (`pypower.gencost` itself must have a generator parent in GridLAB-D).
+    GridLAB-D loads these objects but does not pass them to its solver.
 
   - GLM output names buses `pp_bus_<bus_i>`, generators `pp_gen_<n>`,
     branches `pp_branch_<n>` and cost curves `pp_gencost_<n>` (1-based row
@@ -630,16 +635,31 @@ def {name}():
                 for name,col,val in zip(DCLINE_GLM,COLUMNS["dcline"][7:],row[7:]):
                     out.write(f"    {name} {_glm_value('dcline',col,val)};\n")
                 out.write("}\n")
+        if self.tables["dclinecost"]:
+            self._dump_glm_dclinecost(out)
         if self.geotags:
             self._dump_glm_geodata(out)
-        if self.tables["dclinecost"]:
-            out.write(f"\n// {len(self.tables['dclinecost'])} dclinecost row(s) not written: "
-                "module pypower has no DC line cost objects\n")
         if self.tables["areas"] != self._default_areas():
             out.write(f"\n// {len(self.tables['areas'])} areas row(s) not written: "
                 "module pypower has no area objects (bus area numbers are kept; "
                 "reading this file rebuilds the rows with default price reference buses)\n")
         return out.getvalue()
+
+    def _dump_glm_dclinecost(self,out):
+        """Write `dclinecost` rows as `pp_dclinecost` objects (runtime class
+        with the `pypower.gencost` properties, parent the DC line)"""
+        out.write("\n//\n// dclinecost (module pypower has no DC line cost class;"
+            " same properties as pypower.gencost)\n//\n")
+        keywords = ",".join(f"{v}={k}" for k,v in sorted({0:"UNKNOWN",**COST_MODELS}.items()))
+        out.write(f"class {DCLINECOST_CLASS}\n{{\n    enumeration {{{keywords}}} model;\n"
+            "    double startup[$];\n    double shutdown[$];\n    char1024 costs;\n}\n")
+        ndc = len(self.tables["dcline"])
+        for n,(model,startup,shutdown,_,costs) in enumerate(self.tables["dclinecost"]):
+            out.write(f'object {DCLINECOST_CLASS}\n{{\n    name "pp_dclinecost_{n+1}";\n'
+                f'    parent "pp_dcline_{n%ndc+1 if ndc else n+1}";\n'
+                f'    model {COST_MODELS.get(model,"UNKNOWN")};\n'
+                f'    startup {_fmt(startup)} $;\n    shutdown {_fmt(shutdown)} $;\n'
+                f'    costs "{costs}";\n}}\n')
 
     def _dump_glm_geodata(self,out):
         """Write the auxiliary geodata as `pp_geodata` objects (runtime class)"""
@@ -1502,6 +1522,10 @@ def _read_geodata_csv(text):
         rows.append([line[k] for k in index] + [line[k] for k in aux])
     return rows,[header[k] for k in aux]
 
+DCLINECOST_CLASS = "pp_dclinecost"
+"""GLM runtime class of the DC line cost objects (one per `dclinecost` row,
+parent the DC line, with the properties of `pypower.gencost`)"""
+
 GEODATA_CLASS = "pp_geodata"
 """GLM runtime class of the auxiliary geodata objects (one per geodata row,
 parent the bus, one property per tag)"""
@@ -1768,6 +1792,7 @@ def _parse_glm(text):
     objects = {t:[] for t in _SOLVER_CLASSES}
     others = {}
     geoclass,geoobjects = None,[]
+    dccosts = []
     module = False
     for header,body in _glm_blocks(text):
         words = header.split()
@@ -1781,6 +1806,8 @@ def _parse_glm(text):
             extra = sorted(set(props) - {"baseMVA","version"})
             if extra:
                 others["module pypower setting"] = len(extra)
+        elif len(words) >= 2 and words[0] == "class" and words[1] == DCLINECOST_CLASS:
+            pass
         elif len(words) >= 2 and words[0] == "class" and words[1] == GEODATA_CLASS:
             geoclass = [part.split()[-1] for part in body.split(";")
                 if len(part.split()) >= 2]
@@ -1796,6 +1823,8 @@ def _parse_glm(text):
                 oclass = oclass[8:]
             if oclass == GEODATA_CLASS:
                 geoobjects.append(_glm_props(body))
+            elif oclass == DCLINECOST_CLASS:
+                dccosts.append(_glm_props(body))
             elif oclass in _SOLVER_CLASSES:
                 props = _glm_props(body)
                 if ":" in words[1] and "name" not in props:
@@ -1856,17 +1885,7 @@ def _parse_glm(text):
                 row[j] = names["bus"][bus]
         data["branch"].append(row)
     # costs, ordered by parent generator
-    costs,seen = [],{}
-    for n,props in enumerate(objects["gencost"]):
-        parent = _unquote(props.get("parent",""))
-        index = names["gen"].get(parent,n)
-        seen[index] = seen.get(index,-1) + 1 # second cost per gen is the Q cost
-        model = _glm_number(props.get("model","POLYNOMIAL"),"enum",COST_MODELS)
-        values = _costs_list(_unquote(props.get("costs","")))
-        ncost = len(values)//2 if model == 1 else len(values)
-        costs.append((seen[index],index,n,[model,_glm_number(props.get("startup","0")),
-            _glm_number(props.get("shutdown","0")),ncost]+values))
-    data["gencost"] = [x[3] for x in sorted(costs)]
+    data["gencost"] = _glm_costs(objects["gencost"],names["gen"])
     # DC lines (Sfrom = Pf + j Pt and Sto = Qf + j Qt, as GridLAB-D passes them to PYPOWER)
     spec = COLUMNS["dcline"]
     for n,props in enumerate(objects["dcline"]):
@@ -1889,6 +1908,10 @@ def _parse_glm(text):
         except CaseError as err:
             raise CaseError(f"dcline object {n+1}: {err}") from err
         data["dcline"].append(row)
+    if dccosts:
+        dclines = {_unquote(props.get("name",f"pp_dcline_{n+1}")):n
+            for n,props in enumerate(objects["dcline"])}
+        data["dclinecost"] = _glm_costs(dccosts,dclines)
     notes = []
     if geoobjects:
         geodata,tags = _glm_geodata(geodata,geoclass,geoobjects,names["bus"],notes)
@@ -1902,6 +1925,21 @@ def _parse_glm(text):
             "are edited): "
             + ", ".join(f"{v} {k}" for k,v in sorted(others.items())))
     return data,notes
+
+def _glm_costs(objects,parents):
+    """Read cost objects (`gencost` or `pp_dclinecost`) as matrix rows ordered
+    by parent (`parents` maps object names to row numbers); a second cost
+    object of the same parent is its Q cost and goes after all the P costs"""
+    costs,seen = [],{}
+    for n,props in enumerate(objects):
+        index = parents.get(_unquote(props.get("parent","")),n)
+        seen[index] = seen.get(index,-1) + 1
+        model = _glm_number(props.get("model","POLYNOMIAL"),"enum",COST_MODELS)
+        values = _costs_list(_unquote(props.get("costs","")))
+        ncost = len(values)//2 if model == 1 else len(values)
+        costs.append((seen[index],index,n,[model,_glm_number(props.get("startup","0")),
+            _glm_number(props.get("shutdown","0")),ncost]+values))
+    return [x[3] for x in sorted(costs)]
 
 def _glm_geodata(geodata,tags,objects,buses,notes):
     """Add the auxiliary values of `pp_geodata` objects to the bus locations

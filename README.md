@@ -156,8 +156,10 @@ its terminal buses, which become PV buses held at the line's `Vf` and `Vt`.
 Power flow keeps the line's `Pf` and applies its losses (`loss0 +
 loss1*Pf`); OPF dispatches `Pf` within `Pmin`..`Pmax` at the `dclinecost`
 cost. GLM files store DC lines as `module pypower` `dcline` objects;
-GridLAB-D has no DC line cost objects, so `dclinecost` is kept only in
-`.py` and `.json`.
+GridLAB-D has no DC line cost class, so `dclinecost` rows are written as
+`pp_dclinecost` objects (a runtime class with the `pypower.gencost`
+properties, parent the DC line) and read back from them; GridLAB-D keeps
+them but does not solve with them.
 
 Areas follow the PYPOWER `areas` format (`area`, `price_ref_bus`; see
 `pypower.caseformat`) and list the areas named by the bus `area` column.

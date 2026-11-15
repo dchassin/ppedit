@@ -54,8 +54,8 @@ and optimal power flow.
 Given a case file, `ppedit.Case` is expected to satisfy:
 
   1. **Round trip.** `Case.load(path).dumps(fmt)` re-read with `Case.load`
-     gives the same tables for `py`, `json`, and `glm`, except `dclinecost`
-     and the price reference buses of `areas`, which GLM cannot hold (bus
+     gives the same tables for `py`, `json`, and `glm`, except the price
+     reference buses of `areas`, which GLM cannot hold (bus
      `area` numbers are kept, and `areas` rows are rebuilt from them).
 
   2. **Referential integrity.** Edits through `Case.set_value`,
@@ -109,8 +109,10 @@ What is not promised
     are not expanded; a GLM whose buses come only from them is refused with
     an error naming the files to open instead.
 
-  - `dclinecost` and `areas` are not written to GLM (there are no
-    GridLAB-D objects for them). `areas` is not passed to the solver: the
+  - `areas` is not written to GLM (there is no GridLAB-D object for it).
+    `dclinecost` is written to GLM as `pp_dclinecost` runtime-class objects
+    with the `pypower.gencost` properties, parent the DC line (GridLAB-D
+    keeps them but does not solve with them). `areas` is not passed to the solver: the
     per-area results (`Case.solve`) are sums over the bus `area` column, and
     an area's price is the OPF `lam_P` at its price reference bus.
 
