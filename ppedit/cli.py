@@ -8,10 +8,12 @@ Examples
     ppedit convert case14.py case14.glm
     ppedit check case14.glm
     ppedit serve case14.glm
+    ppedit --version
     ppedit serve case14.py --geodata case14_geodata.csv
 
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
-and opens it in a browser.
+and opens it in a browser; `--version` prints `ppedit` and the installed
+version (e.g. `ppedit 0.2.0`).
 """
 
 import os
@@ -23,6 +25,10 @@ import warnings
 import webbrowser
 
 _logger = logging.getLogger(__file__)
+
+def _version() -> str:
+    from ppedit import __version__ # pylint: disable=import-outside-toplevel
+    return __version__
 
 def main(argv:list[str]|None=None) -> int:
     """Command line entry point
@@ -48,6 +54,7 @@ def main(argv:list[str]|None=None) -> int:
     parser.add_argument("--no-browser",action="store_true",help="do not open a browser")
     parser.add_argument("-d","--debug",action="store_true",help="enable debug logging and traceback on exceptions")
     parser.add_argument("-w","--warning",action="store_true",help="enable warning messages from python")
+    parser.add_argument("--version",action="version",version=f"ppedit {_version()}",help="show the ppedit version and exit")
     args = parser.parse_args(argv)
 
     logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
