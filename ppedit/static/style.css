@@ -58,6 +58,7 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .path {
   color: #9aa6a1; font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   margin-left: auto; min-width: 0; text-align: right;
+  direction: rtl; /* ellipsis on the left so the basename stays visible; app.js adds LRMs to keep the path in order */
 }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; }
 .divider { width: 1px; height: 20px; background: #3a4642; margin: 0 4px; }
