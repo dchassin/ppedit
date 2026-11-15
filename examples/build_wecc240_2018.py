@@ -13,15 +13,35 @@ row per generator in case order); the bus name is checked against
 Branch `rateA` (0 for every branch in the source case) is set to the first
 nonzero of `rateB` and `rateC`; it stays 0 (unlimited) when both are 0.
 (PYPOWER's OPF fails when no branch at all is rated.)
+
+Voltages are then brought under the 1.1 pu bus `Vmax` with margin (issue
+#58): the generators at buses 4131, 4231 and 6433 (`Vg` above 1.1 pu) and
+4039 and 4132 (above 1.08 pu) get `Vg` 1.08 pu (`VG`), and switched shunt
+reactors (`Bs` in `REACTORS`, MVAr at 1 pu) are added at eight 500 kV buses, which puts every bus at or below 1.087 pu
+in the power flow. Last, each rated branch loaded above `MAX_LOADING` (80%,
+a 20% margin) in that power flow gets `rateA` raised to its larger end flow
+divided by `MAX_LOADING` (rounded up to whole MVA), and its `rateB` and
+`rateC` raised to the new `rateA` where they are lower. Unrated branches stay
+unrated.
 """
 
 import csv
+import math
 import os
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.dirname(HERE))
 from ppedit import Case # pylint: disable=wrong-import-position
+
+VG = {4039:1.08,4131:1.08,4132:1.08,4231:1.08,6433:1.08}
+"""Generator voltage setpoints (pu) by bus"""
+
+REACTORS = {2901:-300,2902:-200,4002:-100,4003:-200,4090:-50,4091:-50,4094:-250,4097:-250}
+"""Switched shunt reactors by bus (`Bs`, MVAr at 1 pu)"""
+
+MAX_LOADING = 0.8
+"""Largest power flow loading of a branch `rateA` (a 20% margin)"""
 
 
 def read(name):
@@ -55,12 +75,30 @@ def main():
             counts["rateB" if branch[6] else "rateC" if branch[7] else "unrated"] += 1
             branch[5] = rate
     case.name = "wecc240_2018"
+    for gen in case.tables["gen"]:
+        if gen[0] in VG:
+            gen[5] = VG[gen[0]]
+    for bus in case.tables["bus"]:
+        if bus[0] in REACTORS:
+            bus[5] = float(REACTORS[bus[0]])
+    result = case.solve("pf")
+    if not result["success"]:
+        raise ValueError("power flow failed")
+    raised = 0
+    for branch,flow in zip(case.tables["branch"],result["branch"]):
+        if flow["loading_pct"] is not None and flow["loading_pct"] > 100*MAX_LOADING:
+            rate = float(math.ceil(branch[5]*flow["loading_pct"]/100/MAX_LOADING))
+            branch[5] = rate
+            branch[6] = max(branch[6],rate)
+            branch[7] = max(branch[7],rate)
+            raised += 1
     errors = [x["message"] for x in case.validate() if x["level"] == "error"]
     if errors:
         raise ValueError("; ".join(errors))
     case.save(os.path.join(HERE,"wecc240_2018.py"))
     print(f"wrote examples/wecc240_2018.py: {case.size()}; rateA from rateB "
-        f"{counts['rateB']}, from rateC {counts['rateC']}, unrated {counts['unrated']}")
+        f"{counts['rateB']}, from rateC {counts['rateC']}, unrated {counts['unrated']}; "
+        f"rateA raised on {raised} branches")
 
 if __name__ == "__main__":
     main()
