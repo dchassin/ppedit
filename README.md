@@ -88,7 +88,10 @@ In the editor:
       other (e.g. at the same location) lists them to choose from. Saving to `.py` or `.json` stores the data under the case
       key `geodata` (rows of `BUS_I, LAT, LON, ...`) with the auxiliary
       column names under `geotags`; `.glm` keeps each bus's `latitude` and
-      `longitude`. **Map ▸ Download CSV** exports the geodata.
+      `longitude` and writes the auxiliary columns as `pp_geodata` objects
+      (a runtime class, one object per row with its bus as parent; column
+      names that are not GLM names are changed, e.g. `KV level` to
+      `KV_level`). **Map ▸ Download CSV** exports the geodata.
 
     The **Areas** check box (enabled when the case has more than one area)
     draws a labeled region around the buses of each area and marks price

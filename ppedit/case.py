@@ -31,7 +31,7 @@ A case may also carry bus locations (`Case.geodata`): rows of `[BUS_I, LAT,
 LON, ...]` in decimal degrees (WGS84), where any further values are
 auxiliary data named by `Case.geotags`. Geodata is read from the case's
 `geodata` key (and `geotags` for the auxiliary names), from GLM bus
-`latitude`/`longitude`, or from a CSV file with at least the columns
+`latitude`/`longitude` (and `pp_geodata` objects for the auxiliary data), or from a CSV file with at least the columns
 `BUS_I`, `LAT` and `LON` (`Case.load_geodata`); any other CSV columns are
 kept as auxiliary data. The editor draws the network on a map from it.
 
@@ -91,9 +91,16 @@ Caveats
 
   - Geodata is written to `.py` and `.json` cases as the `geodata` list
     (a plain list in `.py`, not a numpy array, because auxiliary values may
-    be text) and `geotags`. GLM output keeps only each bus's `latitude` and
-    `longitude`; auxiliary geodata is not written to GLM. Geodata rows are
-    not passed to the solver.
+    be text) and `geotags`. GLM output keeps each bus's `latitude` and
+    `longitude`; when there are auxiliary values, it also declares a runtime
+    class `pp_geodata` with one property per tag (`int64`, `double` or
+    `char256`/`char1024`) and writes one `pp_geodata` object per geodata row
+    with its bus as parent (and its own `latitude`/`longitude` when it is
+    not the bus's first row). Tags that are not GLM names are changed to
+    ones that are (`KV level` becomes `KV_level`; a name GLM objects already
+    have, such as `name`, gets a trailing `_`) and are read back that way;
+    `"` in text becomes `'`, and empty values are not written. Geodata rows
+    are not passed to the solver.
 
 References
 ----------
@@ -621,6 +628,8 @@ def {name}():
                 for name,col,val in zip(DCLINE_GLM,COLUMNS["dcline"][7:],row[7:]):
                     out.write(f"    {name} {_glm_value('dcline',col,val)};\n")
                 out.write("}\n")
+        if self.geotags:
+            self._dump_glm_geodata(out)
         if self.tables["dclinecost"]:
             out.write(f"\n// {len(self.tables['dclinecost'])} dclinecost row(s) not written: "
                 "module pypower has no DC line cost objects\n")
@@ -629,6 +638,29 @@ def {name}():
                 "module pypower has no area objects (bus area numbers are kept; "
                 "reading this file rebuilds the rows with default price reference buses)\n")
         return out.getvalue()
+
+    def _dump_glm_geodata(self,out):
+        """Write the auxiliary geodata as `pp_geodata` objects (runtime class)"""
+        names = _glm_tag_names(self.geotags)
+        out.write("\n//\n// geodata auxiliary values (a comment gives each tag that is not a GLM name)\n//\n")
+        out.write(f"class {GEODATA_CLASS}\n{{\n")
+        for k,(tag,name) in enumerate(zip(self.geotags,names)):
+            values = [row[3+k] for row in self.geodata if row[3+k] != ""]
+            out.write(f"    {_glm_geo_type(values)} {name};"
+                + (f" // {tag}" if name != tag else "") + "\n")
+        out.write("}\n")
+        seen = set()
+        for n,row in enumerate(self.geodata):
+            out.write(f'object {GEODATA_CLASS}\n{{\n    name "pp_geodata_{n+1}";\n'
+                f'    parent "pp_bus_{row[0]}";\n')
+            if row[0] in seen: # not the bus's first row: its location is not on the bus
+                out.write(f"    latitude {_fmt(float(row[1]))};\n"
+                    f"    longitude {_fmt(float(row[2]))};\n")
+            seen.add(row[0])
+            for name,val in zip(names,row[3:]):
+                if val != "":
+                    out.write(f"    {name} {_glm_geo_literal(val)};\n")
+            out.write("}\n")
 
     # ----- editing -----
 
@@ -1464,6 +1496,40 @@ def _read_geodata_csv(text):
         rows.append([line[k] for k in index] + [line[k] for k in aux])
     return rows,[header[k] for k in aux]
 
+GEODATA_CLASS = "pp_geodata"
+"""GLM runtime class of the auxiliary geodata objects (one per geodata row,
+parent the bus, one property per tag)"""
+
+_GLM_HEADER = {"name","parent","rank","clock","valid_to","latitude","longitude",
+    "in_svc","out_svc","in","out","flags","groupid","heartbeat","rng_state","guid",
+    "id","class","library","child_count","schedule_skew","root_uid"}
+
+def _glm_tag_names(tags):
+    """Return a unique GLM property name for each geodata tag"""
+    names = []
+    for tag in tags:
+        name = re.sub(r"\W","_",tag.strip()) or "tag"
+        if name[0].isdigit():
+            name = "_" + name
+        while name in _GLM_HEADER or name in names:
+            name += "_"
+        names.append(name)
+    return names
+
+def _glm_geo_type(values):
+    """Return the GLM property type that holds all of `values`"""
+    if all(isinstance(v,int) for v in values):
+        return "int64"
+    if all(isinstance(v,(int,float)) for v in values):
+        return "double"
+    return "char256" if all(len(str(v)) < 256 for v in values) else "char1024"
+
+def _glm_geo_literal(value):
+    """Format an auxiliary geodata value for GLM (text is quoted; `"` becomes `'`)"""
+    if isinstance(value,(int,float)):
+        return _fmt(value)
+    return '"' + re.sub(r"\s+"," ",str(value)).replace('"',"'") + '"'
+
 def _geo_literal(value):
     """Format a geodata value as a Python literal"""
     return _fmt(value) if isinstance(value,(int,float)) else json.dumps(value)
@@ -1695,6 +1761,7 @@ def _parse_glm(text):
     names = {"bus":{},"gen":{}}
     objects = {t:[] for t in _SOLVER_CLASSES}
     others = {}
+    geoclass,geoobjects = None,[]
     module = False
     for header,body in _glm_blocks(text):
         words = header.split()
@@ -1708,6 +1775,9 @@ def _parse_glm(text):
             extra = sorted(set(props) - {"baseMVA","version"})
             if extra:
                 others["module pypower setting"] = len(extra)
+        elif len(words) >= 2 and words[0] == "class" and words[1] == GEODATA_CLASS:
+            geoclass = [part.split()[-1] for part in body.split(";")
+                if len(part.split()) >= 2]
         elif words and words[0] in ("module","clock","class","schedule","filter","global"):
             key = " ".join(words[:2]) if words[0] == "module" else words[0]
             others[key] = others.get(key,0) + 1
@@ -1718,7 +1788,9 @@ def _parse_glm(text):
             oclass = words[1].split(":")[0]
             if oclass.startswith("pypower."):
                 oclass = oclass[8:]
-            if oclass in _SOLVER_CLASSES:
+            if oclass == GEODATA_CLASS:
+                geoobjects.append(_glm_props(body))
+            elif oclass in _SOLVER_CLASSES:
                 props = _glm_props(body)
                 if ":" in words[1] and "name" not in props:
                     props["name"] = words[1]
@@ -1811,9 +1883,12 @@ def _parse_glm(text):
         except CaseError as err:
             raise CaseError(f"dcline object {n+1}: {err}") from err
         data["dcline"].append(row)
+    notes = []
+    if geoobjects:
+        geodata,tags = _glm_geodata(geodata,geoclass,geoobjects,names["bus"],notes)
+        data["geotags"] = tags
     if geodata:
         data["geodata"] = geodata
-    notes = []
     if directives:
         others["# directive"] = directives
     if others:
@@ -1821,3 +1896,40 @@ def _parse_glm(text):
             "are edited): "
             + ", ".join(f"{v} {k}" for k,v in sorted(others.items())))
     return data,notes
+
+def _glm_geodata(geodata,tags,objects,buses,notes):
+    """Add the auxiliary values of `pp_geodata` objects to the bus locations
+
+    Each object adds its values to the first unclaimed location row of its
+    parent bus, or adds a row when it has its own `latitude`/`longitude`.
+    `tags` are the `class pp_geodata` property names, else the object
+    properties in order of appearance. Returns `(rows, tags)`.
+    """
+    if tags is None:
+        tags = []
+        for props in objects:
+            tags += [k for k in props if k not in _GLM_HEADER and k not in tags]
+    rows = {} # bus -> location rows not yet claimed
+    for row in geodata:
+        rows.setdefault(row[0],[]).append(row)
+    out,skipped = [],0
+    for n,props in enumerate(objects):
+        bus = buses.get(_unquote(props.get("parent","")))
+        aux = [_geo_value(_unquote(props[t])) if t in props else "" for t in tags]
+        try:
+            if "latitude" in props and "longitude" in props and bus is not None:
+                row = [bus,_glm_angle(props["latitude"],"NS"),_glm_angle(props["longitude"],"EW")]
+            elif rows.get(bus):
+                row = rows[bus].pop(0)[:3]
+            else:
+                skipped += 1
+                continue
+        except CaseError as err:
+            raise CaseError(f"{GEODATA_CLASS} object {n+1} location: {err}") from err
+        out.append(row+aux)
+    if skipped:
+        notes.append(f"{skipped} {GEODATA_CLASS} object(s) not kept: parent is not a bus "
+            "with a location")
+    # locations without auxiliary values keep their place after the others
+    out += [row[:3]+[""]*len(tags) for left in rows.values() for row in left]
+    return out,tags

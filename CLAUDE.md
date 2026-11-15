@@ -103,7 +103,10 @@ API key to start sessions; tests use a fake client).
   is not edited in the diagram). A click on buses drawn within
   `OVERLAP_PX` screen pixels of each other opens `#bus-menu` at the
   pointer to choose one (`busesAt`/`openBusMenu`), instead of picking
-  the topmost. GLM output keeps lat/lon but not geotags.
+  the topmost. GLM output keeps lat/lon on the bus and writes
+  auxiliary values as `pp_geodata` runtime-class objects (parent the bus;
+  `_dump_glm_geodata`/`_glm_geodata` in `case.py`); tags that are not GLM
+  names are renamed (`_glm_tag_names`) and read back renamed.
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
   layered layout cached by topology signature (`olCache`), drawn in layout
   units under one transform (so it scales with zoom, unlike the other

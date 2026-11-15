@@ -51,11 +51,46 @@ def test_round_trip_case_files(case,fmt,ext):
         data = json.loads(text)
         assert isinstance(data["geodata"],list) and data["geotags"] == ["NAME","KV"]
 
-def test_glm_keeps_locations_only(case):
+def test_glm_round_trip_auxiliary(case):
+    """GLM keeps bus locations and writes the auxiliary values as pp_geodata objects"""
     text = case.dumps("glm")
     assert "latitude 38.5816;" in text and "longitude -121.4944;" in text
+    assert "class pp_geodata\n{\n    char256 NAME;\n    int64 KV;\n}" in text
+    assert 'parent "pp_bus_1";\n    NAME "Sacramento";\n    KV 345;' in text
     again = Case.load("x.glm",text)
-    assert again.geodata == [row[:3] for row in case.geodata] and again.geotags == []
+    assert again.geodata == case.geodata and again.geotags == case.geotags
+    assert again.tables["bus"] == case.tables["bus"] and again.notes == []
+
+def test_glm_auxiliary_names_and_rows():
+    """Tags that are not GLM names are renamed; extra rows keep their location"""
+    case = Case.builtin("case9")
+    case.set_geodata([[1,37,-120,'A "b"',1.5,""],[2,38,-121,"",2,7],[1,36,-119,"c",3,""]],
+        ["Plant name","rating","name"])
+    text = case.dumps("glm")
+    assert "char256 Plant_name; // Plant name" in text and "int64 name_; // name" in text
+    assert "double rating;" in text
+    again = Case.load("x.glm",text)
+    assert again.geotags == ["Plant_name","rating","name_"]
+    assert again.geodata == [[1,37.0,-120.0,"A 'b'",1.5,""],[2,38.0,-121.0,"",2,7],
+        [1,36.0,-119.0,"c",3,""]]
+
+def test_glm_no_auxiliary_no_class(case):
+    case.set_geodata([row[:3] for row in case.geodata])
+    text = case.dumps("glm")
+    assert "pp_geodata" not in text
+    assert Case.load("x.glm",text).geodata == case.geodata
+
+def test_glm_pp_geodata_without_class():
+    """pp_geodata objects without a class block name the tags by their properties"""
+    glm = """module pypower;
+object pypower.bus { name "b1"; bus_i 1; type REF; latitude 37; longitude -122; }
+object pypower.bus { name "b2"; bus_i 2; }
+object pp_geodata { parent "b1"; OWNER "X"; }
+object pp_geodata { parent "b2"; OWNER "Y"; }
+"""
+    case = Case.load("x.glm",glm)
+    assert case.geodata == [[1,37.0,-122.0,"X"]] and case.geotags == ["OWNER"]
+    assert any("1 pp_geodata object(s) not kept" in note for note in case.notes)
 
 def test_glm_dms_location():
     glm = """module pypower;
