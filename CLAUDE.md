@@ -129,6 +129,12 @@ API key to start sessions; tests use a fake client).
   reproduce the drawing from before the menu existed. `:flow` and
   `:loading` need a solution (greyed out until one exists). Data labels
   are not placed to avoid collisions; DC lines get none.
+- Search box (`#net-search`, `searchItems`/`runSearch`/`centerOn` in
+  `app.js`): runs on Enter; client-side only, over buses, branches and DC
+  lines (`A-B` and `branch N` include DC lines; free text matches geodata
+  aux columns only, since buses have no names). One match is picked and
+  centered at the current zoom; several open `#search-menu` (at most 200
+  listed).
 - A case without an `areas` table gets default rows from the bus areas on
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
   written" comment only when the rows differ from those defaults.

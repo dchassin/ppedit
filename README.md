@@ -113,6 +113,16 @@ In the editor:
     the menu) until **Run PF** or **Run OPF**. **None** clears every label
     of the current style and **Defaults** restores its standard ones. The
     choices are remembered by the browser.
+
+    The search box to the right of **Map ▾** finds a bus or branch: type
+    a query and press Enter. `N` or `bus N` finds bus N (or, if there is no
+    bus N, the buses whose number contains N); `A-B`, `A B` or `A to B`
+    finds the branches and DC lines between buses A and B (either
+    direction); `branch N` finds the branches and DC lines connected to bus
+    N; any other text finds the buses whose geodata columns (e.g. a name)
+    contain it. A single match is selected for editing in the side panel
+    and centered in the diagram; several matches open a list to choose from
+    (mouse, or arrow keys and Enter; Escape closes it).
   - **Buses / Generators / Branches / Gen costs / DC lines / DC line
     costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines

@@ -1655,6 +1655,117 @@ function pick(kind, index) {
   renderNetwork();
 }
 
+// ---------------------------------------------------------------- search
+
+// Buses, branches and DC lines matching a network search query, in table
+// order, as [{kind, index, text, sub}]:
+//   N or "bus N"            the bus numbered N (else buses whose number contains N)
+//   "A-B", "A B", "A to B"  branches and DC lines between buses A and B, either direction
+//   "branch N"              branches and DC lines connected to bus N
+//   other text              buses whose geodata auxiliary columns contain it (any case)
+function searchItems(query) {
+  const c = S.state.case, T = c.tables, q = query.trim();
+  if (!q) return [];
+  const types = S.meta.columns.bus[1].options;
+  const bus = i => ({ kind: "bus", index: i, text: `Bus ${T.bus[i][0]}`, sub: `row ${i + 1} · ${types[T.bus[i][1]] || ""}` });
+  const line = (kind, i) => {
+    const r = T[kind][i], br = kind === "branch";
+    return { kind, index: i, text: `${br ? "Branch" : "DC line"} ${r[0]} → ${r[1]}`,
+      sub: `row ${i + 1}` + (br && r[8] ? " · transformer" : "") + (r[br ? 10 : 2] ? "" : " · out of service") };
+  };
+  const lines = test => ["branch", "dcline"].flatMap(kind =>
+    T[kind].map((r, i) => [r, i]).filter(([r]) => test(r[0], r[1])).map(([, i]) => line(kind, i)));
+  const rows = T.bus.map((_, i) => i);
+  let m;
+  if ((m = q.match(/^(?:branch(?:es)?\s*)?(\d+)\s*(?:-+>?|–|—|→|to|\s)\s*(\d+)$/i))) {
+    const a = +m[1], b = +m[2];
+    return lines((f, t) => (f === a && t === b) || (f === b && t === a));
+  }
+  if ((m = q.match(/^branch(?:es)?\s*(\d+)$/i))) {
+    const n = +m[1];
+    return lines((f, t) => f === n || t === n);
+  }
+  if ((m = q.match(/^(?:bus\s*)?(\d+)$/i))) {
+    const exact = rows.filter(i => T.bus[i][0] === +m[1]);
+    return (exact.length ? exact : rows.filter(i => String(T.bus[i][0]).includes(m[1]))).map(bus);
+  }
+  const t = q.toLowerCase(), tagged = new Map(); // bus_i -> first matching geodata value
+  for (const r of c.geodata || []) {
+    const hit = r.slice(3).find(v => v !== null && v !== undefined && String(v).toLowerCase().includes(t));
+    if (hit !== undefined && !tagged.has(r[0])) tagged.set(r[0], String(hit));
+  }
+  return rows.filter(i => tagged.has(T.bus[i][0])).map(i => { const f = bus(i); f.sub += ` · ${tagged.get(T.bus[i][0])}`; return f; });
+}
+
+// pan (keeping the zoom) so a bus, or the middle of a branch or DC line, is at
+// the center of the diagram area left of the inspector
+function centerOn(kind, index) {
+  const svg = $("#net"), T = S.state.case.tables;
+  if (!svg.clientWidth) return;
+  updateNetTools();
+  const ids = kind === "bus" ? [T.bus[index][0]] : T[kind][index].slice(0, 2);
+  let pts;
+  if (S.style === "oneline") {
+    const bar = onelineLayout().bar;
+    pts = ids.map(b => bar.get(b)).filter(Boolean).map(B => ({ x: (B.x0 + B.x1) / 2, y: B.y }));
+  } else {
+    if (!useGeo()) layout();
+    const P = positions();
+    pts = ids.map(b => P[b]).filter(Boolean);
+  }
+  if (needFit) { fitView(); needFit = false; }
+  if (!pts.length) return;
+  const x = pts.reduce((s, p) => s + p.x, 0) / pts.length, y = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+  S.zoom.x = (svg.clientWidth - 330) / 2 - S.zoom.k * x;
+  S.zoom.y = (svg.clientHeight + 20) / 2 - S.zoom.k * y;
+}
+
+function selectFound(item) {
+  closeMenus();
+  if (S.view !== "network") show("network");
+  S.pick = { kind: item.kind, index: item.index };
+  centerOn(item.kind, item.index);
+  renderNetwork();
+}
+
+const SEARCH_MAX = 200; // longest list shown in the matches popup
+function runSearch() {
+  const input = $("#net-search"), menu = $("#search-menu"), q = input.value.trim();
+  closeMenus();
+  if (!q) return;
+  const found = searchItems(q);
+  if (!found.length) return toast(`No bus or branch matches "${q}"`);
+  if (found.length === 1) return selectFound(found[0]);
+  menu.replaceChildren(...[
+    h("div", { class: "sep" }, `${found.length} matches for "${q}"`),
+    ...found.slice(0, SEARCH_MAX).map(f => h("button", { role: "option", onclick: () => selectFound(f) },
+      h("span", {}, f.text), h("span", { class: "sub" }, f.sub))),
+    found.length > SEARCH_MAX ? h("div", { class: "note" }, `First ${SEARCH_MAX} shown; refine the search to see the others`) : null,
+  ].filter(Boolean));
+  menu.classList.add("open");
+  menu.scrollTop = 0;
+  menu.querySelector("button").focus();
+}
+
+function setupSearch() {
+  const input = $("#net-search"), menu = $("#search-menu");
+  input.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); runSearch(); }
+    else if (e.key === "ArrowDown" && menu.classList.contains("open")) { e.preventDefault(); menu.querySelector("button").focus(); }
+    else if (e.key === "Escape") { closeMenus(); input.blur(); }
+  });
+  input.addEventListener("search", () => { if (!input.value) closeMenus(); }); // the clear (×) button
+  menu.addEventListener("keydown", e => {
+    const opts = $$("button", menu), i = opts.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const j = i + (e.key === "ArrowDown" ? 1 : -1);
+      if (j < 0) input.focus(); else if (j < opts.length) opts[j].focus();
+    } else if (e.key === "Home" || e.key === "End") { e.preventDefault(); opts[e.key === "Home" ? 0 : opts.length - 1].focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeMenus(); input.focus(); }
+  });
+}
+
 function renderInspector() {
   const box = $("#inspector");
   if (!S.pick) { box.hidden = true; return; }
@@ -2211,6 +2322,7 @@ async function init() {
   window.addEventListener("resize", () => { if (S.view === "network") renderNetwork(); });
   $("#claude-local").addEventListener("change", e => { $("#claude-root").disabled = !e.target.checked; });
   setupNetworkEvents();
+  setupSearch();
   setInterval(pollClaude, 1000);
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");

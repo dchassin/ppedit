@@ -90,6 +90,10 @@ optional USGS satellite imagery, Census TIGERweb roads, and state and county
 boundaries and names. Buses without geodata are drawn next to their located
 neighbors (dashed) or left out.
 
+A search box in the network toolbar finds a bus (by number or geodata
+text) or a branch or DC line (by its two bus numbers, or all those at a
+bus) and selects it for editing; several matches are listed to choose from.
+
 What is not promised
 --------------------
 

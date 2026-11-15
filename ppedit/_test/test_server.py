@@ -6,6 +6,14 @@ def test_index_and_meta(client):
     meta = client.get("/api/meta").get_json()
     assert "case14" in meta["builtin"] and meta["tables"][0] == "bus"
 
+def test_index_has_network_search(client):
+    """The network search box follows the Map menu and app.js handles it"""
+    page = client.get("/").get_data(as_text=True)
+    assert 'id="net-search"' in page and 'id="search-menu"' in page
+    assert page.index('data-menu="map-menu"') < page.index('id="net-search"')
+    js = client.get("/static/app.js").get_data(as_text=True)
+    assert "function searchItems(" in js and "setupSearch();" in js
+
 def test_post_requires_header(client):
     """Cross-origin pages cannot post without the custom header"""
     res = client.post("/api/new",json={})
