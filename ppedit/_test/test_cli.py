@@ -62,3 +62,7 @@ def test_verbose(tmp_path,caplog):
         messages = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
     assert any(m.startswith("loaded ") for m in messages)
     assert any(m.startswith("saved ") for m in messages)
+    assert logging.getLogger("werkzeug").level == logging.INFO
+    for argv in (["check"],["check","-d"]):
+        main(argv+[out])
+        assert logging.getLogger("werkzeug").level == logging.WARNING

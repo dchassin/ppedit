@@ -15,7 +15,8 @@ Examples
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
 and opens it in a browser; `--version` prints `ppedit` and the installed
 version (e.g. `ppedit 0.2.0`); `--verbose` adds `INFO:` messages on stderr
-(files loaded and saved, and with `serve` each HTTP request).
+(files loaded and saved, and with `serve` each HTTP request, which only
+`--verbose` shows).
 """
 
 import os
@@ -63,6 +64,8 @@ def main(argv:list[str]|None=None) -> int:
     logging.basicConfig()
     logging.getLogger().setLevel(logging.DEBUG if args.debug
         else logging.INFO if args.verbose else logging.WARNING)
+    # werkzeug sets its logger to INFO unless it has a level; request lines only with --verbose
+    logging.getLogger("werkzeug").setLevel(logging.INFO if args.verbose else logging.WARNING)
     if not args.warning:
         warnings.simplefilter("ignore")
 

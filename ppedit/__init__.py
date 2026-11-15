@@ -37,7 +37,8 @@ Optional arguments
   - `--no-browser`: do not open a browser window
 
   - `-v|--verbose`: enable `INFO:` messages on stderr (files loaded and
-    saved, and with `serve` each HTTP request)
+    saved, and with `serve` each HTTP request; request lines are shown
+    only with this option, not with `-d` alone)
 
   - `--version`: print `ppedit` and the installed version, then exit
 
