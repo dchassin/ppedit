@@ -20,8 +20,11 @@ one `Case` (`ppedit/case.py`) in memory and serves a plain HTML/CSS/JS editor
 
 - `MANIFEST.md`: map of every file, a task index, and what not to read.
   Read it first instead of listing folders.
-- No `DESIGN.md`: the design fits in the `ppedit` package docstring
-  (specification and "What is not promised").
+- `DESIGN.md`: numbered design decisions, contracts, and open questions
+  (cite decisions as "decision #N"). Read it before changing behavior it
+  covers, follow its decisions, and ask before departing from one; update
+  it in the same PR when a decision changes. The package docstring stays
+  authoritative for users (specification and "What is not promised").
 
 Upstream references (read-only; use sparse checkout of
 `arras-energy/gridlabd`): `module/pypower/{bus,gen,branch,gencost,dcline}.cpp` for
