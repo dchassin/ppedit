@@ -9,6 +9,11 @@ generator the polynomial cost (`c2,c1,c0`) of its type from
 the end of its `id` in `examples/wecc240_cost.csv` (`<bus name>_<ID>`, one
 row per generator in case order); the bus name is checked against
 `examples/wecc240_bus.csv`. Start-up and shutdown costs are 0.
+
+Branch `rateA` (0 for every branch in the source case) is set to the first
+nonzero of `rateB` and `rateC`, or to `UNRATED_MVA` (99999 MVA) when both are
+0, so OPF has a flow limit on every branch (PYPOWER's OPF fails when no
+branch is rated).
 """
 
 import csv
@@ -18,6 +23,9 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0,os.path.dirname(HERE))
 from ppedit import Case # pylint: disable=wrong-import-position
+
+UNRATED_MVA = 99999.0
+"""rateA of branches with no rating in the source case"""
 
 def read(name):
     """Rows of an examples CSV file"""
@@ -43,12 +51,19 @@ def main():
             raise ValueError(f"generator {n+1} type {gtype} is not in wecc240_gentypes.csv")
         rows.append([2,0.0,0.0,3,",".join(f"{x:g}" for x in types[gtype])])
     case.tables["gencost"] = rows
+    counts = {"rateB":0,"rateC":0,"unrated":0}
+    for branch in case.tables["branch"]:
+        if branch[5] == 0:
+            rate = next((x for x in branch[6:8] if x != 0),0.0)
+            counts["rateB" if branch[6] else "rateC" if branch[7] else "unrated"] += 1
+            branch[5] = rate or UNRATED_MVA
     case.name = "wecc240_2018"
     errors = [x["message"] for x in case.validate() if x["level"] == "error"]
     if errors:
         raise ValueError("; ".join(errors))
     case.save(os.path.join(HERE,"wecc240_2018.py"))
-    print(f"wrote examples/wecc240_2018.py: {case.size()}")
+    print(f"wrote examples/wecc240_2018.py: {case.size()}; rateA from rateB "
+        f"{counts['rateB']}, from rateC {counts['rateC']}, {UNRATED_MVA:g} MVA {counts['unrated']}")
 
 if __name__ == "__main__":
     main()
