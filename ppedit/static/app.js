@@ -729,6 +729,7 @@ function renderNetwork() {
     const title = sv("title");
     title.textContent = `branch ${i + 1}: ${b[0]} → ${b[1]}` + (rb ? `\nPF ${fmt(rb.PF, 1)} MW, QF ${fmt(rb.QF, 1)} MVAr, loading ${rb.loading_pct === null ? "unrated" : fmt(rb.loading_pct, 0) + "%"}` : "");
     hit.append(title);
+    hit.addEventListener("pointerdown", e => e.stopPropagation()); // else #net captures the pointer and gets the click
     hit.addEventListener("click", e => { e.stopPropagation(); pick("branch", i); });
     g.append(line, hit);
     if (classic) {
@@ -766,6 +767,7 @@ function renderNetwork() {
     title.textContent = `DC line ${i + 1}: ${d[0]} → ${d[1]}${on ? "" : " OUT"}` +
       (rd ? `\nPf ${fmt(rd.Pf, 1)} MW, Pt ${fmt(rd.Pt, 1)} MW, loss ${fmt(rd.loss_MW, 2)} MW` : `\nPf ${fmt(d[3], 1)} MW (case value)`);
     hit.append(title);
+    hit.addEventListener("pointerdown", e => e.stopPropagation()); // else #net captures the pointer and gets the click
     hit.addEventListener("click", e => { e.stopPropagation(); pick("dcline", i); });
     g.append(hit);
   });
