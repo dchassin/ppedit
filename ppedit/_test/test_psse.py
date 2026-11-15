@@ -131,7 +131,7 @@ def test_api_and_cli(post,tmp_path,capsys):
     assert "star point" in capsys.readouterr().err
     assert len(Case.load(out).tables["bus"]) == 5
 
-WECC240 = os.path.join(os.path.dirname(__file__),"..","..","examples","wecc240_psse.raw")
+WECC240 = os.path.join(os.path.dirname(__file__),"..","..","examples","wecc240_case.raw")
 
 def _reproduces(case,vm_tol=1e-3,va_tol=0.01):
     """PF reproduces the solved voltages stored in the case"""
