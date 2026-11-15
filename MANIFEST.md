@@ -7,9 +7,10 @@ Update this file in the same PR that adds, moves, or deletes a file.
 ## Start here
 
 1. `CLAUDE.md` — conventions and working rules
-2. `ppedit/__init__.py` — package docs (spec, limits) and public API
-3. `ppedit/case.py` — case model, formats, validation, solver
-4. `ppedit/server.py` — Flask app and JSON API
+2. `DESIGN.md` — design decisions, contracts, open questions
+3. `ppedit/__init__.py` — package docs (spec, limits) and public API
+4. `ppedit/case.py` — case model, formats, validation, solver
+5. `ppedit/server.py` — Flask app and JSON API
 
 ## Task index
 
@@ -24,6 +25,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Add a CLI command or option: `ppedit/cli.py`, `ppedit/__init__.py` Syntax section, `README.md`
 - Refresh the PYPOWER example cases: `python3 examples/import_pypower_cases.py` (after upgrading `pypower`)
 - Change the Claude sessions (tools, data sources, models): `ppedit/claude.py`; `/api/claude*` routes in `ppedit/server.py`; Claude section of `ppedit/static/app.js`; `ppedit/_test/test_claude.py`
+- Change a design decision or resolve an open question: `DESIGN.md` (never renumber decisions)
 - Release: `pyproject.toml` version; see the eudoxys-package skill checklist
 
 ## Package
@@ -75,6 +77,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 |---|---|---|
 | `README.md` | user overview | |
 | `CLAUDE.md` | assistant guidance | |
+| `DESIGN.md` | design decisions, contracts, open questions | update with any decision change |
 | `MANIFEST.md` | this file | |
 | `CONTRIBUTING.md` | contributor guide | approved-issue rule |
 | `TODO.md` | roadmap | |
