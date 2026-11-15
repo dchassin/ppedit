@@ -350,3 +350,5 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 #net .line-label { font: 8.5px var(--mono); fill: #4b5652; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; pointer-events: none; }
 #net.oneline .ol-bus .data { font-size: 8.5px; fill: #4b5652; font-weight: 400; }
 #net.oneline .ol-flow.ol-data { fill: #6b5a8e; }
+.dropdown.labels .head { grid-column: 1 / -1; font-size: 12px; font-weight: 600; padding: 4px 10px 0; }
+.dropdown.labels .note { grid-column: 1 / -1; max-width: none; color: #8a5a00; }

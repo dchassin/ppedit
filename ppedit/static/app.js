@@ -14,12 +14,7 @@ const S = {
   style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
   layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
   areas: (() => { try { return localStorage.getItem("ppedit.areas") === "1"; } catch (_) { return false; } })(), // color buses by area
-  labels: (() => { // diagram labels: built-in items (":name") and table column names, per table
-    const def = { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] }; // = LABEL_DEFAULTS
-    let s = null;
-    try { s = JSON.parse(localStorage.getItem("ppedit.labels") || "null"); } catch (_) { /* storage unavailable */ }
-    return { bus: new Set((s && s.bus) || def.bus), branch: new Set((s && s.branch) || def.branch) };
-  })(),
+  labels: null,        // style -> {bus, branch}: Sets of label keys (see loadLabels)
   map: (() => {
     const def = { imagery: false, roads: false, states: true, stateNames: true, counties: false, countyNames: false };
     try { return { ...def, ...JSON.parse(localStorage.getItem("ppedit.map") || "{}") }; } catch (_) { return def; }
@@ -536,16 +531,33 @@ function busSummary() {
 // starting with ":") and any column of the bus and branch tables (keys are column names;
 // the bus_i column is the bus number). Data labels read "name value unit".
 
+// Each diagram style keeps its own choices; the defaults reproduce the drawing from before
+// the menu existed. Items marked "solved" need a power flow or OPF solution.
 const LABEL_ITEMS = {
-  bus: [[":voltage", "Voltage", "Voltage magnitude and angle (solution, or case values)", ["classic", "oneline"]],
-    [":gen", "Generation", "Generation MW (classic) or generator MW/MVAr (one-line)", ["classic", "oneline"]],
-    [":load", "Load", "Load MW (classic) or load MW/MVAr (one-line)", ["classic", "oneline"]]],
-  branch: [[":flow", "Power flow", "MW (classic) or MW/MVAr (one-line) flow, after a solve", ["classic", "oneline"]],
-    [":loading", "Loading", "Loading in % of rateA, after a solve", ["simple", "classic", "oneline"]]],
+  bus: [[":voltage", "Voltage", "Voltage magnitude and angle (solution, or case values)"],
+    [":gen", "Generation", "Generation MW (one-line: generator MW and MVAr)"],
+    [":load", "Load", "Load MW (one-line: load MW and MVAr)"]],
+  branch: [[":flow", "Power flow", "Branch flow MW from the from bus (one-line: MW and MVAr)", "solved"],
+    [":loading", "Loading", "Branch loading in % of rateA", "solved"]],
 };
-const LABEL_DEFAULTS = { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] };
+const LABEL_DEFAULTS = {
+  simple: { bus: ["bus_i"], branch: [] },
+  classic: { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] },
+  oneline: { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] },
+};
 
-const showLabel = (table, key) => S.labels[table].has(key);
+function loadLabels() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("ppedit.labels") || "null"); } catch (_) { /* storage unavailable */ }
+  S.labels = {};
+  for (const [style, def] of Object.entries(LABEL_DEFAULTS)) {
+    const v = s && s[style] && Array.isArray(s[style].bus) ? s[style] : def;
+    S.labels[style] = { bus: new Set(v.bus), branch: new Set(v.branch || []) };
+  }
+}
+
+const curLabels = () => S.labels[S.style] || S.labels.simple;
+const showLabel = (table, key) => curLabels()[table].has(key);
 
 function labelValue(spec, v) {
   if (spec.kind === "enum") return spec.options[v] ?? v;
@@ -558,7 +570,7 @@ function dataLabels(table, row) {
   const out = [];
   S.meta.columns[table].forEach((spec, j) => {
     if (table === "bus" && j === 0) return;
-    if (S.labels[table].has(spec.name)) out.push(`${spec.name} ${labelValue(spec, row[j])}`);
+    if (showLabel(table, spec.name)) out.push(`${spec.name} ${labelValue(spec, row[j])}`);
   });
   return out;
 }
@@ -571,12 +583,14 @@ function branchLabels(i, rb) {
 }
 
 function setLabel(table, key, on) {
-  S.labels[table][on ? "add" : "delete"](key);
+  curLabels()[table][on ? "add" : "delete"](key);
   saveLabels();
 }
 
 function saveLabels() {
-  try { localStorage.setItem("ppedit.labels", JSON.stringify({ bus: [...S.labels.bus], branch: [...S.labels.branch] })); } catch (_) { /* storage unavailable */ }
+  const out = {};
+  for (const [style, L] of Object.entries(S.labels)) out[style] = { bus: [...L.bus], branch: [...L.branch] };
+  try { localStorage.setItem("ppedit.labels", JSON.stringify(out)); } catch (_) { /* storage unavailable */ }
   renderNetwork();
 }
 
@@ -591,7 +605,9 @@ function buildLabelMenu() {
     S.meta.columns[table].map((spec, j) => box(table, spec.name,
       table === "bus" && j === 0 ? `${spec.name} (number)` : spec.name,
       `${spec.desc || spec.name}${spec.unit ? ` (${spec.unit})` : ""}`)));
-  menu.replaceChildren(group("bus", "Buses"), group("branch", "Branches"),
+  menu.replaceChildren(h("div", { class: "head", id: "label-head" }),
+    group("bus", "Buses"), group("branch", "Branches"),
+    h("div", { class: "note", id: "label-note" }),
     h("div", { class: "foot" },
       h("button", { "data-action": "labels-none" }, "None"),
       h("button", { "data-action": "labels-default" }, "Defaults")));
@@ -604,13 +620,25 @@ function buildLabelMenu() {
 }
 
 function updateLabelMenu() {
+  const solved = !!(S.state && S.state.result && S.state.result.success);
+  const name = { simple: "Simple", classic: "Classic", oneline: "One-line" }[S.style] || S.style;
+  const head = $("#label-head");
+  if (head) head.textContent = `Labels for the ${name} style`;
+  let waiting = false;
   for (const cb of $$("#label-menu [data-label]")) {
     const [table, key] = cb.dataset.label.split(/:(.*)/s);
     cb.checked = showLabel(table, key);
     const item = LABEL_ITEMS[table].find(it => it[0] === key);
-    const off = item && !item[3].includes(S.style);
-    cb.closest("label").classList.toggle("disabled", !!off);
-    if (item) cb.closest("label").title = off ? `${item[2]}: not drawn in the ${S.style} style` : item[2];
+    if (!item) continue;
+    const off = item[3] === "solved" && !solved;
+    if (off && cb.checked) waiting = true;
+    cb.closest("label").classList.toggle("disabled", off);
+    cb.closest("label").title = off ? `${item[2]}: shown after a solve (Run PF or Run OPF)` : item[2];
+  }
+  const note = $("#label-note");
+  if (note) {
+    note.textContent = waiting ? "Power flow and loading labels appear after a solve: Run PF or Run OPF." : "";
+    note.hidden = !waiting;
   }
 }
 
@@ -647,7 +675,7 @@ function renderNetwork() {
     const ax = p.x + dx * t, ay = p.y + dy * t;
     const sx = fwd ? ux : -ux, sy = fwd ? uy : -uy;
     const a = 4;
-    labels.append(sv("path", {
+    if (classic) labels.append(sv("path", {
       d: `M${ax + sx * a},${ay + sy * a} L${ax - sx * a - sy * a * 0.8},${ay - sy * a + sx * a * 0.8} L${ax - sx * a + sy * a * 0.8},${ay - sy * a - sx * a * 0.8} Z`,
       class: "flow-arrow", fill: color || NEUTRAL_LINE,
     }));
@@ -710,8 +738,8 @@ function renderNetwork() {
         const mx = p.x + dx * 0.25, my = p.y + dy * 0.25;
         for (const s of [-3, 3]) g.append(sv("circle", { cx: mx + ux * s, cy: my + uy * s, r: 4.5, class: "xfmr-sym" }));
       }
-      if (rb) flowMark(p, q, rb.PF, line.style.stroke);
     }
+    if (rb) flowMark(p, q, rb.PF, line.style.stroke);
     lineText(p, q, branchLabels(i, rb));
   });
   // DC lines: dash-dot lines with a "DC" converter tag near the from bus
@@ -790,7 +818,11 @@ function renderNetwork() {
       if (hasGen) node.append(sv("circle", { r: r + 4, class: "gen" }));
       node.append(sv("circle", { r, class: "body", fill: sum.res ? vColor(v.Vm) : TYPE_COLOR[b[1]] || "#999" }));
       if (b[2] > 0) node.append(sv("path", { d: `M${r + 2},${r + 1} l6,6 m-3,0 h3 v-3`, class: "load" }));
-      const lines = [...(showLabel("bus", "bus_i") ? [`${b[0]}`] : []), ...dataLabels("bus", b)];
+      const lines = [...(showLabel("bus", "bus_i") ? [`${b[0]}`] : [])];
+      if (showLabel("bus", ":voltage")) lines.push(`${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`);
+      if (hasGen && showLabel("bus", ":gen")) lines.push(`G ${(sum.gen.get(b[0]) || 0).toFixed(1)} MW`);
+      if (b[2] !== 0 && showLabel("bus", ":load")) lines.push(`L ${b[2].toFixed(1)} MW`);
+      lines.push(...dataLabels("bus", b));
       const label = sv("text", { x: r + 5, y: -r - 1 });
       lines.forEach((t, j) => {
         const ts = sv("tspan", { x: r + 5, dy: j ? "1.15em" : 0 });
@@ -2071,8 +2103,12 @@ async function onAction(btn) {
     else if (a === "del-rows") await deleteRows();
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
-    else if (a === "labels-none") { S.labels.bus.clear(); S.labels.branch.clear(); saveLabels(); }
-    else if (a === "labels-default") { S.labels.bus = new Set(LABEL_DEFAULTS.bus); S.labels.branch = new Set(LABEL_DEFAULTS.branch); saveLabels(); }
+    else if (a === "labels-none") { curLabels().bus.clear(); curLabels().branch.clear(); saveLabels(); }
+    else if (a === "labels-default") {
+      const d = LABEL_DEFAULTS[S.style] || LABEL_DEFAULTS.simple;
+      S.labels[S.style] = { bus: new Set(d.bus), branch: new Set(d.branch) };
+      saveLabels();
+    }
     else if (a === "geodata-load") $("#geodata-input").click();
     else if (a === "geodata-export") downloadUrl("/api/export?format=csv");
     else if (a === "geodata-clear") {
@@ -2123,6 +2159,7 @@ function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("op
 
 async function init() {
   S.meta = await api("/api/meta");
+  loadLabels();
   buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
   document.addEventListener("click", e => {
