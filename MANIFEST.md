@@ -57,6 +57,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/_test/data/case3.glm` | 3-bus GLM test model | curated, hand-written |
 | `ppedit/_test/data/psse_v33.raw` | 4-bus PSS/E revision 33 test case (loads, shunts, 2- and 3-winding transformers, DC line) | curated, hand-written; used by `test_psse.py` |
 | `ppedit/_test/data/psse_v35.raw` | 3-bus PSS/E revision 35 test case (system-wide data, `@!` headers, switching devices) | curated, hand-written; used by `test_psse.py` |
+| `ppedit/_test/data/IEEE_*_bus.raw` | IEEE 14, 24, 30, 39, 57, 118 and 300-bus cases as PSS/E revision 33 | added by the maintainer; used by `test_psse.py`; IEEE_300 ~135 kB |
 | `ppedit/_test/data/case9_geodata.csv` | synthetic `case9` bus locations | curated, hand-written; used by `test_geodata.py` |
 
 ## Examples
@@ -69,6 +70,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/pypower/AUTHORS` | PYPOWER authors | copied from the `pypower` package |
 | `examples/pypower/case*.py` | PYPOWER built-in cases, unchanged | copied; don't edit; case300.py ~60 kB |
 | `examples/pypower/case*.glm` | the same cases as `module pypower` GLM models | generated; don't edit; case300.glm ~250 kB, use `head` |
+| `examples/wecc240_psse.raw` | NREL reduced WECC 240-bus case as PSS/E revision 34 (2018 summer peak) | from NREL (see file header); ~220 kB, use `head`; tested by `_test/test_psse.py` |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~85 kB, use `head` |
 | `examples/wecc240_geodata.csv` | bus locations for the WECC 240-bus case (`BUS_I,LAT,LON` plus `GEOHASH,NAME,GEN,LOAD,BA,COUNTY`) | for `--geodata` or **Map ▸ Load CSV…** |
 | `examples/wecc240_map.py` | WECC 240-bus case with its `geodata` and `geotags` | written by ppedit; ~95 kB, use `head` |

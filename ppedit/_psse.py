@@ -9,9 +9,18 @@ The conversion follows MATPOWER's `psse2mpc` (`psse_parse`,
 `psse_convert`, `psse_convert_xfmr`, `psse_convert_hvdc`; MATPOWER is
 BSD-3-Clause licensed, https://matpower.org), with these additions:
 
-  - revisions 34 and 35 (system-wide data, node-breaker fields, 12 branch
-    ratings, generator `NREG`, switched shunt `ID`), and lines starting
-    with `@!` (field name headers) are skipped;
+  - revisions 34 and 35 (system-wide data, 12 branch ratings and names,
+    generator `NREG`, at the end of the record in 34 and after `IREG` in
+    35, switched shunt `ID` in 35);
+  - `@!` field name lines, when a section has one, locate the fields of
+    single-line records (buses, loads, shunts, generators, branches,
+    switching devices) by name, so writers that order fields differently
+    are read correctly; without them the fields are taken by position;
+  - a generator that regulates another bus (`IREG`), which PYPOWER
+    cannot do, gets its own bus voltage in the case as `Vg` instead of
+    `VS`, so a solved case solves to the same voltages (a note says how
+    many); a note also counts generators held at a reactive power limit,
+    since PYPOWER power flow holds `Vg` there instead;
   - out-of-service switched shunts (revision 32 and later) and fixed
     shunts and loads are left out;
   - closed in-service system switching devices (revision 34 and later)
@@ -102,31 +111,44 @@ class _Rec(list):
         """Column `k` as an int"""
         return int(round(self.num(k,default)))
 
+def _field_names(line):
+    """Field names of an `@!` header line, upper case, without quotes or blanks"""
+    return [re.sub(r"[\s'\"]","",x).upper() for x in line.lstrip()[2:].split(",")]
+
 def _read(text):
-    """Return the header lines, the sections (lists of records) and their
-    labels, as `psse_read` splits them"""
-    lines = [x for x in re.split(r"\r\n|\n|\r",text) if not x.lstrip().startswith("@!")]
-    if len(lines) < 3:
+    """Return the header lines, the sections (lists of records), their
+    labels, and the field names of each section's first `@!` line (`None`
+    if it has none), as `psse_read` splits them"""
+    lines = re.split(r"\r\n|\n|\r",text)
+    header = []
+    while lines and len(header) < 3:
+        line = lines.pop(0)
+        if not line.lstrip().startswith("@!"):
+            header.append(line)
+    if len(header) < 3:
         raise RawError("too few lines for a PSS/E RAW file")
-    header = lines[:3]
-    sections,labels = [],[]
-    current = []
-    for line in lines[3:]:
-        if _EOS.match(line):
+    sections,labels,fields = [],[],[]
+    current,names = [],None
+    for line in lines:
+        if line.lstrip().startswith("@!"):
+            if not current and names is None:
+                names = _field_names(line)
+        elif _EOS.match(line):
             sections.append(current)
+            fields.append(names)
             match = _LABEL.search(line)
             labels.append(match.group(1).upper() if match else "")
-            current = []
+            current,names = [],None
             if line.lstrip().startswith("Q"):
                 break
-        else:
-            if line.strip():
-                current.append(line)
+        elif line.strip():
+            current.append(line)
     else:
-        if any(x.strip() for x in current):
+        if current:
             sections.append(current)
+            fields.append(names)
             labels.append("")
-    return header,sections,labels
+    return header,sections,labels,fields
 
 def _order(rev,system_wide):
     """Section names in file order for revision `rev`"""
@@ -185,7 +207,7 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
       - `RawError`: the text is not a readable RAW case
     """
     # pylint: disable=too-many-locals,too-many-branches,too-many-statements
-    header,sections,labels = _read(text)
+    header,sections,labels,fields = _read(text)
     head = _Rec(_fields(header[0]))
     notes = []
     sbase = head.num(2,0.0)
@@ -208,7 +230,7 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
         notes.append(f"IC = {head.int(1,0)}: this may be a change case, not a base case")
     system_wide = rev >= 34 or (bool(labels) and "SYSTEM" in labels[0])
     names = _order(rev,system_wide)
-    data = {}
+    data,heads = {},{}
     for k,records in enumerate(sections):
         if k >= len(names):
             if records:
@@ -216,6 +238,17 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
                     f"{names[-1]} data were not read")
             break
         data.setdefault(names[k],[]).append(records)
+        if fields[k] and names[k] not in heads:
+            heads[names[k]] = fields[k]
+    def columns(name,cols):
+        """1-based columns of the fields `cols` (name: (default column, aliases...))
+        in section `name`, from its `@!` field names when it has them"""
+        head = heads.get(name) if rev >= 31 else None
+        out = {}
+        for key,(col,*aliases) in cols.items():
+            found = [head.index(x)+1 for x in (key,*aliases) if head and x in head]
+            out[key] = found[0] if found else col
+        return out
     def sect(name):
         """Records of all sections called `name` (switched shunts may be in two places)"""
         return [r for block in data.get(name,[]) for r in block]
@@ -230,6 +263,8 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
     # ----- buses -----
     bus = []
     nolimits = 0
+    bcols = columns("bus",{"BASKV":(3,),"IDE":(4,),"AREA":(5,),"ZONE":(6,),"VM":(8,),
+        "VA":(9,),"NVHI":(10,),"NVLO":(11,)})
     for r in recs("bus"):
         if rev < 24:    # I,IDE,PL,QL,GL,BL,IA,VM,VA,'NAME',BASKV,ZONE
             row = [r.int(1),r.int(2,1),r.num(3),r.num(4),r.num(5),r.num(6),r.int(7,1),
@@ -238,10 +273,11 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
             row = [r.int(1),r.int(4,1),0.0,0.0,r.num(5),r.num(6),r.int(7,1),
                 r.num(9,1.0),r.num(10),r.num(3),r.int(8,1),None,None]
         else:           # I,'NAME',BASKV,IDE,AREA,ZONE,OWNER,VM,VA,NVHI,NVLO,EVHI,EVLO
-            row = [r.int(1),r.int(4,1),0.0,0.0,0.0,0.0,r.int(5,1),
-                r.num(8,1.0),r.num(9),r.num(3),r.int(6,1),
-                r.num(10) if len(r) >= 10 and r[9].strip() else None,
-                r.num(11) if len(r) >= 11 and r[10].strip() else None]
+            c = bcols
+            row = [r.int(1),r.int(c["IDE"],1),0.0,0.0,0.0,0.0,r.int(c["AREA"],1),
+                r.num(c["VM"],1.0),r.num(c["VA"]),r.num(c["BASKV"]),r.int(c["ZONE"],1),
+                r.num(c["NVHI"]) if len(r) >= c["NVHI"] and r[c["NVHI"]-1].strip() else None,
+                r.num(c["NVLO"]) if len(r) >= c["NVLO"] and r[c["NVLO"]-1].strip() else None]
         if row[11] is None or row[12] is None:
             nolimits += 1
             row[11] = _STAR_VMAX if row[11] is None else row[11]
@@ -266,20 +302,23 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
         return bus[index[number]]
 
     # ----- loads (I,ID,STATUS,AREA,ZONE,PL,QL,IP,IQ,YP,YQ,...) -----
+    c = columns("load",{"STAT":(3,"STATUS"),"PL":(6,),"QL":(7,),"IP":(8,),"IQ":(9,),
+        "YP":(10,),"YQ":(11,)})
     for r in recs("load"):
-        if r.int(3,1) != 1:
+        if r.int(c["STAT"],1) != 1:
             continue
         b = at(r.int(1),"a load")
         vm = b[7]
-        b[2] += r.num(6) + r.num(8)*vm + r.num(10)*vm**2
-        b[3] += r.num(7) + r.num(9)*vm - r.num(11)*vm**2
+        b[2] += r.num(c["PL"]) + r.num(c["IP"])*vm + r.num(c["YP"])*vm**2
+        b[3] += r.num(c["QL"]) + r.num(c["IQ"])*vm - r.num(c["YQ"])*vm**2
 
     # ----- fixed shunts (I,ID,STATUS,GL,BL) -----
+    c = columns("fixed shunt",{"STATUS":(3,"STAT"),"GL":(4,),"BL":(5,)})
     for r in recs("fixed shunt"):
-        if r.int(3,1) == 1:
+        if r.int(c["STATUS"],1) == 1:
             b = at(r.int(1),"a fixed shunt")
-            b[4] += r.num(4)
-            b[5] += r.num(5)
+            b[4] += r.num(c["GL"])
+            b[5] += r.num(c["BL"])
 
     # ----- switched shunts (BINIT only) -----
     if rev <= 27:
@@ -288,28 +327,48 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
         binit,status = 7,None
     elif rev < 32:
         binit,status = 8,None
-    elif rev < 34:
+    elif rev < 35:      # I,MODSW,ADJM,STAT,VSWHI,VSWLO,SWREM,RMPCT,'RMIDNT',BINIT,...
         binit,status = 10,4
-    elif rev < 35:
-        binit,status = 11,4
-    else:
+    else:               # I,'ID',MODSW,ADJM,SWSTAT,VSWHI,VSWLO,SWREG,NREG,RMPCT,'RMIDNT',BINIT
         binit,status = 12,5
+    if status is not None:
+        c = columns("switched shunt",{"BINIT":(binit,),"STAT":(status,"ST","SWSTAT")})
+        binit,status = c["BINIT"],c["STAT"]
     for r in recs("switched shunt"):
         if status is None or r.int(status,1) == 1:
             at(r.int(1),"a switched shunt")[5] += r.num(binit)
 
     # ----- generators -----
     gen = []
-    if rev < 34:    # I,ID,PG,QG,QT,QB,VS,IREG,MBASE,ZR,ZX,RT,XT,GTAP,STAT,RMPCT,PT,PB
-        cols = (3,4,5,6,7,9,15,17,18)
+    if rev < 35:    # I,ID,PG,QG,QT,QB,VS,IREG,MBASE,ZR,ZX,RT,XT,GTAP,STAT,RMPCT,PT,PB
+        cols = (3,4,5,6,7,9,15,17,18)   # (revision 34 has NREG at the end)
     else:           # I,ID,PG,QG,QT,QB,VS,IREG,NREG,MBASE,...,STAT(16),RMPCT,PT,PB
         cols = (3,4,5,6,7,10,16,18,19)
+    c = columns("generator",dict(zip(("PG","QG","QT","QB","VS","MBASE","STAT","PT","PB",
+        "IREG"),((x,) for x in cols+(8,)))))
+    cols,ireg = tuple(c.values())[:9],c["IREG"]
+    remote = 0
     defaults = (0.0,0.0,9999.0,-9999.0,1.0,sbase,1,9999.0,-9999.0)
     for r in recs("generator"):
         at(r.int(1),"a generator")
         v = [r.num(c,d) for c,d in zip(cols,defaults)]
+        if r.int(ireg,0) not in (0,r.int(1)):
+            v[4] = bus[index[r.int(1)]][7]  # PYPOWER regulates only the generator bus
+            remote += 1
         gen.append([r.int(1),v[0],v[1],v[2],v[3],v[4],v[5],1 if v[6] > 0 else 0,v[7],v[8]]
             + [0.0]*11)
+
+    def at_limit(g):
+        """In service at a Q limit, with Vg not the case voltage of its bus"""
+        return g[7] and min(abs(g[2]-g[3]),abs(g[2]-g[4])) < 1e-3 \
+            and abs(g[5]-bus[index[g[0]]][7]) > 1e-4
+    atlimit = sum(1 for g in gen if at_limit(g))
+    if atlimit:
+        notes.append(f"{atlimit} generator(s) are at a reactive power limit in the case; "
+            "PYPOWER power flow holds their Vg instead of the limit, so voltages may differ")
+    if remote:
+        notes.append(f"{remote} generator(s) regulate the voltage of another bus (IREG), "
+            "which PYPOWER cannot do; their Vg is the voltage of their own bus in the case")
 
     # ----- branches -----
     branch = []
@@ -317,6 +376,14 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
         if on and number in index:
             bus[index[number]][4] += g*sbase
             bus[index[number]][5] += b*sbase
+    if rev >= 34:   # I,J,CKT,R,X,B,'NAME',RATE1..RATE12,GI,BI,GJ,BJ,ST
+        c = columns("branch",{"R":(4,),"X":(5,),"B":(6,),"RATE1":(8,"RATEA"),
+            "GI":(20,),"STAT":(24,"ST")})
+    elif rev >= 31:
+        c = columns("branch",{"R":(4,),"X":(5,),"B":(6,),"RATE1":(7,"RATEA"),
+            "GI":(10,),"STAT":(14,"ST")})
+    else:
+        c = {"R":4,"X":5,"B":6}
     for r in recs("branch"):
         fbus,tbus = r.int(1),abs(r.int(2))
         at(fbus,"a branch")
@@ -324,27 +391,29 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
         if rev <= 27:   # I,J,CKT,R,X,B,RATEA,RATEB,RATEC,RATIO,ANGLE,GI,BI,GJ,BJ,ST
             rates,gi,st = 7,12,16
             ratio,angle = r.num(10),r.num(11)
-        elif rev < 34:  # I,J,CKT,R,X,B,RATEA,RATEB,RATEC,GI,BI,GJ,BJ,ST
+        elif rev < 31:  # I,J,CKT,R,X,B,RATEA,RATEB,RATEC,GI,BI,GJ,BJ,ST
             rates,gi,st = 7,10,14
             ratio,angle = 0.0,0.0
-        else:           # I,J,CKT,R,X,B,'NAME',RATE1..RATE12,GI,BI,GJ,BJ,ST
-            rates,gi,st = 8,20,24
+        else:
+            rates,gi,st = c["RATE1"],c["GI"],c["STAT"]
             ratio,angle = 0.0,0.0
         on = 1 if r.int(st,1) else 0
-        branch.append([fbus,tbus,r.num(4),r.num(5),r.num(6),r.num(rates),
+        branch.append([fbus,tbus,r.num(c["R"]),r.num(c["X"]),r.num(c["B"]),r.num(rates),
             r.num(rates+1),r.num(rates+2),ratio,angle,on,-360.0,360.0])
         shunt(fbus,r.num(gi),r.num(gi+1),on)
         shunt(tbus,r.num(gi+2),r.num(gi+3),on)
 
     # ----- system switching devices (I,J,CKT,X,RATE1..RATE12,STAT,NSTAT,...) -----
     switches = 0
+    c = columns("system switching device",{"X":(4,),"RATE1":(5,),"STAT":(17,)})
     for r in recs("system switching device"):
         fbus,tbus = r.int(1),abs(r.int(2))
         at(fbus,"a switching device")
         at(tbus,"a switching device")
-        on = 1 if r.int(17,1) == 1 else 0
-        branch.append([fbus,tbus,0.0,r.num(4,0.0001) or 0.0001,0.0,r.num(5),r.num(6),
-            r.num(7),0.0,0.0,on,-360.0,360.0])
+        on = 1 if r.int(c["STAT"],1) == 1 else 0
+        rate = c["RATE1"]
+        branch.append([fbus,tbus,0.0,r.num(c["X"],0.0001) or 0.0001,0.0,r.num(rate),
+            r.num(rate+1),r.num(rate+2),0.0,0.0,on,-360.0,360.0])
         switches += 1
     if switches:
         notes.append(f"{switches} system switching device(s) converted to branches "

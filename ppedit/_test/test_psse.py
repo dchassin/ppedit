@@ -122,6 +122,44 @@ def test_api_and_cli(post,tmp_path,capsys):
     assert "star point" in capsys.readouterr().err
     assert len(Case.load(out).tables["bus"]) == 5
 
+WECC240 = os.path.join(os.path.dirname(__file__),"..","..","examples","wecc240_psse.raw")
+
+def _reproduces(case,vm_tol=1e-3,va_tol=0.01):
+    """PF reproduces the solved voltages stored in the case"""
+    result = case.solve("pf")
+    assert result["success"]
+    bus = {r[0]:r for r in case.tables["bus"]}
+    assert max(abs(x["Vm"]-bus[x["bus_i"]][7]) for x in result["bus"]) < vm_tol
+    assert max(abs(x["Va"]-bus[x["bus_i"]][8]) for x in result["bus"]) < va_tol
+
+def test_wecc240():
+    """Revision 34 (NREG at the end of generator records, @! headers) and
+    remote voltage regulation"""
+    case = Case.load(WECC240)
+    assert case.size()["bus"] == 243 and case.size()["gen"] == 146
+    bus = {r[0]:r for r in case.tables["bus"]}
+    gen = case.tables["gen"][0]
+    # 1032 'C' regulates bus 1002 at VS = 1.014: Vg is bus 1032's own voltage
+    assert gen[:10] == [1032,712.0,-3.332,200.0,-200.0,bus[1032][7],873.0,1,873.0,0.0]
+    assert all(g[8] >= g[9] and g[6] > 0 for g in case.tables["gen"])
+    assert any("IREG" in x for x in case.notes)
+    assert not [x for x in case.validate() if x["level"] == "error"]
+    _reproduces(case)
+
+@pytest.mark.parametrize("name,exact",[("IEEE_14_bus",True),("IEEE_24_bus",False),
+    ("IEEE_30_bus",False),("IEEE_39_bus",True),("IEEE_57_bus",True),("IEEE_118_bus",False),
+    ("IEEE_300_bus",False)])
+def test_ieee_cases(name,exact):
+    """Revision 33 cases solve; those without generators held at a reactive
+    power limit reproduce their stored solution"""
+    case = Case.load(os.path.join(DATA,f"{name}.raw"))
+    assert not [x for x in case.validate() if x["level"] == "error"]
+    assert exact != any("reactive power limit" in x for x in case.notes)
+    if exact:
+        _reproduces(case)
+    else:
+        assert case.solve("pf")["success"]
+
 # MATPOWER's psse2mpc test cases and expected conversions (optional: needs the
 # `matpower` package, whose test data is not redistributed here)
 
@@ -151,4 +189,8 @@ def test_matpower_cases(name):
         for a,b in zip(got,rows):
             if table == "bus" and a[0] in stars:
                 a = a[:9] + [1.0] + a[10:]  # psse2mpc gives star buses 1 kV
+            if table == "gen" and abs(a[5]-b[5]) > 1e-4:
+                # remote regulation: Vg is the generator bus voltage, not VS
+                assert a[5] == next(r[7] for r in case.tables["bus"] if r[0] == a[0])
+                a = a[:5] + [b[5]] + a[6:]
             assert a[:len(b)] == pytest.approx(b[:len(a)],rel=1e-4,abs=1e-4),(table,a,b)

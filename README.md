@@ -183,7 +183,11 @@ demand and shunts (constant current and admittance loads at the case
 voltage), 2-winding transformers become branches with a turns ratio and
 phase shift, each 3-winding transformer becomes three branches to an added
 star bus (numbered from the next power of ten above the largest bus
-number), and two-terminal DC lines become `dcline` rows. Names, owners,
+number), and two-terminal DC lines become `dcline` rows. A generator that
+regulates another bus gets its own bus voltage as `Vg` (PYPOWER regulates
+only the generator bus), so a solved case solves to the same voltages,
+unless generators are held at a reactive power limit in the case
+(PYPOWER power flow does not enforce those; the notes say how many). Names, owners,
 zones, magnetizing admittance, impedance correction, VSC and multi-terminal
 DC lines, FACTS devices and the other PSS/E data PYPOWER cannot hold are
 dropped, and the editor lists them when the file is opened. PSS/E has no
