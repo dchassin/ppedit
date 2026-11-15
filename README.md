@@ -84,7 +84,8 @@ In the editor:
       The National Map), roads, and state and county boundaries and names
       (U.S. Census Bureau TIGERweb); these need network access and cover the
       United States. Buses without geodata are drawn dashed next to their
-      neighbors. Saving to `.py` or `.json` stores the data under the case
+      neighbors. Clicking where several buses are drawn on top of each
+      other (e.g. at the same location) lists them to choose from. Saving to `.py` or `.json` stores the data under the case
       key `geodata` (rows of `BUS_I, LAT, LON, ...`) with the auxiliary
       column names under `geotags`; `.glm` keeps each bus's `latitude` and
       `longitude`. **Map ▸ Download CSV** exports the geodata.

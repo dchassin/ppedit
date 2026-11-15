@@ -100,7 +100,10 @@ API key to start sessions; tests use a fake client).
   points (states abbreviated when zoomed out). US coverage only; the USGS
   imagery has dark gaps over some water; offline the layers simply don't
   draw. Buses are not draggable in this layout (geodata
-  is not edited in the diagram). GLM output keeps lat/lon but not geotags.
+  is not edited in the diagram). A click on buses drawn within
+  `OVERLAP_PX` screen pixels of each other opens `#bus-menu` at the
+  pointer to choose one (`busesAt`/`openBusMenu`), instead of picking
+  the topmost. GLM output keeps lat/lon but not geotags.
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
   layered layout cached by topology signature (`olCache`), drawn in layout
   units under one transform (so it scales with zoom, unlike the other
