@@ -3,9 +3,9 @@
 Syntax
 ------
 
-    ppedit serve [FILE] [-g CSV] [-p PORT] [--host HOST] [--no-browser] [-d] [-w]
-    ppedit convert INPUT OUTPUT [-g CSV] [-d] [-w]
-    ppedit check FILE [-d] [-w]
+    ppedit serve [FILE] [-g CSV] [-p PORT] [--host HOST] [--no-browser] [-d] [-v] [-w]
+    ppedit convert INPUT OUTPUT [-g CSV] [-d] [-v] [-w]
+    ppedit check FILE [-d] [-v] [-w]
     ppedit --version
 
 Positional arguments
@@ -35,6 +35,9 @@ Optional arguments
   - `--host HOST`: interface to listen on (default `127.0.0.1`)
 
   - `--no-browser`: do not open a browser window
+
+  - `-v|--verbose`: enable `INFO:` messages on stderr (files loaded and
+    saved, and with `serve` each HTTP request)
 
   - `--version`: print `ppedit` and the installed version, then exit
 

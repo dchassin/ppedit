@@ -10,10 +10,12 @@ Examples
     ppedit serve case14.glm
     ppedit --version
     ppedit serve case14.py --geodata case14_geodata.csv
+    ppedit convert case14.py case14.glm --verbose
 
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
 and opens it in a browser; `--version` prints `ppedit` and the installed
-version (e.g. `ppedit 0.2.0`).
+version (e.g. `ppedit 0.2.0`); `--verbose` adds `INFO:` messages on stderr
+(files loaded and saved, and with `serve` each HTTP request).
 """
 
 import os
@@ -53,11 +55,14 @@ def main(argv:list[str]|None=None) -> int:
     parser.add_argument("--host",default="127.0.0.1",help="interface to listen on (default 127.0.0.1)")
     parser.add_argument("--no-browser",action="store_true",help="do not open a browser")
     parser.add_argument("-d","--debug",action="store_true",help="enable debug logging and traceback on exceptions")
+    parser.add_argument("-v","--verbose",action="store_true",help="enable INFO messages (progress and server requests)")
     parser.add_argument("-w","--warning",action="store_true",help="enable warning messages from python")
     parser.add_argument("--version",action="version",version=f"ppedit {_version()}",help="show the ppedit version and exit")
     args = parser.parse_args(argv)
 
-    logging.basicConfig(level=logging.DEBUG if args.debug else logging.WARNING)
+    logging.basicConfig()
+    logging.getLogger().setLevel(logging.DEBUG if args.debug
+        else logging.INFO if args.verbose else logging.WARNING)
     if not args.warning:
         warnings.simplefilter("ignore")
 
