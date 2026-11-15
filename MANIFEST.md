@@ -73,7 +73,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/README.md` | provenance of the WECC 240 examples | |
 | `examples/wecc240_case.raw` | WECC 240-bus case as PSS/E revision 34 (see `examples/README.md`) | from NREL (see file header); ~220 kB, use `head`; tested by `_test/test_psse.py` |
 | `examples/wecc240_bus.csv` | WECC 240 bus index: row, PSS/E bus number, name, PYPOWER `bus_i` | from NREL |
-| `examples/wecc240_cost.csv` | per-generator cost rows (`id` = bus name + PSS/E ID; `model,startup,shutdown,cost`) | placeholders |
+| `examples/wecc240_cost.csv` | per-generator cost rows (`id` = bus name + PSS/E ID; `model,startup,shutdown,cost`) | costs copied from `wecc240_gentypes.csv` by type |
 | `examples/wecc240_gentypes.csv` | polynomial costs (`c2,c1,c0`) by generator type (the PSS/E generator ID) | written by `wecc240_gentypes.py` |
 | `examples/wecc240_gentypes.py` | derives `wecc240_gentypes.csv` from NREL's WECC 240 scheduling workbook | maintenance script; needs `openpyxl` |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~85 kB, use `head` |

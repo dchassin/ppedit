@@ -25,3 +25,7 @@ case's `Pmax` for them is nameplate capacity, so a single-snapshot OPF
 runs them at `Pmax` unless their `Pmax` is first limited to what is
 available. `SC` and `ND` (0 MW units) have no NREL curve.
 
+`wecc240_cost.csv` has one polynomial cost row per generator (`id` is the
+bus name and PSS/E generator ID), with the `c2,c1,c0` of its type from
+`wecc240_gentypes.csv`; start-up and shutdown costs are 0.
+
