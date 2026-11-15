@@ -121,7 +121,7 @@ function renderChrome() {
   const name = $("#case-name");
   if (document.activeElement !== name) name.value = c.name;
   $("#dirty").hidden = !st.dirty;
-  $("#case-path").textContent = st.path || "not saved to a file";
+  $("#case-path > .path-text").textContent = "\u200e" + (st.path || "not saved to a file") + "\u200e"; // LRMs: keep LTR order in the rtl span
   $("#case-path").title = st.path || "";
   $("#save-btn").disabled = !st.path;
   $("#undo-btn").disabled = !st.can_undo;
