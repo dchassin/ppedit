@@ -164,6 +164,14 @@ td.bad input { color: var(--err); }
 .net-check { display: flex; align-items: center; gap: 4px; border: 1px solid var(--line-strong); background: var(--panel); border-radius: 5px; padding: 3px 8px; cursor: pointer; }
 .net-check:hover:not(:has(:disabled)) { border-color: var(--accent); }
 .net-check:has(:disabled) { opacity: .45; cursor: default; }
+/* network search */
+#net-search { width: 170px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 5px; padding: 4px 8px; font: inherit; }
+#net-search:hover, #net-search:focus { border-color: var(--accent); outline: none; }
+.dropdown.search { min-width: 260px; }
+.dropdown.search .note { max-width: 300px; color: #8a5a00; font-size: 12px; }
+.dropdown.search button { display: flex; justify-content: space-between; gap: 12px; }
+.dropdown.search button:focus { background: var(--sel); outline: none; }
+.dropdown.search button .sub { color: var(--muted); font-size: 11px; white-space: nowrap; }
 /* areas */
 #net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
 #net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }

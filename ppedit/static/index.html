@@ -112,6 +112,11 @@
             <div class="note">US coverage, loaded from USGS and Census Bureau map services</div>
           </div>
         </div>
+        <div class="menu net-search">
+          <input id="net-search" type="search" placeholder="Find bus or branch…" spellcheck="false" autocomplete="off" aria-label="Find a bus or branch"
+            title="Press Enter to search. N or bus N: bus N · A-B or A to B: branches between buses A and B · branch N: branches at bus N · other text: bus geodata columns">
+          <div id="search-menu" class="dropdown left search" role="listbox"></div>
+        </div>
         <input type="file" id="geodata-input" accept=".csv,text/csv" hidden>
       </div>
       <div class="map-credit" id="map-credit" hidden></div>
