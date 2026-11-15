@@ -121,6 +121,12 @@ API key to start sessions; tests use a fake client).
   `olCache` signature), where ties always keep a column in each box and
   a jog (never merged). Geodata positions are fixed, so an area may
   show as several patches there.
+- Labels menu (`S.labels`, `LABEL_ITEMS`, `dataLabels` in `app.js`): per
+  table a set of keys, built-in items prefixed `:` (`:voltage`, `:gen`,
+  `:load`, `:flow`, `:loading`) and column names (`bus_i` is the bus
+  number), saved in `localStorage` as `ppedit.labels`. Defaults reproduce
+  the drawing from before the menu existed. Data labels are not placed to
+  avoid collisions; DC lines get none.
 - A case without an `areas` table gets default rows from the bus areas on
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
   written" comment only when the rows differ from those defaults.
