@@ -88,7 +88,8 @@ The network diagram has a *Geodata* layout, available when the case has
 geodata, that places buses at their locations on a map (Web Mercator) with
 optional USGS satellite imagery, Census TIGERweb roads, and state and county
 boundaries and names. Buses without geodata are drawn next to their located
-neighbors (dashed) or left out.
+neighbors (dashed) or left out. Clicking where several buses overlap lists
+them to choose from.
 
 A search box in the network toolbar finds a bus (by number or geodata
 text) or a branch or DC line (by its two bus numbers, or all those at a

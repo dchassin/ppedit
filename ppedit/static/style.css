@@ -178,6 +178,7 @@ td.bad input { color: var(--err); }
 #net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
 .res-block.wide { grid-column: 1 / -1; }
 .dropdown.left { left: 0; right: auto; }
+.dropdown.at-point { right: auto; max-height: 50vh; } /* left/top set where it opens (#bus-menu) */
 .dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
 .dropdown label:hover { background: var(--sel); }
 .dropdown label.disabled { color: var(--muted); }
