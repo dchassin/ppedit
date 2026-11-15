@@ -110,7 +110,7 @@ What is not promised
     an error naming the files to open instead.
 
   - `areas` is not written to GLM (there is no GridLAB-D object for it).
-    `dclinecost` is written to GLM as `pp_dclinecost` runtime-class objects
+    `dclinecost` is written to GLM as `dclinecost` runtime-class objects
     with the `pypower.gencost` properties, parent the DC line (GridLAB-D
     keeps them but does not solve with them). `areas` is not passed to the solver: the
     per-area results (`Case.solve`) are sums over the bus `area` column, and

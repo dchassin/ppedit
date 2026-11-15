@@ -79,11 +79,13 @@ Caveats
     `Sfrom` and `Sto`.
 
   - `module pypower` has no DC line cost class, so GLM output declares a
-    runtime class `pp_dclinecost` with the properties of `pypower.gencost`
+    runtime class `dclinecost` with the properties of `pypower.gencost`
     (`model`, `startup`, `shutdown`, `costs`) and writes one object per
     `dclinecost` row, named `pp_dclinecost_<n>` with its DC line as parent
     (`pypower.gencost` itself must have a generator parent in GridLAB-D).
     GridLAB-D loads these objects but does not pass them to its solver.
+    The class is named for a `pypower.dclinecost` class that GridLAB-D is
+    expected to add; GLM input also reads `object pypower.dclinecost`.
 
   - GLM output names buses `pp_bus_<bus_i>`, generators `pp_gen_<n>`,
     branches `pp_branch_<n>` and cost curves `pp_gencost_<n>` (1-based row
@@ -646,7 +648,7 @@ def {name}():
         return out.getvalue()
 
     def _dump_glm_dclinecost(self,out):
-        """Write `dclinecost` rows as `pp_dclinecost` objects (runtime class
+        """Write `dclinecost` rows as `dclinecost` objects (runtime class
         with the `pypower.gencost` properties, parent the DC line)"""
         out.write("\n//\n// dclinecost (module pypower has no DC line cost class;"
             " same properties as pypower.gencost)\n//\n")
@@ -1522,7 +1524,7 @@ def _read_geodata_csv(text):
         rows.append([line[k] for k in index] + [line[k] for k in aux])
     return rows,[header[k] for k in aux]
 
-DCLINECOST_CLASS = "pp_dclinecost"
+DCLINECOST_CLASS = "dclinecost"
 """GLM runtime class of the DC line cost objects (one per `dclinecost` row,
 parent the DC line, with the properties of `pypower.gencost`)"""
 
@@ -1927,7 +1929,7 @@ def _parse_glm(text):
     return data,notes
 
 def _glm_costs(objects,parents):
-    """Read cost objects (`gencost` or `pp_dclinecost`) as matrix rows ordered
+    """Read cost objects (`gencost` or `dclinecost`) as matrix rows ordered
     by parent (`parents` maps object names to row numbers); a second cost
     object of the same parent is its Q cost and goes after all the P costs"""
     costs,seen = [],{}

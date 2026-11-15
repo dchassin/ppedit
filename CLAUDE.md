@@ -77,10 +77,12 @@ API key to start sessions; tests use a fake client).
 - GLM `dcline`: `Sfrom` = `Pf + j Pt`, `Sto` = `Qf + j Qt` (GridLAB-D's
   positional mapping in `pypower.cpp` and `py2glm.py`, not the meaning in
   the `dcline.cpp` property descriptions). `dclinecost` has no module
-  pypower class: GLM output writes it as `pp_dclinecost` runtime-class
+  pypower class: GLM output writes it as `dclinecost` runtime-class
   objects (the `pypower.gencost` properties, parent the DC line, named
   `pp_dclinecost_<n>`; `_dump_glm_dclinecost`/`_glm_costs` in `case.py`),
-  since `pypower.gencost` must have a gen parent. `areas`, which module
+  since `pypower.gencost` must have a gen parent; named for the
+  `pypower.dclinecost` class gridlabd is expected to add (input reads
+  that too). Drop the `class dclinecost` declaration once it exists. `areas`, which module
   pypower also lacks, is dropped on GLM output (bus `area` is kept). `areas` is not passed to
   the solver; per-area results are computed in `Case._area_summary`.
 - GLM import keeps only `bus`, `gen`, `branch`, `gencost`, `dcline`; everything else

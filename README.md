@@ -157,7 +157,7 @@ Power flow keeps the line's `Pf` and applies its losses (`loss0 +
 loss1*Pf`); OPF dispatches `Pf` within `Pmin`..`Pmax` at the `dclinecost`
 cost. GLM files store DC lines as `module pypower` `dcline` objects;
 GridLAB-D has no DC line cost class, so `dclinecost` rows are written as
-`pp_dclinecost` objects (a runtime class with the `pypower.gencost`
+`dclinecost` objects (a runtime class with the `pypower.gencost`
 properties, parent the DC line) and read back from them; GridLAB-D keeps
 them but does not solve with them.
 

@@ -35,18 +35,22 @@ def test_round_trip(case,fmt,ext):
     assert again.tables == case.tables
 
 def test_round_trip_glm(case):
-    """dcline and dclinecost survive .glm (costs as pp_dclinecost objects)"""
+    """dcline and dclinecost survive .glm (costs as dclinecost objects)"""
     text = case.dumps("glm")
     assert text.count("object pypower.dcline") == 4
     assert 'from "pp_bus_30";' in text and "status OUT;" in text
     assert "Sfrom 10+8.9j MVA;" in text # Pf + j Pt, as GridLAB-D passes it to PYPOWER
     assert "dclinecost row(s) not written" not in text
-    assert text.count("object pp_dclinecost") == 4
-    assert "class pp_dclinecost" in text and 'parent "pp_dcline_4";' in text
+    assert text.count("object dclinecost") == 4
+    assert "class dclinecost" in text and 'parent "pp_dcline_4";' in text
     again = Case.load("x.glm",text)
     assert again.tables["dcline"] == case.tables["dcline"]
     assert again.tables["dclinecost"] == case.tables["dclinecost"]
     assert again.notes == []
+    # the module class GridLAB-D is expected to add reads the same
+    text = text.replace("object dclinecost","object pypower.dclinecost")
+    again = Case.load("x.glm",text[:text.index("class dclinecost")]+text[text.index("object pypower.dclinecost"):])
+    assert again.tables["dclinecost"] == case.tables["dclinecost"]
 
 def test_glm_py2glm_style():
     """GLM written by `gridlabd convert -t pypower`: numeric status, unquoted names, outputs"""
