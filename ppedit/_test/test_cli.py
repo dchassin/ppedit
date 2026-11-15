@@ -19,6 +19,14 @@ def test_check_errors(tmp_path,capsys):
     assert main(["check",str(path)]) == 1
     assert "no reference" in capsys.readouterr().out
 
+def test_version(capsys):
+    import pytest # pylint: disable=import-outside-toplevel
+    from ppedit import __version__ # pylint: disable=import-outside-toplevel
+    with pytest.raises(SystemExit) as exc:
+        main(["--version"])
+    assert exc.value.code == 0
+    assert capsys.readouterr().out.strip() == f"ppedit {__version__}"
+
 def test_bad_input(capsys):
     assert main(["convert","missing.py"]) == 1
     assert "ERROR [ppedit]" in capsys.readouterr().err
