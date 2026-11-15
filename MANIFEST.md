@@ -38,7 +38,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
 | `ppedit/static/index.html` | editor page layout | |
 | `ppedit/static/style.css` | editor styles | |
-| `ppedit/static/app.js` | editor logic: tables, network diagram (simple, classic and one-line styles; force and geodata layouts with map layers), results, issues, Claude sessions | checked by hand (see `CLAUDE.md`) |
+| `ppedit/static/app.js` | editor logic: tables, network diagram (simple, classic and one-line styles; force and geodata layouts with map layers; labels menu), results, issues, Claude sessions | checked by hand (see `CLAUDE.md`) |
 | `ppedit/.gitignore` | generated-output ignores | |
 
 ## Tests
@@ -63,6 +63,11 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/pypower/AUTHORS` | PYPOWER authors | copied from the `pypower` package |
 | `examples/pypower/case*.py` | PYPOWER built-in cases, unchanged | copied; don't edit; case300.py ~60 kB |
 | `examples/pypower/case*.glm` | the same cases as `module pypower` GLM models | generated; don't edit; case300.glm ~250 kB, use `head` |
+| `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~85 kB, use `head` |
+| `examples/wecc240_geodata.csv` | bus locations for the WECC 240-bus case (`BUS_I,LAT,LON` plus `GEOHASH,NAME,GEN,LOAD,BA,COUNTY`) | for `--geodata` or **Map ▸ Load CSV…** |
+| `examples/wecc240_map.py` | WECC 240-bus case with its `geodata` and `geotags` | written by ppedit; ~95 kB, use `head` |
+| `examples/wecc240_map.json` | the same case as JSON | written by ppedit; ~215 kB, use `head` |
+| `examples/wecc240_map.glm` | the same case as a `module pypower` GLM model (keeps bus latitude/longitude) | written by ppedit; ~350 kB, use `head` |
 
 ## Repository
 

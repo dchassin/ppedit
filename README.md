@@ -100,6 +100,19 @@ In the editor:
     each area its own box of columns (areas left to right in number order);
     a line between two areas is drawn with a jog from its column in one box
     to its column in the other, so every bus bar stays inside its area.
+
+    The **Labels ▾** menu (between the layout selector and **Areas**) turns
+    the diagram labels on and off. For buses: the bus number, voltage,
+    generation and load; for branches: power flow and loading (% of
+    `rateA`, after a solve). Any column of the bus and branch tables can
+    also be shown as a label (`name value unit`, e.g. `baseKV 345 kV` or
+    `rateA 250 MVA`). Each style keeps its own choices: by default the
+    simple style shows bus numbers only, and the classic and one-line styles
+    show bus number, voltage, generation, load and flows. Power flow and
+    loading labels need a solution, so they are greyed out (with a note in
+    the menu) until **Run PF** or **Run OPF**. **None** clears every label
+    of the current style and **Defaults** restores its standard ones. The
+    choices are remembered by the browser.
   - **Buses / Generators / Branches / Gen costs / DC lines / DC line
     costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines

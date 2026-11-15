@@ -128,6 +128,9 @@ What is not promised
     is not dragged); each line has a column at each of its buses joined by
     one horizontal segment, which keeps bus bars short but makes large
     meshed cases wide, and lines that skip rows still cross bus bars.
+    Label choices (**Labels ▾**) are kept in the browser, not in the case,
+    and labels are not placed to avoid each other, so many data labels on a
+    dense diagram overlap.
 
   - Claude sessions send the case data they read, and the files and web
     pages they use, to the Anthropic API; they are kept in server memory

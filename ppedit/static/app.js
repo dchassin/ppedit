@@ -14,6 +14,7 @@ const S = {
   style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
   layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
   areas: (() => { try { return localStorage.getItem("ppedit.areas") === "1"; } catch (_) { return false; } })(), // color buses by area
+  labels: null,        // style -> {bus, branch}: Sets of label keys (see loadLabels)
   map: (() => {
     const def = { imagery: false, roads: false, states: true, stateNames: true, counties: false, countyNames: false };
     try { return { ...def, ...JSON.parse(localStorage.getItem("ppedit.map") || "{}") }; } catch (_) { return def; }
@@ -524,6 +525,123 @@ function busSummary() {
   return { gen, ngen, conn, volt, res };
 }
 
+// ---------------------------------------------------------------- diagram labels
+//
+// The Labels menu turns labels on buses and branches on and off: built-in items (keys
+// starting with ":") and any column of the bus and branch tables (keys are column names;
+// the bus_i column is the bus number). Data labels read "name value unit".
+
+// Each diagram style keeps its own choices; the defaults reproduce the drawing from before
+// the menu existed. Items marked "solved" need a power flow or OPF solution.
+const LABEL_ITEMS = {
+  bus: [[":voltage", "Voltage", "Voltage magnitude and angle (solution, or case values)"],
+    [":gen", "Generation", "Generation MW (one-line: generator MW and MVAr)"],
+    [":load", "Load", "Load MW (one-line: load MW and MVAr)"]],
+  branch: [[":flow", "Power flow", "Branch flow MW from the from bus (one-line: MW and MVAr)", "solved"],
+    [":loading", "Loading", "Branch loading in % of rateA", "solved"]],
+};
+const LABEL_DEFAULTS = {
+  simple: { bus: ["bus_i"], branch: [] },
+  classic: { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] },
+  oneline: { bus: ["bus_i", ":voltage", ":gen", ":load"], branch: [":flow"] },
+};
+
+function loadLabels() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem("ppedit.labels") || "null"); } catch (_) { /* storage unavailable */ }
+  S.labels = {};
+  for (const [style, def] of Object.entries(LABEL_DEFAULTS)) {
+    const v = s && s[style] && Array.isArray(s[style].bus) ? s[style] : def;
+    S.labels[style] = { bus: new Set(v.bus), branch: new Set(v.branch || []) };
+  }
+}
+
+const curLabels = () => S.labels[S.style] || S.labels.simple;
+const showLabel = (table, key) => curLabels()[table].has(key);
+
+function labelValue(spec, v) {
+  if (spec.kind === "enum") return spec.options[v] ?? v;
+  if (typeof v === "number" && !Number.isInteger(v)) v = +v.toPrecision(5);
+  return spec.unit ? `${v} ${spec.unit}` : `${v}`;
+}
+
+function dataLabels(table, row) {
+  // "name value unit" for each table column picked in the Labels menu (bus_i is the bus number)
+  const out = [];
+  S.meta.columns[table].forEach((spec, j) => {
+    if (table === "bus" && j === 0) return;
+    if (showLabel(table, spec.name)) out.push(`${spec.name} ${labelValue(spec, row[j])}`);
+  });
+  return out;
+}
+
+function branchLabels(i, rb) {
+  // extra text lines for branch i: loading (after a solve) and data labels
+  const out = [];
+  if (showLabel("branch", ":loading") && rb && rb.loading_pct !== null) out.push(`${fmt(rb.loading_pct, 0)}%`);
+  return out.concat(dataLabels("branch", S.state.case.tables.branch[i]));
+}
+
+function setLabel(table, key, on) {
+  curLabels()[table][on ? "add" : "delete"](key);
+  saveLabels();
+}
+
+function saveLabels() {
+  const out = {};
+  for (const [style, L] of Object.entries(S.labels)) out[style] = { bus: [...L.bus], branch: [...L.branch] };
+  try { localStorage.setItem("ppedit.labels", JSON.stringify(out)); } catch (_) { /* storage unavailable */ }
+  renderNetwork();
+}
+
+function buildLabelMenu() {
+  const menu = $("#label-menu");
+  const box = (table, key, text, title) => h("label", { title },
+    h("input", { type: "checkbox", "data-label": `${table}:${key}` }), text);
+  const group = (table, name) => h("div", { class: "col" },
+    h("div", { class: "sep" }, name),
+    LABEL_ITEMS[table].map(([key, text, title]) => box(table, key, text, title)),
+    h("div", { class: "sep" }, `${name.replace(/es$/, "")} data`),
+    S.meta.columns[table].map((spec, j) => box(table, spec.name,
+      table === "bus" && j === 0 ? `${spec.name} (number)` : spec.name,
+      `${spec.desc || spec.name}${spec.unit ? ` (${spec.unit})` : ""}`)));
+  menu.replaceChildren(h("div", { class: "head", id: "label-head" }),
+    group("bus", "Buses"), group("branch", "Branches"),
+    h("div", { class: "note", id: "label-note" }),
+    h("div", { class: "foot" },
+      h("button", { "data-action": "labels-none" }, "None"),
+      h("button", { "data-action": "labels-default" }, "Defaults")));
+  menu.addEventListener("change", e => {
+    const cb = e.target.closest("[data-label]");
+    if (!cb) return;
+    const [table, key] = cb.dataset.label.split(/:(.*)/s);
+    setLabel(table, key, cb.checked);
+  });
+}
+
+function updateLabelMenu() {
+  const solved = !!(S.state && S.state.result && S.state.result.success);
+  const name = { simple: "Simple", classic: "Classic", oneline: "One-line" }[S.style] || S.style;
+  const head = $("#label-head");
+  if (head) head.textContent = `Labels for the ${name} style`;
+  let waiting = false;
+  for (const cb of $$("#label-menu [data-label]")) {
+    const [table, key] = cb.dataset.label.split(/:(.*)/s);
+    cb.checked = showLabel(table, key);
+    const item = LABEL_ITEMS[table].find(it => it[0] === key);
+    if (!item) continue;
+    const off = item[3] === "solved" && !solved;
+    if (off && cb.checked) waiting = true;
+    cb.closest("label").classList.toggle("disabled", off);
+    cb.closest("label").title = off ? `${item[2]}: shown after a solve (Run PF or Run OPF)` : item[2];
+  }
+  const note = $("#label-note");
+  if (note) {
+    note.textContent = waiting ? "Power flow and loading labels appear after a solve: Run PF or Run OPF." : "";
+    note.hidden = !waiting;
+  }
+}
+
 function renderNetwork() {
   updateNetTools();
   if (S.style === "oneline") return renderOneline();
@@ -557,7 +675,7 @@ function renderNetwork() {
     const ax = p.x + dx * t, ay = p.y + dy * t;
     const sx = fwd ? ux : -ux, sy = fwd ? uy : -uy;
     const a = 4;
-    labels.append(sv("path", {
+    if (classic) labels.append(sv("path", {
       d: `M${ax + sx * a},${ay + sy * a} L${ax - sx * a - sy * a * 0.8},${ay - sy * a + sx * a * 0.8} L${ax - sx * a + sy * a * 0.8},${ay - sy * a - sx * a * 0.8} Z`,
       class: "flow-arrow", fill: color || NEUTRAL_LINE,
     }));
@@ -567,6 +685,21 @@ function renderNetwork() {
     const lx = ax + nx * off * (ny < 0 ? -1 : 1), ly = ay + ny * off * (ny < 0 ? -1 : 1);
     const txt = sv("text", { x: lx, y: ly, class: "flow-label", "text-anchor": "middle", "dominant-baseline": "middle", transform: `rotate(${ang} ${lx} ${ly})` });
     txt.textContent = `${Math.abs(mw).toFixed(1)} MW`;
+    if (showLabel("branch", ":flow")) labels.append(txt);
+  };
+  // picked branch labels: a block at mid-line on the side away from the flow label
+  const lineText = (p, q, lines) => {
+    if (!lines.length) return;
+    const dx = q.x - p.x, dy = q.y - p.y, len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len, s = ny < 0 ? 1 : -1, off = classic ? 9 : 6;
+    const lx = (p.x + q.x) / 2 + nx * off * s, ly = (p.y + q.y) / 2 + ny * off * s;
+    const txt = sv("text", { x: lx, y: ly, class: "line-label", "text-anchor": Math.abs(nx) < 0.3 ? "middle" : nx * s > 0 ? "start" : "end" });
+    const y0 = ny * s < -0.3 ? -(lines.length - 1) * 1.1 : Math.abs(ny) <= 0.3 ? -(lines.length - 1) * 0.55 : 0.8;
+    lines.forEach((t, j) => {
+      const ts = sv("tspan", { x: lx, dy: `${j ? 1.1 : y0 + 0.35}em` });
+      ts.textContent = t;
+      txt.append(ts);
+    });
     labels.append(txt);
   };
   // edges
@@ -605,8 +738,9 @@ function renderNetwork() {
         const mx = p.x + dx * 0.25, my = p.y + dy * 0.25;
         for (const s of [-3, 3]) g.append(sv("circle", { cx: mx + ux * s, cy: my + uy * s, r: 4.5, class: "xfmr-sym" }));
       }
-      if (rb) flowMark(p, q, rb.PF, line.style.stroke);
     }
+    if (rb) flowMark(p, q, rb.PF, line.style.stroke);
+    lineText(p, q, branchLabels(i, rb));
   });
   // DC lines: dash-dot lines with a "DC" converter tag near the from bus
   c.tables.dcline.forEach((d, i) => {
@@ -666,24 +800,37 @@ function renderNetwork() {
       node.setAttribute("class", cls.join(" "));
       node.append(shape);
       if (b[1] === 3) node.append(sv("circle", { r: r + 4, class: "ref-ring" }));
-      const lines = [[`${b[0]}`, "num"], [`${v.Va.toFixed(2)}°`, ""]];
-      if (hasGen) lines.push([`G ${(sum.gen.get(b[0]) || 0).toFixed(1)} MW`, "gen-mw"]);
-      if (b[2] !== 0) lines.push([`L ${b[2].toFixed(1)} MW`, "load-mw"]);
+      const lines = [];
+      if (showLabel("bus", "bus_i")) lines.push([`${b[0]}`, "num"]);
+      if (showLabel("bus", ":voltage")) lines.push([`${v.Va.toFixed(2)}°`, ""]);
+      if (hasGen && showLabel("bus", ":gen")) lines.push([`G ${(sum.gen.get(b[0]) || 0).toFixed(1)} MW`, "gen-mw"]);
+      if (b[2] !== 0 && showLabel("bus", ":load")) lines.push([`L ${b[2].toFixed(1)} MW`, "load-mw"]);
+      for (const t of dataLabels("bus", b)) lines.push([t, "data"]);
       const label = sv("text", { x: r + 5, y: -r + 2, class: "ol-label" });
       lines.forEach(([t, c2], j) => {
         const ts = sv("tspan", { x: r + 5, dy: j ? "1.15em" : 0, class: c2 });
         ts.textContent = t;
         label.append(ts);
       });
-      node.append(label);
+      if (lines.length) node.append(label);
     } else {
       r = b[1] === 3 ? 9 : 7;
       if (hasGen) node.append(sv("circle", { r: r + 4, class: "gen" }));
       node.append(sv("circle", { r, class: "body", fill: sum.res ? vColor(v.Vm) : TYPE_COLOR[b[1]] || "#999" }));
       if (b[2] > 0) node.append(sv("path", { d: `M${r + 2},${r + 1} l6,6 m-3,0 h3 v-3`, class: "load" }));
+      const lines = [...(showLabel("bus", "bus_i") ? [`${b[0]}`] : [])];
+      if (showLabel("bus", ":voltage")) lines.push(`${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`);
+      if (hasGen && showLabel("bus", ":gen")) lines.push(`G ${(sum.gen.get(b[0]) || 0).toFixed(1)} MW`);
+      if (b[2] !== 0 && showLabel("bus", ":load")) lines.push(`L ${b[2].toFixed(1)} MW`);
+      lines.push(...dataLabels("bus", b));
       const label = sv("text", { x: r + 5, y: -r - 1 });
-      label.textContent = b[0];
-      node.append(label);
+      lines.forEach((t, j) => {
+        const ts = sv("tspan", { x: r + 5, dy: j ? "1.15em" : 0 });
+        if (j || !showLabel("bus", "bus_i")) ts.setAttribute("class", "data");
+        ts.textContent = t;
+        label.append(ts);
+      });
+      if (lines.length) node.append(label);
     }
     const title = sv("title");
     title.textContent = `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), area ${b[6]}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nPd ${b[2]} MW, Qd ${b[3]} MVAr\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`;
@@ -964,6 +1111,16 @@ function renderOneline() {
     b.textContent = `${num(q)} MVAr`;
     text.append(a, b);
   };
+  // picked branch labels: further lines to the right of a vertical line, reading upward
+  const dataText = (xx, yc, rows) => {
+    if (!showText) return;
+    rows.forEach((s, j) => {
+      const xl = xx + 15 + 10 * j;
+      const t = sv("text", { x: xl, y: yc, class: "ol-flow ol-data", "text-anchor": "middle", "dominant-baseline": "hanging", transform: `rotate(-90 ${xl} ${yc})` });
+      t.textContent = s;
+      text.append(t);
+    });
+  };
   // disconnect switch between ya (pivot, bus side) and yb; open blades swing out 35 degrees
   const discSwitch = (xx, ya, yb, closed) => {
     const sgn = Math.sign(yb - ya), len = Math.abs(yb - ya);
@@ -994,7 +1151,7 @@ function renderOneline() {
       sv("path", { d: `M${xx - 7},${gc} c2,-6 5,-6 7,0 s5,6 7,0`, class: "wave" }));
     tip(sym, `gen ${i + 1} at bus ${gr[0]} (${on ? "in service" : "out of service"})\nPg ${num(p)} MW, Qg ${num(q)} MVAr`);
     wires.append(sym);
-    flowLabels(xx, yb - 58, p, q);
+    if (showLabel("bus", ":gen")) flowLabels(xx, yb - 58, p, q);
     if (showText) {
       const t = sv("text", { x: xx, y: gc - 16, class: "ol-name", "text-anchor": "middle" });
       t.textContent = `G${i + 1}`;
@@ -1013,7 +1170,7 @@ function renderOneline() {
     const sym = onPick(sv("path", { d: `M${xx - 7},${ya} L${xx + 7},${ya} L${xx},${ya + 13} Z`, class: "ol-load" + (on ? "" : " dead") }), "bus", i);
     tip(sym, `load at bus ${b[0]}${on ? "" : " (bus NONE: disconnected)"}\nPd ${num(p)} MW, Qd ${num(q)} MVAr`);
     wires.append(sym);
-    flowLabels(xx, yb + 57, p, q);
+    if (showLabel("bus", ":load")) flowLabels(xx, yb + 57, p, q);
   });
   // a line's route: straight down one column, or down its column at the upper bus, across
   // (one horizontal jog, in the first gap below the upper bar), and down its column at the lower bus
@@ -1056,9 +1213,10 @@ function renderOneline() {
     if (rb) {
       // signed flow from the upper bus toward the lower bus
       const p = fromTop ? rb.PF : rb.PT, q = fromTop ? rb.QF : rb.QT;
-      flowLabels(xx, yl, p, q);
+      if (showLabel("branch", ":flow")) flowLabels(xx, yl, p, q);
       if (Math.abs(p) >= 0.05) arrow(xx, yl, p > 0);
     }
+    dataText(xx, yl, branchLabels(i, rb));
     const hit = onPick(sv("path", { d: R.path(ya, yb), class: "edge-hit", fill: "none" }), "branch", i);
     tip(hit, `branch ${i + 1}: ${b[0]} → ${b[1]}${xfmr ? " (transformer)" : ""}${on ? "" : " OUT"}` +
       (rb ? `\nPF ${fmt(rb.PF, 1)} MW, QF ${fmt(rb.QF, 1)} MVAr, loading ${rb.loading_pct === null ? "unrated" : fmt(rb.loading_pct, 0) + "%"}` : ""));
@@ -1111,12 +1269,18 @@ function renderOneline() {
     bars.append(hit);
     if (showText) {
       const t = sv("text", { x: B.x0 - 6, y: B.y - 3, class: "ol-bus", "text-anchor": "end" });
-      const t1 = sv("tspan", { x: B.x0 - 6, class: "num" });
-      t1.textContent = `${areas && priceRef.has(b[0]) ? "★ " : ""}${b[1] === 3 ? "REF " : ""}${b[0]}`;
-      const t2 = sv("tspan", { x: B.x0 - 6, dy: "1.2em" });
-      t2.textContent = `${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`;
-      t.append(t1, t2);
-      text.append(t);
+      const head = `${areas && priceRef.has(b[0]) ? "★ " : ""}${b[1] === 3 ? "REF " : ""}${showLabel("bus", "bus_i") ? b[0] : ""}`.trim();
+      const rows = [];
+      if (head) rows.push([head, "num"]);
+      if (showLabel("bus", ":voltage")) rows.push([`${v.Vm.toFixed(3)}∠${v.Va.toFixed(1)}°`, null]);
+      for (const d of dataLabels("bus", b)) rows.push([d, "data"]);
+      rows.forEach(([s, cl], j) => {
+        const ts = sv("tspan", { x: B.x0 - 6, dy: j ? "1.2em" : 0 });
+        if (cl) ts.setAttribute("class", cl);
+        ts.textContent = s;
+        t.append(ts);
+      });
+      if (rows.length) text.append(t);
     }
   });
   g.append(wires, bars, lines, text);
@@ -1291,6 +1455,7 @@ function updateNetTools() {
   sel.title = oneline ? "The one-line style computes its own layout"
     : has ? "Bus positions" : "Geodata layout: load a CSV of bus locations (Map ▾) or open a case with geodata";
   $("[data-action=relayout]").disabled = useGeo();
+  updateLabelMenu();
   const na = areaList().length, ab = $("#net-areas");
   ab.checked = S.areas;
   ab.disabled = na < 2;
@@ -1938,6 +2103,12 @@ async function onAction(btn) {
     else if (a === "del-rows") await deleteRows();
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
+    else if (a === "labels-none") { curLabels().bus.clear(); curLabels().branch.clear(); saveLabels(); }
+    else if (a === "labels-default") {
+      const d = LABEL_DEFAULTS[S.style] || LABEL_DEFAULTS.simple;
+      S.labels[S.style] = { bus: new Set(d.bus), branch: new Set(d.branch) };
+      saveLabels();
+    }
     else if (a === "geodata-load") $("#geodata-input").click();
     else if (a === "geodata-export") downloadUrl("/api/export?format=csv");
     else if (a === "geodata-clear") {
@@ -1988,6 +2159,8 @@ function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("op
 
 async function init() {
   S.meta = await api("/api/meta");
+  loadLabels();
+  buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
   document.addEventListener("click", e => {
     const m = e.target.closest("[data-menu]");

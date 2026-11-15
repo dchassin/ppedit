@@ -342,3 +342,13 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 .claude-log .working { color: var(--muted); font-style: italic; }
 .claude-input { display: flex; gap: 6px; padding: 8px 10px; border-top: 1px solid var(--line); }
 .claude-input textarea { flex: 1; resize: vertical; min-height: 38px; max-height: 200px; border: 1px solid var(--line-strong); border-radius: 5px; padding: 6px 8px; font: inherit; }
+/* diagram labels menu and picked data labels */
+.dropdown.labels.open { display: grid; grid-template-columns: auto auto; column-gap: 4px; }
+.dropdown.labels .foot { grid-column: 1 / -1; display: flex; gap: 4px; border-top: 1px solid var(--line-strong); margin-top: 4px; padding-top: 4px; }
+.dropdown.labels .foot button { width: auto; }
+#net .node text .data, #net.classic .node text.ol-label .data { font-size: 9px; fill: #4b5652; font-weight: 400; }
+#net .line-label { font: 8.5px var(--mono); fill: #4b5652; paint-order: stroke; stroke: #fff; stroke-width: 2.5px; pointer-events: none; }
+#net.oneline .ol-bus .data { font-size: 8.5px; fill: #4b5652; font-weight: 400; }
+#net.oneline .ol-flow.ol-data { fill: #6b5a8e; }
+.dropdown.labels .head { grid-column: 1 / -1; font-size: 12px; font-weight: 600; padding: 4px 10px 0; }
+.dropdown.labels .note { grid-column: 1 / -1; max-width: none; color: #8a5a00; }
