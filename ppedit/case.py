@@ -475,7 +475,7 @@ class Case:
             data,notes = _parse_glm(text)
             case = cls(data,name)
             case.notes = notes
-        _logger.debug("loaded %s: %s",path,case.size())
+        _logger.info("loaded %s: %s",path,case.size())
         return case
 
     # ----- output -----
@@ -550,6 +550,7 @@ class Case:
         text = self.dumps(fmt)
         with open(path,"w",encoding="utf-8") as fh:
             fh.write(text)
+        _logger.info("saved %s: %s",path,self.size())
 
     def _dump_py(self):
         out = io.StringIO()

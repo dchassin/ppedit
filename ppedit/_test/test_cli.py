@@ -51,3 +51,18 @@ def test_serve_exit(capsys):
     thread.join(5)
     assert not thread.is_alive() and out["code"] == 0
     assert "server stopped" in capsys.readouterr().out
+
+def test_verbose(tmp_path,caplog):
+    import logging # pylint: disable=import-outside-toplevel
+    out = str(tmp_path/"case3.json")
+    with caplog.at_level(logging.NOTSET):
+        assert main(["convert",os.path.join(DATA,"case3.glm"),out]) == 0
+        assert not [r for r in caplog.records if r.levelno == logging.INFO]
+        assert main(["convert","-v",os.path.join(DATA,"case3.glm"),out]) == 0
+        messages = [r.getMessage() for r in caplog.records if r.levelno == logging.INFO]
+    assert any(m.startswith("loaded ") for m in messages)
+    assert any(m.startswith("saved ") for m in messages)
+    assert logging.getLogger("werkzeug").level == logging.INFO
+    for argv in (["check"],["check","-d"]):
+        main(argv+[out])
+        assert logging.getLogger("werkzeug").level == logging.WARNING
