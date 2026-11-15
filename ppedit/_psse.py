@@ -197,7 +197,8 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
     -------
 
       - `dict`: `ppc` dict (`version`, `baseMVA`, `bus`, `gen`, `branch`,
-        `dcline`; lists of rows in PYPOWER column order)
+        `dcline`; lists of rows in PYPOWER column order) and
+        `psse_revision`, the PSS/E revision the file was read as
 
       - `list[str]`: notes on what was not converted
 
@@ -426,7 +427,8 @@ def parse_raw(text:str) -> tuple[dict,list[str]]:
     # ----- two-terminal DC lines -----
     dcline = _dclines(sect("two-terminal dc"),bus,index,notes)
 
-    data = {"version":"2","baseMVA":sbase,"bus":bus,"gen":gen,"branch":branch}
+    data = {"version":"2","baseMVA":sbase,"bus":bus,"gen":gen,"branch":branch,
+        "psse_revision":rev}
     if dcline:
         data["dcline"] = dcline
     return data,notes

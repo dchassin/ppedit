@@ -141,7 +141,9 @@ In the editor:
   - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
     branch flows and loading, DC line flows and losses, area totals, the
     PYPOWER report, and **Apply solution to case** to copy the solved
-    Vm/Va/Pg/Qg and DC line flows into the model.
+    Vm/Va/Pg/Qg and DC line flows into the model. Results also reports how
+    the open file was read (format, PSS/E revision, rows read, and what was
+    not converted or kept); opening a file with such notes shows this page.
   - **Issues**: every validation error and warning; click one to jump to
     the cell.
   - **Claude**: any number of conversations with Claude, each in its own tab (the

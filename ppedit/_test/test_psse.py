@@ -113,10 +113,19 @@ def test_api_and_cli(post,tmp_path,capsys):
     with open(V35,encoding="utf-8") as fh:
         status,state = post("/api/open",{"filename":"psse_v35.raw","text":fh.read()})
     assert status == 200 and state["case"]["tables"]["bus"][0][0] == 1
+    source = state["source"]
+    assert source["file"] == "psse_v35.raw" and source["format"] == "raw"
+    assert source["revision"] == 35 and source["size"]["bus"] == 3
+    assert any("switching device" in x for x in source["notes"])
     status,state = post("/api/open",{"path":V35})
     assert status == 200 and state["format"] == "raw"
     status,err = post("/api/save",{})
     assert status == 400 and "read only" in err["error"]
+    status,state = post("/api/save",{"path":str(tmp_path/"v35.glm")})
+    assert status == 200 and not state["case"]["notes"]
+    assert state["source"]["notes"]     # the load report stays after saving
+    status,state = post("/api/new",{})
+    assert state["source"] is None
     out = str(tmp_path/"v33.glm")
     assert main(["convert",V33,out]) == 0
     assert "star point" in capsys.readouterr().err

@@ -309,6 +309,11 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 .issue .lvl.error { background: var(--err-bg); color: var(--err); }
 .issue .lvl.warning { background: var(--warn-bg); color: var(--warn); }
 .issue .where { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 120px; }
+.source-report { margin: 0 0 14px; padding-bottom: 10px; }
+.source-report:not(:first-child) { margin-top: 14px; }
+.source-report .hint { display: block; margin: 0; padding: 8px 12px 0; }
+.source-notes { margin: 8px 0 0; padding: 0 12px 0 32px; }
+.source-notes li { margin: 3px 0; }
 .notes { background: var(--warn-bg); border: 1px solid #f0d58a; border-radius: 6px; padding: 8px 12px; margin-bottom: 12px; }
 
 .toast {
