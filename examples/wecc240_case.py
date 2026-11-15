@@ -1,8 +1,8 @@
-"""PYPOWER case wecc240 (written by ppedit)"""
+"""PYPOWER case wecc240_map (written by ppedit)"""
 
 from numpy import array
 
-def wecc240_case():
+def wecc240_map():
     """Power flow data for 243 bus, 197 generator case.
 
     @return: PYPOWER case dict
@@ -1123,15 +1123,17 @@ def wecc240_case():
     ## dcline data
     # fbus tbus status Pf Pt Qf Qt Vf Vt Pmin Pmax QminF QmaxF QminT QmaxT loss0 loss1
     ppc["dcline"] = array([
-        [4010, 2619, 1, 2904.49, 2466.53, 0, 0, 1.075, 1.012, -3100, 3100, -2000, 2000, -2000, 2000, 41.54, 0.138],
+        [4010, 2619, 1, 2904.49, 2466.53, 0, 0, 1.075, 1.012, 0, 3100, -2000, 2000, -2000, 2000, 41.54, 0.138],
         [2604, 2600, 1, 1791.95, 1591.98, 0, 0, 1.03, 1.056, 0, 2400, -100, 100, -100, 100, 50, 0.086]
     ])
 
-    ## dclinecost data
-    # model startup shutdown ncost c(n-1) ... c0 (or x1 y1 ... xn yn)
-    ppc["dclinecost"] = array([
-        [2, 0, 0, 3, 0, 0, 0],
-        [2, 0, 0, 3, 0, 0, 0]
+    ## areas data
+    # area price_ref_bus
+    ppc["areas"] = array([
+        [1, 1431],
+        [2, 3933],
+        [3, 5032],
+        [4, 2030]
     ])
 
     return ppc
