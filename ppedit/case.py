@@ -397,6 +397,11 @@ class Case:
         """Bus locations: rows of `[BUS_I, LAT, LON, aux...]` (decimal degrees)"""
         self.geotags = []
         """Names of the auxiliary geodata values (columns after `LON`)"""
+        self.source = None
+        """How `Case.load` read the case (`None` otherwise): `file` (base
+        name), `format` (`py`, `json`, `glm` or `raw`), `revision` (PSS/E
+        revision, else `None`), `size` (rows per table when read) and
+        `notes` (as read; `Case.notes` is cleared when the case is saved)"""
         if data is not None:
             self._from_ppc(data)
 
@@ -494,6 +499,7 @@ class Case:
         name = re.sub(r"\W","_",os.path.splitext(os.path.basename(path))[0]) or "case"
         if name[0].isdigit():
             name = "case_" + name
+        revision = None
         if fmt == "py":
             case = cls(_parse_py(text,name),name)
         elif fmt == "json":
@@ -508,12 +514,16 @@ class Case:
                 data,notes = parse_raw(text)
             except RawError as err:
                 raise CaseError(f"invalid PSS/E RAW file: {err}") from err
+            revision = data.pop("psse_revision")
             case = cls(data,name)
             case.notes = notes
         else:
             data,notes = _parse_glm(text)
             case = cls(data,name)
             case.notes = notes
+        case.source = {"file":os.path.basename(path),"format":fmt,
+            "revision":revision,
+            "size":case.size(),"notes":list(case.notes)}
         _logger.info("loaded %s: %s",path,case.size())
         return case
 

@@ -2014,12 +2014,33 @@ function setupNetworkEvents() {
 
 // ---------------------------------------------------------------- results
 
+const FORMAT_NAMES = { py: "PYPOWER case (.py)", json: "PYPOWER JSON case (.json)",
+  glm: "GridLAB-D module pypower model (.glm)", raw: "PSS/E RAW case (.raw)" };
+
+// How the open case was read (state.source): file, format, rows read, and the
+// conversion notes (data not kept); stays until another case is opened.
+function sourceReport() {
+  const src = S.state.source;
+  if (!src) return null;
+  const fmtName = (FORMAT_NAMES[src.format] || src.format) + (src.revision ? `, revision ${src.revision}` : "");
+  const names = { bus: "buses", gen: "generators", branch: "branches", gencost: "generator costs",
+    dcline: "DC lines", dclinecost: "DC line costs", areas: "areas" };
+  const rows = S.meta.tables.filter(t => src.size[t]).map(t => `${src.size[t]} ${names[t] || t}`).join(", ") || "no rows";
+  return h("div", { class: "res-block source-report" },
+    h("h3", {}, `Opened ${src.file}`),
+    h("div", { class: "hint" }, `${fmtName}: ${rows}`),
+    src.notes.length
+      ? h("ul", { class: "source-notes" }, src.notes.map(n => h("li", {}, n)))
+      : h("div", { class: "hint" }, "Everything in the file was read."));
+}
+
 function renderResults() {
   const box = $("#view-results");
   const r = S.state.result;
+  const report = sourceReport();
   if (!r) {
-    box.replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No solution yet"),
-      "Run a power flow (Run PF) or optimal power flow (Run OPF). Any edit clears the solution."));
+    box.replaceChildren(...[report, h("div", { class: "empty" }, h("div", { class: "big" }, "No solution yet"),
+      "Run a power flow (Run PF) or optimal power flow (Run OPF). Any edit clears the solution.")].filter(Boolean));
     return;
   }
   const c = S.state.case;
@@ -2061,6 +2082,7 @@ function renderResults() {
           .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null));
   }
   kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"), h("pre", { class: "log" }, r.log || "(no output)")));
+  if (report) kids.push(report);
   box.replaceChildren(...kids);
 }
 function card(k, v, cls) { return h("div", { class: "card" }, h("div", { class: "k" }, k), h("div", { class: "v " + (cls || "") }, v)); }
@@ -2236,7 +2258,7 @@ async function openFile(file) {
   const text = await file.text();
   await act("/api/open", { filename: file.name, text });
   afterOpen();
-  if (S.state.case.notes.length) toast(S.state.case.notes[0]);
+  if (S.state.source && S.state.source.notes.length) show("results");  // conversion report
   else toast(`Opened ${file.name} — use Save as to keep changes`);
 }
 
@@ -2393,7 +2415,7 @@ async function init() {
   setInterval(pollClaude, 1000);
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");
-  if (S.state.case.notes.length) toast(S.state.case.notes[0]);
+  if (S.state.source && S.state.source.notes.length) show("results");  // conversion report
 }
 
 init().catch(err => toast(err.message, true));

@@ -16,7 +16,8 @@ Every successful call returns the editor state: `case` (see
 `ppedit.Case.to_dict`), `path`, `format`, `dirty`, `issues`, `can_undo`,
 `can_redo`, `result` (last solution or `null`), `cascade` (whether the
 last edit changed cells other than the one edited), and `revision` (a
-counter that changes whenever the case changes). Errors return
+counter that changes whenever the case changes), and `source` (how the
+open case was read, see `ppedit.Case.source`, or `null`). Errors return
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
@@ -184,6 +185,7 @@ class Editor:
             "result": self.result,
             "cascade": cascade,
             "revision": self.revision,
+            "source": self.case.source,
         }
 
 def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
