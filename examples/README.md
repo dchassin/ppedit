@@ -32,10 +32,12 @@ bus name and PSS/E generator ID), with the `c2,c1,c0` of its type from
 In `wecc240_2011.py` the Pacific DC Intertie (CELILO 4010 to SYLMARLA 2619)
 and the Intermountain line (INTERMT 2604 to ADELANTO 2600) are DC lines with
 zero `dclinecost`. The PSS/E case models them as a load at the rectifier
-bus and a negative load at the inverter bus; the DC lines carry the same
-flows (`Pf` 3133.1 and 1845.7 MW, `Pt` 2497.4 and 1680.8 MW) through
-`loss1` (20.3% and 8.9%), with `Pmax` = `Pf`, no reactive power, and `Vf`,
-`Vt` at the case voltages, so the power flow solution is unchanged.
+bus and a negative load at the inverter bus. The DC lines take the same
+power at the rectifier (`Pf` 3133.1 and 1845.7 MW) with 3.5% losses
+(`loss1` 0.035; `Pt` 3023.4 and 1781.1 MW); the rest of the difference is
+load at the inverter bus (526.0 MW at SYLMARLA, 100.3 MW at ADELANTO), so
+the power flow solution is unchanged. `Pmax` is `Pf`, there is no reactive
+power, and `Vf`, `Vt` are the case voltages.
 
 `wecc240_2018.py` is `wecc240_2011.py` (with its geodata) plus one
 polynomial cost row per generator, the costs of its type from
