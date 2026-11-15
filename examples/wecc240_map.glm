@@ -20148,6 +20148,7 @@ object pypower.dcline
 // dclinecost (module pypower has no DC line cost class; same properties as pypower.gencost)
 //
 class dclinecost
+{
     enumeration {UNKNOWN=0,PIECEWISE=1,POLYNOMIAL=2} model;
     double startup[$];
     double shutdown[$];
