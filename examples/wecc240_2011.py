@@ -1,8 +1,8 @@
-"""PYPOWER case wecc240_case (written by ppedit)"""
+"""PYPOWER case wecc240_2011 (written by ppedit)"""
 
 from numpy import array
 
-def wecc240_case():
+def wecc240_2011():
     """Power flow data for 243 bus, 146 generator case.
 
     @return: PYPOWER case dict
