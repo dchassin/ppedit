@@ -75,8 +75,9 @@ Given a case file, `ppedit.Case` is expected to satisfy:
   5. **Geodata.** Bus locations (`Case.geodata`, rows of `[BUS_I, LAT, LON,
      aux...]` with auxiliary column names in `Case.geotags`) are read from a
      CSV file, from the `geodata` (and `geotags`) keys of a `.py`/`.json`
-     case, or from GLM bus `latitude`/`longitude`, and are written back under
-     the same keys. Renumbering a bus renumbers its geodata and deleting a
+     case, or from GLM bus `latitude`/`longitude` and `pp_geodata` objects
+     (a runtime class holding the auxiliary values, parent the bus), and are
+     written back the same way. Renumbering a bus renumbers its geodata and deleting a
      bus deletes its geodata.
 
 The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
@@ -126,8 +127,9 @@ What is not promised
     edit (load a CSV or edit the case file). Map layers are fetched by the
     browser from public U.S. government map services (USGS The National Map,
     Census Bureau TIGERweb): they need network access, cover the United
-    States only, and are not cached by `ppedit`. GLM output keeps bus
-    locations but not auxiliary geodata. In the classic style a bus with both generation and load
+    States only, and are not cached by `ppedit`. GLM output writes
+    auxiliary geodata as `pp_geodata` objects; tags that are not GLM
+    property names are renamed (e.g. `KV level` to `KV_level`). In the classic style a bus with both generation and load
     is drawn as a generator (circle); its label shows both MW values. The
     one-line style computes its own layered layout from the topology (it
     is not dragged); each line has a column at each of its buses joined by

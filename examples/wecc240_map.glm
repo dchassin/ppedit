@@ -1,4 +1,4 @@
-// wecc240_map: written by ppedit
+// wecc240_case: written by ppedit
 module pypower
 {
     version 2;
@@ -20142,6 +20142,2497 @@ object pypower.dcline
     Qmaxt 100 MVAr;
     loss0 50 MW;
     loss1 0.086 MW/MW;
+}
+
+//
+// geodata auxiliary values (a comment gives each tag that is not a GLM name)
+//
+class pp_geodata
+{
+    char256 GEOHASH;
+    char256 NAME;
+    double GEN;
+    double LOAD;
+    char256 BA;
+    int64 COUNTY;
+}
+object pp_geodata
+{
+    name "pp_geodata_1001";
+    parent "pp_bus_1001";
+    GEOHASH "9wdb95";
+    NAME "FOURCORN";
+    LOAD 0;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1002";
+    parent "pp_bus_1002";
+    GEOHASH "9wdb95";
+    NAME "FOURCORN";
+    LOAD 0.22371;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1003";
+    parent "pp_bus_1003";
+    GEOHASH "9wdb95";
+    NAME "FOURCORN";
+    LOAD 2.21266;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1004";
+    parent "pp_bus_1004";
+    GEOHASH "9we1bp";
+    NAME "SAN JUAN";
+    LOAD 1.00772;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1032";
+    parent "pp_bus_1032";
+    GEOHASH "9wdb95";
+    NAME "FCNGN4CC";
+    GEN 2.561;
+    LOAD 0;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1034";
+    parent "pp_bus_1034";
+    GEOHASH "9we1bp";
+    NAME "SJUAN G4";
+    GEN 6.326;
+    LOAD 0;
+    BA "SW";
+    COUNTY 35045;
+}
+object pp_geodata
+{
+    name "pp_geodata_1101";
+    parent "pp_bus_1101";
+    GEOHASH "9w1zzg";
+    NAME "CORONADO";
+    LOAD 4.48254;
+    BA "SW";
+    COUNTY 4001;
+}
+object pp_geodata
+{
+    name "pp_geodata_1102";
+    parent "pp_bus_1102";
+    GEOHASH "9w1wf0";
+    NAME "CHOLLA";
+    LOAD 0.17987;
+    BA "SW";
+    COUNTY 4017;
+}
+object pp_geodata
+{
+    name "pp_geodata_1131";
+    parent "pp_bus_1131";
+    GEOHASH "9w1zzg";
+    NAME "CORONADO";
+    GEN 6.202;
+    LOAD 0;
+    BA "SW";
+    COUNTY 4001;
+}
+object pp_geodata
+{
+    name "pp_geodata_1201";
+    parent "pp_bus_1201";
+    GEOHASH "9w3h8n";
+    NAME "MOENKOPI";
+    LOAD 0.15398;
+    BA "SW";
+    COUNTY 4005;
+}
+object pp_geodata
+{
+    name "pp_geodata_1202";
+    parent "pp_bus_1202";
+    GEOHASH "9w94m0";
+    NAME "NAVAJO";
+    LOAD 0.81075;
+    BA "SW";
+    COUNTY 4005;
+}
+object pp_geodata
+{
+    name "pp_geodata_1232";
+    parent "pp_bus_1232";
+    GEOHASH "9w94m0";
+    NAME "NAVAJO 2";
+    GEN 6.176;
+    LOAD 0;
+    BA "SW";
+    COUNTY 4005;
+}
+object pp_geodata
+{
+    name "pp_geodata_1301";
+    parent "pp_bus_1301";
+    GEOHASH "9qqk6u";
+    NAME "MEAD";
+    LOAD 2.58831;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_1302";
+    parent "pp_bus_1302";
+    GEOHASH "9qw0kp";
+    NAME "H ALLEN";
+    LOAD 0.01709;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_1303";
+    parent "pp_bus_1303";
+    GEOHASH "9qw0kp";
+    NAME "H ALLEN";
+    LOAD 6.20412;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_1331";
+    parent "pp_bus_1331";
+    GEOHASH "9qqk6u";
+    NAME "HOOVER";
+    GEN 4.495;
+    LOAD 0;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_1333";
+    parent "pp_bus_1333";
+    GEOHASH "9qw0kp";
+    NAME "H ALLEN";
+    GEN 9.852;
+    LOAD 0;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_1401";
+    parent "pp_bus_1401";
+    GEOHASH "9mzqxj";
+    NAME "PALOVRDE";
+    LOAD 6.31453;
+    BA "SW";
+    COUNTY 4013;
+}
+object pp_geodata
+{
+    name "pp_geodata_1402";
+    parent "pp_bus_1402";
+    GEOHASH "9w01f3";
+    NAME "WESTWING";
+    LOAD 5.0742;
+    BA "SW";
+    COUNTY 4025;
+}
+object pp_geodata
+{
+    name "pp_geodata_1403";
+    parent "pp_bus_1403";
+    GEOHASH "9qndpr";
+    NAME "PARKER";
+    LOAD 0;
+    BA "CA";
+    COUNTY 4012;
+}
+object pp_geodata
+{
+    name "pp_geodata_1431";
+    parent "pp_bus_1431";
+    GEOHASH "9mzqxj";
+    NAME "PALOVRD2";
+    GEN 15.799;
+    LOAD 0;
+    BA "SW";
+    COUNTY 4013;
+}
+object pp_geodata
+{
+    name "pp_geodata_2000";
+    parent "pp_bus_2000";
+    GEOHASH "9mtzm4";
+    NAME "MEXICO";
+    LOAD 2.20719;
+    BA "MX";
+}
+object pp_geodata
+{
+    name "pp_geodata_2030";
+    parent "pp_bus_2030";
+    GEOHASH "9mtzm4";
+    NAME "MEXICO";
+    GEN 2.839;
+    LOAD 0;
+    BA "MX";
+}
+object pp_geodata
+{
+    name "pp_geodata_2100";
+    parent "pp_bus_2100";
+    GEOHASH "9mvgw4";
+    NAME "IMPERIAL";
+    LOAD 0.24448;
+    BA "SW";
+    COUNTY 6025;
+}
+object pp_geodata
+{
+    name "pp_geodata_2130";
+    parent "pp_bus_2130";
+    GEOHASH "9mvgw4";
+    NAME "IMPERIAL";
+    GEN 1.928;
+    LOAD 0;
+    BA "SW";
+    COUNTY 6025;
+}
+object pp_geodata
+{
+    name "pp_geodata_2201";
+    parent "pp_bus_2201";
+    GEOHASH "9muccv";
+    NAME "MIGUEL";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2202";
+    parent "pp_bus_2202";
+    GEOHASH "9muccv";
+    NAME "MIGUEL";
+    LOAD 1.41396;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2203";
+    parent "pp_bus_2203";
+    GEOHASH "9mudw2";
+    NAME "MISSION";
+    LOAD 1.53005;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2233";
+    parent "pp_bus_2233";
+    GEOHASH "9mudw2";
+    NAME "MISSION";
+    GEN 3.605;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2301";
+    parent "pp_bus_2301";
+    GEOHASH "9mvffm";
+    NAME "IMPRLVLY";
+    LOAD 0;
+    BA "SW";
+    COUNTY 6025;
+}
+object pp_geodata
+{
+    name "pp_geodata_2302";
+    parent "pp_bus_2302";
+    GEOHASH "9mvffm";
+    NAME "IMPRLVLY";
+    LOAD 0;
+    BA "SW";
+    COUNTY 6025;
+}
+object pp_geodata
+{
+    name "pp_geodata_2332";
+    parent "pp_bus_2332";
+    GEOHASH "9mvffm";
+    NAME "IMPRLVLY";
+    GEN 1.333;
+    LOAD 0;
+    BA "SW";
+    COUNTY 6025;
+}
+object pp_geodata
+{
+    name "pp_geodata_2400";
+    parent "pp_bus_2400";
+    GEOHASH "9qj152";
+    NAME "DEVERS";
+    LOAD 0.74161;
+    BA "CA";
+    COUNTY 6065;
+}
+object pp_geodata
+{
+    name "pp_geodata_2401";
+    parent "pp_bus_2401";
+    GEOHASH "9qhe90";
+    NAME "LUGO";
+    LOAD 0.75656;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2402";
+    parent "pp_bus_2402";
+    GEOHASH "9qh3ky";
+    NAME "MIRALOMA";
+    LOAD 0.94418;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2403";
+    parent "pp_bus_2403";
+    GEOHASH "9qh8k2";
+    NAME "VALLEY";
+    LOAD 0.92491;
+    BA "CA";
+    COUNTY 6065;
+}
+object pp_geodata
+{
+    name "pp_geodata_2404";
+    parent "pp_bus_2404";
+    GEOHASH "9qhh0n";
+    NAME "VINCENT";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2405";
+    parent "pp_bus_2405";
+    GEOHASH "9q5epx";
+    NAME "SYLMAR S";
+    LOAD 0.73433;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2406";
+    parent "pp_bus_2406";
+    GEOHASH "9q5fq8";
+    NAME "EAGLROCK";
+    LOAD 0.65922;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2407";
+    parent "pp_bus_2407";
+    GEOHASH "9q5bwz";
+    NAME "LITEHIPE";
+    LOAD 1.61042;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2408";
+    parent "pp_bus_2408";
+    GEOHASH "9qh18k";
+    NAME "MESA CAL";
+    LOAD 1.55495;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2409";
+    parent "pp_bus_2409";
+    GEOHASH "9qh3ky";
+    NAME "MIRALOMA";
+    LOAD 1.41333;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2410";
+    parent "pp_bus_2410";
+    GEOHASH "9q5evq";
+    NAME "PARDEE";
+    LOAD 1.41146;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2411";
+    parent "pp_bus_2411";
+    GEOHASH "9qhh0n";
+    NAME "VINCENT";
+    LOAD 0.95946;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2431";
+    parent "pp_bus_2431";
+    GEOHASH "9qhe90";
+    NAME "LUGO";
+    GEN 1.666;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2434";
+    parent "pp_bus_2434";
+    GEOHASH "9qhh0n";
+    NAME "VINCENT";
+    GEN 1.489;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2438";
+    parent "pp_bus_2438";
+    GEOHASH "9qh18k";
+    NAME "MESA CAL";
+    GEN 23.486;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2439";
+    parent "pp_bus_2439";
+    GEOHASH "9qh3ky";
+    NAME "MIRALOMA";
+    GEN 1.666;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2501";
+    parent "pp_bus_2501";
+    GEOHASH "9qh0rw";
+    NAME "SERRANO";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6059;
+}
+object pp_geodata
+{
+    name "pp_geodata_2502";
+    parent "pp_bus_2502";
+    GEOHASH "9qh0rw";
+    NAME "SERRANO";
+    LOAD 2.08784;
+    BA "CA";
+    COUNTY 6059;
+}
+object pp_geodata
+{
+    name "pp_geodata_2503";
+    parent "pp_bus_2503";
+    GEOHASH "9mumuf";
+    NAME "S.ONOFRE";
+    LOAD 1.64652;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2533";
+    parent "pp_bus_2533";
+    GEOHASH "9mumuf";
+    NAME "S.ONOFRE";
+    GEN 1.999;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6073;
+}
+object pp_geodata
+{
+    name "pp_geodata_2600";
+    parent "pp_bus_2600";
+    GEOHASH "9qhkxd";
+    NAME "ADELANTO";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2601";
+    parent "pp_bus_2601";
+    GEOHASH "9q5epc";
+    NAME "RINALDI";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2602";
+    parent "pp_bus_2602";
+    GEOHASH "9q5f6t";
+    NAME "STA E";
+    LOAD 0.08753;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2603";
+    parent "pp_bus_2603";
+    GEOHASH "9qhsdk";
+    NAME "VICTORVL";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2604";
+    parent "pp_bus_2604";
+    GEOHASH "9rpbwn";
+    NAME "INTERMT";
+    LOAD 0;
+    BA "BA";
+    COUNTY 49027;
+}
+object pp_geodata
+{
+    name "pp_geodata_2605";
+    parent "pp_bus_2605";
+    GEOHASH "9q5cw0";
+    NAME "STA B1";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2606";
+    parent "pp_bus_2606";
+    GEOHASH "9q5cw0";
+    NAME "STA B2";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2607";
+    parent "pp_bus_2607";
+    GEOHASH "9qhsdk";
+    NAME "VICTORVL";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6071;
+}
+object pp_geodata
+{
+    name "pp_geodata_2608";
+    parent "pp_bus_2608";
+    GEOHASH "9q5sgb";
+    NAME "CASTAIC";
+    LOAD 0.08803;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2609";
+    parent "pp_bus_2609";
+    GEOHASH "9q5fm0";
+    NAME "GLENDAL";
+    LOAD 0.12079;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2610";
+    parent "pp_bus_2610";
+    GEOHASH "9mupsy";
+    NAME "HAYNES";
+    LOAD 0.08899;
+    BA "CA";
+    COUNTY 6059;
+}
+object pp_geodata
+{
+    name "pp_geodata_2611";
+    parent "pp_bus_2611";
+    GEOHASH "9q5g0q";
+    NAME "OLIVE";
+    LOAD 0.08803;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2612";
+    parent "pp_bus_2612";
+    GEOHASH "9q5epc";
+    NAME "RINALDI";
+    LOAD 0.10667;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2613";
+    parent "pp_bus_2613";
+    GEOHASH "9q5cts";
+    NAME "RIVER";
+    LOAD 0.28772;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2614";
+    parent "pp_bus_2614";
+    GEOHASH "9q5cw0";
+    NAME "STA BLD";
+    LOAD 0.12315;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2615";
+    parent "pp_bus_2615";
+    GEOHASH "9q5f6t";
+    NAME "STA E";
+    LOAD 0.71865;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2616";
+    parent "pp_bus_2616";
+    GEOHASH "9q5cw0";
+    NAME "STA F";
+    LOAD 0.10499;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2617";
+    parent "pp_bus_2617";
+    GEOHASH "9q5fj1";
+    NAME "STA G";
+    LOAD 0.10847;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2618";
+    parent "pp_bus_2618";
+    GEOHASH "9q5dy2";
+    NAME "STA J";
+    LOAD 0.7847;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2619";
+    parent "pp_bus_2619";
+    GEOHASH "9q5epx";
+    NAME "SYLMARLA";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2620";
+    parent "pp_bus_2620";
+    GEOHASH "9qh8k2";
+    NAME "VALLEY";
+    LOAD 0.18176;
+    BA "CA";
+    COUNTY 6065;
+}
+object pp_geodata
+{
+    name "pp_geodata_2621";
+    parent "pp_bus_2621";
+    GEOHASH "9q5cw0";
+    NAME "STA B";
+    LOAD 0.20942;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2630";
+    parent "pp_bus_2630";
+    GEOHASH "9mupsy";
+    NAME "HAYNES3G";
+    GEN 3.947;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6059;
+}
+object pp_geodata
+{
+    name "pp_geodata_2631";
+    parent "pp_bus_2631";
+    GEOHASH "9q5g0q";
+    NAME "OLIVE";
+    GEN 0.52;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2634";
+    parent "pp_bus_2634";
+    GEOHASH "9rpbwn";
+    NAME "INTERM1G";
+    GEN 1.618;
+    LOAD 0;
+    BA "BA";
+    COUNTY 49027;
+}
+object pp_geodata
+{
+    name "pp_geodata_2637";
+    parent "pp_bus_2637";
+    GEOHASH "9q5epc";
+    NAME "OWENS G";
+    GEN 0.087;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2638";
+    parent "pp_bus_2638";
+    GEOHASH "9q5sgb";
+    NAME "CASTAI4G";
+    GEN 0.407;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6037;
+}
+object pp_geodata
+{
+    name "pp_geodata_2901";
+    parent "pp_bus_2901";
+    GEOHASH "9qq5wv";
+    NAME "ELDORADO";
+    LOAD 0;
+    BA "CA";
+    COUNTY 32003;
+}
+object pp_geodata
+{
+    name "pp_geodata_2902";
+    parent "pp_bus_2902";
+    GEOHASH "9q5zqv";
+    NAME "MOHAVE";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3101";
+    parent "pp_bus_3101";
+    GEOHASH "9q8yyz";
+    NAME "EMBRCDRD";
+    LOAD 0.31358;
+    BA "CA";
+    COUNTY 6075;
+}
+object pp_geodata
+{
+    name "pp_geodata_3102";
+    parent "pp_bus_3102";
+    GEOHASH "9q8yqr";
+    NAME "MARTIN";
+    LOAD 0.14572;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3103";
+    parent "pp_bus_3103";
+    GEOHASH "9q9jb9";
+    NAME "SANMATEO";
+    LOAD 0.38042;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3104";
+    parent "pp_bus_3104";
+    GEOHASH "9q8yqr";
+    NAME "MARTIN";
+    LOAD 0.28351;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3105";
+    parent "pp_bus_3105";
+    GEOHASH "9q8yyc";
+    NAME "POTRERO";
+    LOAD 0.21537;
+    BA "CA";
+    COUNTY 6075;
+}
+object pp_geodata
+{
+    name "pp_geodata_3133";
+    parent "pp_bus_3133";
+    GEOHASH "9q9jb9";
+    NAME "SANMATEO";
+    GEN 0.0621;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3135";
+    parent "pp_bus_3135";
+    GEOHASH "9q8yyc";
+    NAME "POTRERO";
+    GEN 0.579;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6075;
+}
+object pp_geodata
+{
+    name "pp_geodata_3201";
+    parent "pp_bus_3201";
+    GEOHASH "9qc0p1";
+    NAME "C.COSTA";
+    LOAD 0.41718;
+    BA "CA";
+    COUNTY 6013;
+}
+object pp_geodata
+{
+    name "pp_geodata_3202";
+    parent "pp_bus_3202";
+    GEOHASH "9q9pk4";
+    NAME "MORAGA";
+    LOAD 0.52894;
+    BA "CA";
+    COUNTY 6013;
+}
+object pp_geodata
+{
+    name "pp_geodata_3203";
+    parent "pp_bus_3203";
+    GEOHASH "9q9m24";
+    NAME "NEWARK";
+    LOAD 0.59254;
+    BA "CA";
+    COUNTY 6001;
+}
+object pp_geodata
+{
+    name "pp_geodata_3204";
+    parent "pp_bus_3204";
+    GEOHASH "9qc26h";
+    NAME "PITSBURG";
+    LOAD 0.59595;
+    BA "CA";
+    COUNTY 6013;
+}
+object pp_geodata
+{
+    name "pp_geodata_3205";
+    parent "pp_bus_3205";
+    GEOHASH "9q9peh";
+    NAME "SOBRANTE";
+    LOAD 0.4922;
+    BA "CA";
+    COUNTY 6013;
+}
+object pp_geodata
+{
+    name "pp_geodata_3234";
+    parent "pp_bus_3234";
+    GEOHASH "9qc26h";
+    NAME "PITSBURG";
+    GEN 6.807;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6013;
+}
+object pp_geodata
+{
+    name "pp_geodata_3301";
+    parent "pp_bus_3301";
+    GEOHASH "9q97v8";
+    NAME "METCALF";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6085;
+}
+object pp_geodata
+{
+    name "pp_geodata_3302";
+    parent "pp_bus_3302";
+    GEOHASH "9q9hgh";
+    NAME "JEFFERSN";
+    LOAD 0.31638;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3303";
+    parent "pp_bus_3303";
+    GEOHASH "9q97v8";
+    NAME "METCALF";
+    LOAD 0.56287;
+    BA "CA";
+    COUNTY 6085;
+}
+object pp_geodata
+{
+    name "pp_geodata_3304";
+    parent "pp_bus_3304";
+    GEOHASH "9q9hq4";
+    NAME "MONTAVIS";
+    LOAD 0.48578;
+    BA "CA";
+    COUNTY 6085;
+}
+object pp_geodata
+{
+    name "pp_geodata_3305";
+    parent "pp_bus_3305";
+    GEOHASH "9q9jk9";
+    NAME "RAVENSWD";
+    LOAD 0.38969;
+    BA "CA";
+    COUNTY 6081;
+}
+object pp_geodata
+{
+    name "pp_geodata_3333";
+    parent "pp_bus_3333";
+    GEOHASH "9q97v8";
+    NAME "METCALF";
+    GEN 1.324;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6085;
+}
+object pp_geodata
+{
+    name "pp_geodata_3401";
+    parent "pp_bus_3401";
+    GEOHASH "9qd9xh";
+    NAME "GREGG";
+    LOAD 0.52326;
+    BA "CA";
+    COUNTY 6039;
+}
+object pp_geodata
+{
+    name "pp_geodata_3402";
+    parent "pp_bus_3402";
+    GEOHASH "9qe6tq";
+    NAME "HELMS PP";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3403";
+    parent "pp_bus_3403";
+    GEOHASH "9qdbm8";
+    NAME "MC CALL";
+    LOAD 0.46437;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3404";
+    parent "pp_bus_3404";
+    GEOHASH "9qd2ds";
+    NAME "PANOCHE";
+    LOAD 0.40037;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3405";
+    parent "pp_bus_3405";
+    GEOHASH "9qct8r";
+    NAME "WILSON";
+    LOAD 0.42303;
+    BA "CA";
+    COUNTY 6101;
+}
+object pp_geodata
+{
+    name "pp_geodata_3432";
+    parent "pp_bus_3432";
+    GEOHASH "9qe6tq";
+    NAME "HELMS PP";
+    GEN 3.746;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3433";
+    parent "pp_bus_3433";
+    GEOHASH "9qdbm8";
+    NAME "MC CALL";
+    GEN 2.347;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3501";
+    parent "pp_bus_3501";
+    GEOHASH "9qben2";
+    NAME "FULTON";
+    LOAD 0.56251;
+    BA "CA";
+    COUNTY 6097;
+}
+object pp_geodata
+{
+    name "pp_geodata_3531";
+    parent "pp_bus_3531";
+    GEOHASH "9qben2";
+    NAME "FULTON";
+    GEN 1.981;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6097;
+}
+object pp_geodata
+{
+    name "pp_geodata_3601";
+    parent "pp_bus_3601";
+    GEOHASH "9pr8ne";
+    NAME "HUMBOLDT";
+    LOAD 0.09297;
+    BA "CA";
+    COUNTY 6023;
+}
+object pp_geodata
+{
+    name "pp_geodata_3631";
+    parent "pp_bus_3631";
+    GEOHASH "9pr8ne";
+    NAME "HUMBOLDT";
+    GEN 0.306;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6023;
+}
+object pp_geodata
+{
+    name "pp_geodata_3701";
+    parent "pp_bus_3701";
+    GEOHASH "9r4bc7";
+    NAME "SUMMIT";
+    LOAD 0.31705;
+    BA "SW";
+    COUNTY 32031;
+}
+object pp_geodata
+{
+    name "pp_geodata_3731";
+    parent "pp_bus_3731";
+    GEOHASH "9r4bc7";
+    NAME "SUMMIT";
+    GEN 0.243;
+    LOAD 0;
+    BA "SW";
+    COUNTY 32031;
+}
+object pp_geodata
+{
+    name "pp_geodata_3801";
+    parent "pp_bus_3801";
+    GEOHASH "9q603v";
+    NAME "DIABLO";
+    LOAD 0.16406;
+    BA "CA";
+    COUNTY 6079;
+}
+object pp_geodata
+{
+    name "pp_geodata_3802";
+    parent "pp_bus_3802";
+    GEOHASH "9q6tde";
+    NAME "GATES";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3803";
+    parent "pp_bus_3803";
+    GEOHASH "9q713t";
+    NAME "MIDWAY";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3804";
+    parent "pp_bus_3804";
+    GEOHASH "9q6tde";
+    NAME "GATES";
+    LOAD 0.20182;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3805";
+    parent "pp_bus_3805";
+    GEOHASH "9q713t";
+    NAME "MIDWAY";
+    LOAD 0.43425;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3806";
+    parent "pp_bus_3806";
+    GEOHASH "9q613c";
+    NAME "MORROBAY";
+    LOAD 0.25577;
+    BA "CA";
+    COUNTY 6079;
+}
+object pp_geodata
+{
+    name "pp_geodata_3831";
+    parent "pp_bus_3831";
+    GEOHASH "9q603v";
+    NAME "DIABLO1";
+    GEN 2.323;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6079;
+}
+object pp_geodata
+{
+    name "pp_geodata_3835";
+    parent "pp_bus_3835";
+    GEOHASH "9q713t";
+    NAME "MIDWAY";
+    GEN 3.358;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3836";
+    parent "pp_bus_3836";
+    GEOHASH "9q613c";
+    NAME "MORROBAY";
+    GEN 1.497;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6079;
+}
+object pp_geodata
+{
+    name "pp_geodata_3891";
+    parent "pp_bus_3891";
+    GEOHASH "9q6tde";
+    NAME "GATES1";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6019;
+}
+object pp_geodata
+{
+    name "pp_geodata_3892";
+    parent "pp_bus_3892";
+    GEOHASH "9q713t";
+    NAME "MIDWAY1";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3893";
+    parent "pp_bus_3893";
+    GEOHASH "9q713t";
+    NAME "MIDWAY2";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3894";
+    parent "pp_bus_3894";
+    GEOHASH "9q713t";
+    NAME "MIDWAY3";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3895";
+    parent "pp_bus_3895";
+    GEOHASH "9q713t";
+    NAME "MIDWAY4";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3896";
+    parent "pp_bus_3896";
+    GEOHASH "9q713t";
+    NAME "MIDWAY5";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3897";
+    parent "pp_bus_3897";
+    GEOHASH "9q713t";
+    NAME "MIDWAY6";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6029;
+}
+object pp_geodata
+{
+    name "pp_geodata_3901";
+    parent "pp_bus_3901";
+    GEOHASH "9q9fy1";
+    NAME "LOSBANOS";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6047;
+}
+object pp_geodata
+{
+    name "pp_geodata_3902";
+    parent "pp_bus_3902";
+    GEOHASH "9q92vz";
+    NAME "MOSSLAND";
+    LOAD 0.13769;
+    BA "CA";
+    COUNTY 6053;
+}
+object pp_geodata
+{
+    name "pp_geodata_3903";
+    parent "pp_bus_3903";
+    GEOHASH "9q9w99";
+    NAME "TESLA";
+    LOAD 0.19074;
+    BA "CA";
+    COUNTY 6001;
+}
+object pp_geodata
+{
+    name "pp_geodata_3904";
+    parent "pp_bus_3904";
+    GEOHASH "9qc63x";
+    NAME "VACA-DIX";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6095;
+}
+object pp_geodata
+{
+    name "pp_geodata_3905";
+    parent "pp_bus_3905";
+    GEOHASH "9r13pb";
+    NAME "TABLE MT";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6007;
+}
+object pp_geodata
+{
+    name "pp_geodata_3906";
+    parent "pp_bus_3906";
+    GEOHASH "9r321k";
+    NAME "ROUND MT";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_3907";
+    parent "pp_bus_3907";
+    GEOHASH "9qcbq0";
+    NAME "BELLOTA";
+    LOAD 0.43038;
+    BA "CA";
+    COUNTY 6077;
+}
+object pp_geodata
+{
+    name "pp_geodata_3908";
+    parent "pp_bus_3908";
+    GEOHASH "9qcem3";
+    NAME "BRIGHTON";
+    LOAD 0.18687;
+    BA "CA";
+    COUNTY 6067;
+}
+object pp_geodata
+{
+    name "pp_geodata_3909";
+    parent "pp_bus_3909";
+    GEOHASH "9qcxqg";
+    NAME "COLGATE";
+    LOAD 0.15939;
+    BA "CA";
+    COUNTY 6115;
+}
+object pp_geodata
+{
+    name "pp_geodata_3910";
+    parent "pp_bus_3910";
+    GEOHASH "9qcjcp";
+    NAME "CORTINA";
+    LOAD 0.22844;
+    BA "CA";
+    COUNTY 6011;
+}
+object pp_geodata
+{
+    name "pp_geodata_3911";
+    parent "pp_bus_3911";
+    GEOHASH "9r1jcf";
+    NAME "COTWDPGE";
+    LOAD 0.20437;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_3912";
+    parent "pp_bus_3912";
+    GEOHASH "9r10zd";
+    NAME "GLENN";
+    LOAD 0.15692;
+    BA "CA";
+    COUNTY 6021;
+}
+object pp_geodata
+{
+    name "pp_geodata_3913";
+    parent "pp_bus_3913";
+    GEOHASH "9qcggm";
+    NAME "GOLDHILL";
+    LOAD 0.301;
+    BA "CA";
+    COUNTY 6067;
+}
+object pp_geodata
+{
+    name "pp_geodata_3914";
+    parent "pp_bus_3914";
+    GEOHASH "9qbbed";
+    NAME "IGNACIO";
+    LOAD 0.20724;
+    BA "CA";
+    COUNTY 6041;
+}
+object pp_geodata
+{
+    name "pp_geodata_3915";
+    parent "pp_bus_3915";
+    GEOHASH "9qbcde";
+    NAME "LAKEVILE";
+    LOAD 0.23085;
+    BA "CA";
+    COUNTY 6097;
+}
+object pp_geodata
+{
+    name "pp_geodata_3916";
+    parent "pp_bus_3916";
+    GEOHASH "9r106e";
+    NAME "LOGAN CR";
+    LOAD 0.13977;
+    BA "CA";
+    COUNTY 6021;
+}
+object pp_geodata
+{
+    name "pp_geodata_3917";
+    parent "pp_bus_3917";
+    GEOHASH "9q9fy1";
+    NAME "LOSBANOS";
+    LOAD 0.21416;
+    BA "CA";
+    COUNTY 6047;
+}
+object pp_geodata
+{
+    name "pp_geodata_3918";
+    parent "pp_bus_3918";
+    GEOHASH "9q92vz";
+    NAME "MOSSLAND";
+    LOAD 0.28954;
+    BA "CA";
+    COUNTY 6053;
+}
+object pp_geodata
+{
+    name "pp_geodata_3919";
+    parent "pp_bus_3919";
+    GEOHASH "9r1867";
+    NAME "PALERMO";
+    LOAD 0.17167;
+    BA "CA";
+    COUNTY 6007;
+}
+object pp_geodata
+{
+    name "pp_geodata_3920";
+    parent "pp_bus_3920";
+    GEOHASH "9qcts0";
+    NAME "RIO OSO";
+    LOAD 0.15883;
+    BA "CA";
+    COUNTY 6101;
+}
+object pp_geodata
+{
+    name "pp_geodata_3921";
+    parent "pp_bus_3921";
+    GEOHASH "9r321k";
+    NAME "ROUND MT";
+    LOAD 0.12692;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_3922";
+    parent "pp_bus_3922";
+    GEOHASH "9r13pb";
+    NAME "TABLE MT";
+    LOAD 0.23181;
+    BA "CA";
+    COUNTY 6007;
+}
+object pp_geodata
+{
+    name "pp_geodata_3923";
+    parent "pp_bus_3923";
+    GEOHASH "9q9w99";
+    NAME "TESLA";
+    LOAD 0.35345;
+    BA "CA";
+    COUNTY 6001;
+}
+object pp_geodata
+{
+    name "pp_geodata_3924";
+    parent "pp_bus_3924";
+    GEOHASH "9qc63x";
+    NAME "VACA-DIX";
+    LOAD 0.30015;
+    BA "CA";
+    COUNTY 6095;
+}
+object pp_geodata
+{
+    name "pp_geodata_3925";
+    parent "pp_bus_3925";
+    GEOHASH "9r1jcf";
+    NAME "COTWDPGE";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_3926";
+    parent "pp_bus_3926";
+    GEOHASH "9qcts0";
+    NAME "RIO OSO";
+    LOAD 0.24421;
+    BA "CA";
+    COUNTY 6101;
+}
+object pp_geodata
+{
+    name "pp_geodata_3931";
+    parent "pp_bus_3931";
+    GEOHASH "9r321k";
+    NAME "ROUND MT";
+    GEN 3.442;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_3932";
+    parent "pp_bus_3932";
+    GEOHASH "9q92vz";
+    NAME "MOSSLAND";
+    GEN 1.426;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6053;
+}
+object pp_geodata
+{
+    name "pp_geodata_3933";
+    parent "pp_bus_3933";
+    GEOHASH "9q9w99";
+    NAME "TESLA";
+    GEN 7.934;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6001;
+}
+object pp_geodata
+{
+    name "pp_geodata_4001";
+    parent "pp_bus_4001";
+    GEOHASH "9r3wzq";
+    NAME "MALIN";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41035;
+}
+object pp_geodata
+{
+    name "pp_geodata_4002";
+    parent "pp_bus_4002";
+    GEOHASH "9r9uxw";
+    NAME "SUMMER L";
+    LOAD 0.1545;
+    BA "NW";
+    COUNTY 41037;
+}
+object pp_geodata
+{
+    name "pp_geodata_4003";
+    parent "pp_bus_4003";
+    GEOHASH "9rg8bx";
+    NAME "BURNS";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41025;
+}
+object pp_geodata
+{
+    name "pp_geodata_4004";
+    parent "pp_bus_4004";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY";
+    LOAD 0.24818;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4005";
+    parent "pp_bus_4005";
+    GEOHASH "c245ue";
+    NAME "JOHN DAY";
+    LOAD 0.44455;
+    BA "NW";
+    COUNTY 41055;
+}
+object pp_geodata
+{
+    name "pp_geodata_4006";
+    parent "pp_bus_4006";
+    GEOHASH "c21g7y";
+    NAME "BIG EDDY";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41065;
+}
+object pp_geodata
+{
+    name "pp_geodata_4007";
+    parent "pp_bus_4007";
+    GEOHASH "c21g7u";
+    NAME "CELILOCA";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41065;
+}
+object pp_geodata
+{
+    name "pp_geodata_4008";
+    parent "pp_bus_4008";
+    GEOHASH "9r3wzq";
+    NAME "MALIN";
+    LOAD 0.26511;
+    BA "NW";
+    COUNTY 41035;
+}
+object pp_geodata
+{
+    name "pp_geodata_4009";
+    parent "pp_bus_4009";
+    GEOHASH "c21g7y";
+    NAME "BIG EDDY";
+    LOAD 2.04513;
+    BA "NW";
+    COUNTY 41065;
+}
+object pp_geodata
+{
+    name "pp_geodata_4010";
+    parent "pp_bus_4010";
+    GEOHASH "c21g7u";
+    NAME "CELILO";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41065;
+}
+object pp_geodata
+{
+    name "pp_geodata_4031";
+    parent "pp_bus_4031";
+    GEOHASH "9r3wzq";
+    NAME "MALIN";
+    GEN 4.724;
+    LOAD 0;
+    BA "NW";
+    COUNTY 41035;
+}
+object pp_geodata
+{
+    name "pp_geodata_4035";
+    parent "pp_bus_4035";
+    GEOHASH "c245ue";
+    NAME "JOHN DAY";
+    GEN 8.448;
+    LOAD 0;
+    BA "NW";
+    COUNTY 41055;
+}
+object pp_geodata
+{
+    name "pp_geodata_4039";
+    parent "pp_bus_4039";
+    GEOHASH "c21g7y";
+    NAME "DALLES21";
+    GEN 4.279;
+    LOAD 0;
+    BA "NW";
+    COUNTY 41065;
+}
+object pp_geodata
+{
+    name "pp_geodata_4090";
+    parent "pp_bus_4090";
+    GEOHASH "9r3wzq";
+    NAME "MALIN1";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41035;
+}
+object pp_geodata
+{
+    name "pp_geodata_4091";
+    parent "pp_bus_4091";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY1";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4092";
+    parent "pp_bus_4092";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY2";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4093";
+    parent "pp_bus_4093";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY3";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4094";
+    parent "pp_bus_4094";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY4";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4095";
+    parent "pp_bus_4095";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY5";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4096";
+    parent "pp_bus_4096";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY6";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4097";
+    parent "pp_bus_4097";
+    GEOHASH "9rcvn1";
+    NAME "GRIZZLY7";
+    LOAD 0;
+    BA "NW";
+    COUNTY 41031;
+}
+object pp_geodata
+{
+    name "pp_geodata_4101";
+    parent "pp_bus_4101";
+    GEOHASH "c2e2u0";
+    NAME "COULEE";
+    LOAD 0.88212;
+    BA "NW";
+    COUNTY 53025;
+}
+object pp_geodata
+{
+    name "pp_geodata_4102";
+    parent "pp_bus_4102";
+    GEOHASH "c26crp";
+    NAME "HANFORD";
+    LOAD 0.43855;
+    BA "NW";
+    COUNTY 53005;
+}
+object pp_geodata
+{
+    name "pp_geodata_4103";
+    parent "pp_bus_4103";
+    GEOHASH "c2kx95";
+    NAME "BELL";
+    LOAD 0.0108;
+    BA "NW";
+    COUNTY 53063;
+}
+object pp_geodata
+{
+    name "pp_geodata_4104";
+    parent "pp_bus_4104";
+    GEOHASH "c2kx95";
+    NAME "BELL";
+    LOAD 2.42499;
+    BA "NW";
+    COUNTY 53063;
+}
+object pp_geodata
+{
+    name "pp_geodata_4131";
+    parent "pp_bus_4131";
+    GEOHASH "c2e2u0";
+    NAME "COULEE";
+    GEN 14.114;
+    LOAD 0;
+    BA "NW";
+    COUNTY 53025;
+}
+object pp_geodata
+{
+    name "pp_geodata_4132";
+    parent "pp_bus_4132";
+    GEOHASH "c26crp";
+    NAME "HANFORD";
+    GEN 9.209;
+    LOAD 0;
+    BA "NW";
+    COUNTY 53005;
+}
+object pp_geodata
+{
+    name "pp_geodata_4201";
+    parent "pp_bus_4201";
+    GEOHASH "c2967d";
+    NAME "NORTH";
+    LOAD 5.14523;
+    BA "NW";
+    COUNTY 53061;
+}
+object pp_geodata
+{
+    name "pp_geodata_4202";
+    parent "pp_bus_4202";
+    GEOHASH "c237sz";
+    NAME "WCASCADE";
+    LOAD 4.30023;
+    BA "NW";
+    COUNTY 53053;
+}
+object pp_geodata
+{
+    name "pp_geodata_4203";
+    parent "pp_bus_4203";
+    GEOHASH "9rb6wg";
+    NAME "WILLAMET";
+    LOAD 4.30843;
+    BA "NW";
+    COUNTY 41039;
+}
+object pp_geodata
+{
+    name "pp_geodata_4204";
+    parent "pp_bus_4204";
+    GEOHASH "9r88yx";
+    NAME "MERIDIAN";
+    LOAD 0.94963;
+    BA "NW";
+    COUNTY 41029;
+}
+object pp_geodata
+{
+    name "pp_geodata_4231";
+    parent "pp_bus_4231";
+    GEOHASH "c2967d";
+    NAME "NORTH G3";
+    GEN 5.947;
+    LOAD 0;
+    BA "NW";
+    COUNTY 53061;
+}
+object pp_geodata
+{
+    name "pp_geodata_4232";
+    parent "pp_bus_4232";
+    GEOHASH "c237sz";
+    NAME "WCASCADE";
+    GEN 2.125;
+    LOAD 0;
+    BA "NW";
+    COUNTY 53053;
+}
+object pp_geodata
+{
+    name "pp_geodata_5001";
+    parent "pp_bus_5001";
+    GEOHASH "c2c10y";
+    NAME "CANADA";
+    LOAD 7.21338;
+    BA "BC";
+}
+object pp_geodata
+{
+    name "pp_geodata_5002";
+    parent "pp_bus_5002";
+    GEOHASH "c2c10y";
+    NAME "CANALB";
+    LOAD 8.53458;
+    BA "BC";
+}
+object pp_geodata
+{
+    name "pp_geodata_5003";
+    parent "pp_bus_5003";
+    GEOHASH "c2u6xt";
+    NAME "CA230TO";
+    LOAD 0.58926;
+    BA "AB";
+}
+object pp_geodata
+{
+    name "pp_geodata_5004";
+    parent "pp_bus_5004";
+    GEOHASH "c2u6xt";
+    NAME "CA230";
+    LOAD 0;
+    BA "AB";
+}
+object pp_geodata
+{
+    name "pp_geodata_5031";
+    parent "pp_bus_5031";
+    GEOHASH "c2c10y";
+    NAME "CANAD G1";
+    GEN 13.397;
+    LOAD 0;
+    BA "BC";
+}
+object pp_geodata
+{
+    name "pp_geodata_5032";
+    parent "pp_bus_5032";
+    GEOHASH "c2c10y";
+    NAME "CMAIN GM";
+    GEN 27.7342;
+    LOAD 0;
+    BA "BC";
+}
+object pp_geodata
+{
+    name "pp_geodata_6101";
+    parent "pp_bus_6101";
+    GEOHASH "9rwgcr";
+    NAME "MIDPOINT";
+    LOAD 0;
+    BA "BA";
+    COUNTY 16063;
+}
+object pp_geodata
+{
+    name "pp_geodata_6102";
+    parent "pp_bus_6102";
+    GEOHASH "9rwgcr";
+    NAME "MIDPOINT";
+    LOAD 1.02247;
+    BA "BA";
+    COUNTY 16063;
+}
+object pp_geodata
+{
+    name "pp_geodata_6103";
+    parent "pp_bus_6103";
+    GEOHASH "9rx7st";
+    NAME "BORAH";
+    LOAD 0.38645;
+    BA "BA";
+    COUNTY 16013;
+}
+object pp_geodata
+{
+    name "pp_geodata_6104";
+    parent "pp_bus_6104";
+    GEOHASH "9rx7st";
+    NAME "BORAH";
+    LOAD 1.68365;
+    BA "BA";
+    COUNTY 16013;
+}
+object pp_geodata
+{
+    name "pp_geodata_6132";
+    parent "pp_bus_6132";
+    GEOHASH "9rwgcr";
+    NAME "MIDPOINT";
+    GEN 5.303;
+    LOAD 0;
+    BA "BA";
+    COUNTY 16063;
+}
+object pp_geodata
+{
+    name "pp_geodata_6201";
+    parent "pp_bus_6201";
+    GEOHASH "c8h5zm";
+    NAME "COLSTRP";
+    LOAD 0.19417;
+    BA "NW";
+    COUNTY 30087;
+}
+object pp_geodata
+{
+    name "pp_geodata_6202";
+    parent "pp_bus_6202";
+    GEOHASH "c2r8x7";
+    NAME "GARRISON";
+    LOAD 0.08132;
+    BA "NW";
+    COUNTY 30077;
+}
+object pp_geodata
+{
+    name "pp_geodata_6203";
+    parent "pp_bus_6203";
+    GEOHASH "c8h5zm";
+    NAME "COLSTRP";
+    LOAD 0.60924;
+    BA "NW";
+    COUNTY 30087;
+}
+object pp_geodata
+{
+    name "pp_geodata_6204";
+    parent "pp_bus_6204";
+    GEOHASH "c2r8x7";
+    NAME "GARRISON";
+    LOAD 0.66755;
+    BA "NW";
+    COUNTY 30077;
+}
+object pp_geodata
+{
+    name "pp_geodata_6205";
+    parent "pp_bus_6205";
+    GEOHASH "c82vu4";
+    NAME "MONTANA";
+    LOAD 0.46598;
+    BA "NW";
+    COUNTY 30013;
+}
+object pp_geodata
+{
+    name "pp_geodata_6231";
+    parent "pp_bus_6231";
+    GEOHASH "c8h5zm";
+    NAME "COLSTRP";
+    GEN 2.738;
+    LOAD 0;
+    BA "NW";
+    COUNTY 30087;
+}
+object pp_geodata
+{
+    name "pp_geodata_6235";
+    parent "pp_bus_6235";
+    GEOHASH "c82vu4";
+    NAME "MONTA G1";
+    GEN 3.617;
+    LOAD 0;
+    BA "NW";
+    COUNTY 30013;
+}
+object pp_geodata
+{
+    name "pp_geodata_6301";
+    parent "pp_bus_6301";
+    GEOHASH "9x6z6m";
+    NAME "BRIDGER";
+    LOAD 0.50865;
+    BA "RM";
+    COUNTY 56037;
+}
+object pp_geodata
+{
+    name "pp_geodata_6302";
+    parent "pp_bus_6302";
+    GEOHASH "9xkgmv";
+    NAME "LARAMIE";
+    LOAD 0.58842;
+    BA "RM";
+    COUNTY 56001;
+}
+object pp_geodata
+{
+    name "pp_geodata_6303";
+    parent "pp_bus_6303";
+    GEOHASH "9x6z6m";
+    NAME "BRIDGER2";
+    LOAD 0.72486;
+    BA "RM";
+    COUNTY 56037;
+}
+object pp_geodata
+{
+    name "pp_geodata_6304";
+    parent "pp_bus_6304";
+    GEOHASH "9xkgmv";
+    NAME "LARAMIE";
+    LOAD 0;
+    BA "RM";
+    COUNTY 56001;
+}
+object pp_geodata
+{
+    name "pp_geodata_6305";
+    parent "pp_bus_6305";
+    GEOHASH "9x3mfn";
+    NAME "NAUGHTON";
+    LOAD 0.05682;
+    BA "BA";
+    COUNTY 56023;
+}
+object pp_geodata
+{
+    name "pp_geodata_6333";
+    parent "pp_bus_6333";
+    GEOHASH "9x6z6m";
+    NAME "BRIDGER";
+    GEN 6.083;
+    LOAD 0;
+    BA "RM";
+    COUNTY 56037;
+}
+object pp_geodata
+{
+    name "pp_geodata_6335";
+    parent "pp_bus_6335";
+    GEOHASH "9x3mfn";
+    NAME "NAUGHT";
+    GEN 3.381;
+    LOAD 0;
+    BA "BA";
+    COUNTY 56023;
+}
+object pp_geodata
+{
+    name "pp_geodata_6401";
+    parent "pp_bus_6401";
+    GEOHASH "9r50xy";
+    NAME "TRACYSPP";
+    LOAD 1.62839;
+    BA "SW";
+    COUNTY 32019;
+}
+object pp_geodata
+{
+    name "pp_geodata_6402";
+    parent "pp_bus_6402";
+    GEOHASH "9r4bc7";
+    NAME "SUMITSPP";
+    LOAD 0.27085;
+    BA "SW";
+    COUNTY 32031;
+}
+object pp_geodata
+{
+    name "pp_geodata_6403";
+    parent "pp_bus_6403";
+    GEOHASH "9rkf69";
+    NAME "VALMY";
+    LOAD 0.00198;
+    BA "SW";
+    COUNTY 32007;
+}
+object pp_geodata
+{
+    name "pp_geodata_6404";
+    parent "pp_bus_6404";
+    GEOHASH "9rn2tf";
+    NAME "GONDER";
+    LOAD 0.0275;
+    BA "SW";
+    COUNTY 32033;
+}
+object pp_geodata
+{
+    name "pp_geodata_6433";
+    parent "pp_bus_6433";
+    GEOHASH "9rkf69";
+    NAME "VALMY";
+    GEN 2.663;
+    LOAD 0;
+    BA "SW";
+    COUNTY 32007;
+}
+object pp_geodata
+{
+    name "pp_geodata_6501";
+    parent "pp_bus_6501";
+    GEOHASH "9x27ep";
+    NAME "BENLOMND";
+    LOAD 0.19303;
+    BA "BA";
+    COUNTY 49003;
+}
+object pp_geodata
+{
+    name "pp_geodata_6502";
+    parent "pp_bus_6502";
+    GEOHASH "9x0mgn";
+    NAME "CAMP WIL";
+    LOAD 1.53933;
+    BA "BA";
+    COUNTY 49049;
+}
+object pp_geodata
+{
+    name "pp_geodata_6503";
+    parent "pp_bus_6503";
+    GEOHASH "9x47er";
+    NAME "EMERY";
+    LOAD 0.41423;
+    BA "BA";
+    COUNTY 49047;
+}
+object pp_geodata
+{
+    name "pp_geodata_6504";
+    parent "pp_bus_6504";
+    GEOHASH "9x06gc";
+    NAME "MONA";
+    LOAD 0.29372;
+    BA "BA";
+    COUNTY 49049;
+}
+object pp_geodata
+{
+    name "pp_geodata_6505";
+    parent "pp_bus_6505";
+    GEOHASH "9wdr2q";
+    NAME "PINTO";
+    LOAD 0.00656;
+    BA "BA";
+    COUNTY 49037;
+}
+object pp_geodata
+{
+    name "pp_geodata_6506";
+    parent "pp_bus_6506";
+    GEOHASH "9wdr2q";
+    NAME "PINTO PS";
+    LOAD 0;
+    BA "BA";
+    COUNTY 49037;
+}
+object pp_geodata
+{
+    name "pp_geodata_6507";
+    parent "pp_bus_6507";
+    GEOHASH "9wbmjr";
+    NAME "SIGURD";
+    LOAD 0.52783;
+    BA "BA";
+    COUNTY 49041;
+}
+object pp_geodata
+{
+    name "pp_geodata_6508";
+    parent "pp_bus_6508";
+    GEOHASH "9x0gc5";
+    NAME "SPAN FRK";
+    LOAD 0.12899;
+    BA "BA";
+    COUNTY 49049;
+}
+object pp_geodata
+{
+    name "pp_geodata_6509";
+    parent "pp_bus_6509";
+    GEOHASH "9x0ryy";
+    NAME "TERMINAL";
+    LOAD 0.00849;
+    BA "BA";
+    COUNTY 49035;
+}
+object pp_geodata
+{
+    name "pp_geodata_6510";
+    parent "pp_bus_6510";
+    GEOHASH "9x27ep";
+    NAME "BENLOMND";
+    LOAD 1.97192;
+    BA "BA";
+    COUNTY 49003;
+}
+object pp_geodata
+{
+    name "pp_geodata_6533";
+    parent "pp_bus_6533";
+    GEOHASH "9x47er";
+    NAME "EMERY";
+    GEN 8.588;
+    LOAD 0;
+    BA "BA";
+    COUNTY 49047;
+}
+object pp_geodata
+{
+    name "pp_geodata_7001";
+    parent "pp_bus_7001";
+    GEOHASH "9wve62";
+    NAME "COLOEAST";
+    LOAD 6.86364;
+    BA "RM";
+    COUNTY 8041;
+}
+object pp_geodata
+{
+    name "pp_geodata_7002";
+    parent "pp_bus_7002";
+    GEOHASH "9x5w98";
+    NAME "CRAIG";
+    LOAD 2.51708;
+    BA "RM";
+    COUNTY 8081;
+}
+object pp_geodata
+{
+    name "pp_geodata_7031";
+    parent "pp_bus_7031";
+    GEOHASH "9wve62";
+    NAME "COLOEAST";
+    GEN 13.0881;
+    LOAD 0;
+    BA "RM";
+    COUNTY 8041;
+}
+object pp_geodata
+{
+    name "pp_geodata_7032";
+    parent "pp_bus_7032";
+    GEOHASH "9x5w98";
+    NAME "CRAIG";
+    GEN 4.714;
+    LOAD 0;
+    BA "RM";
+    COUNTY 8081;
+}
+object pp_geodata
+{
+    name "pp_geodata_8001";
+    parent "pp_bus_8001";
+    GEOHASH "9r0vxp";
+    NAME "OLINDA";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_8002";
+    parent "pp_bus_8002";
+    GEOHASH "9q9wtp";
+    NAME "TRACY";
+    LOAD 0;
+    BA "CA";
+    COUNTY 6077;
+}
+object pp_geodata
+{
+    name "pp_geodata_8003";
+    parent "pp_bus_8003";
+    GEOHASH "9r1jcf";
+    NAME "COTWDWAP";
+    LOAD 0.54642;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_8004";
+    parent "pp_bus_8004";
+    GEOHASH "9qcf5u";
+    NAME "RNCHSECO";
+    LOAD 3.4091;
+    BA "CA";
+    COUNTY 6067;
+}
+object pp_geodata
+{
+    name "pp_geodata_8005";
+    parent "pp_bus_8005";
+    GEOHASH "9q9wtp";
+    NAME "TRACYPMP";
+    LOAD 1.21322;
+    BA "CA";
+    COUNTY 6077;
+}
+object pp_geodata
+{
+    name "pp_geodata_8033";
+    parent "pp_bus_8033";
+    GEOHASH "9r1jcf";
+    NAME "COTWDWAP";
+    GEN 1.394;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6089;
+}
+object pp_geodata
+{
+    name "pp_geodata_8034";
+    parent "pp_bus_8034";
+    GEOHASH "9qcf5u";
+    NAME "RNCHSECO";
+    GEN 4.298;
+    LOAD 0;
+    BA "CA";
+    COUNTY 6067;
 }
 
 // 2 dclinecost row(s) not written: module pypower has no DC line cost objects

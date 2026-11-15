@@ -1127,6 +1127,13 @@ def wecc240_map():
         [2604, 2600, 1, 1791.95, 1591.98, 0, 0, 1.03, 1.056, 0, 2400, -100, 100, -100, 100, 50, 0.086]
     ])
 
+    ## dclinecost data
+    # model startup shutdown ncost c(n-1) ... c0 (or x1 y1 ... xn yn)
+    ppc["dclinecost"] = array([
+        [2, 0, 0, 3, 0, 0, 0],
+        [2, 0, 0, 3, 0, 0, 0]
+    ])
+
     ## areas data
     # area price_ref_bus
     ppc["areas"] = array([
