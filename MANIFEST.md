@@ -19,6 +19,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
 - Change area handling: `COLUMNS["areas"]`, `Case.validate` and `Case._area_summary` in `ppedit/case.py`; `areaRegions`, area grouping in `layout`/`onelineLayout` in `ppedit/static/app.js`; `ppedit/_test/test_areas.py`
 - Change DC line handling: `COLUMNS["dcline"]`, `COST_TABLES` and `Case.solve` in `ppedit/case.py`; solver callbacks in `ppedit/_dcline.py`; `ppedit/_test/test_dcline.py`
+- Change PSS/E `.raw` input: `ppedit/_psse.py` (conversion), `INPUT_FORMATS`/`Case.load` in `ppedit/case.py`; `ppedit/_test/test_psse.py` and `ppedit/_test/data/psse_v*.raw`
 - Add an API route: `ppedit/server.py` (and its docstring API list); `ppedit/_test/test_server.py`; call it from `ppedit/static/app.js`
 - Change the UI: `ppedit/static/{index.html,style.css,app.js}`
 - Change geodata handling or map layers: `Case.load_geodata`/`_geo_*` helpers in `ppedit/case.py`; `geoLayout`/`renderMap` in `ppedit/static/app.js`; `ppedit/_test/test_geodata.py`
@@ -34,7 +35,8 @@ Update this file in the same PR that adds, moves, or deletes a file.
 |---|---|---|
 | `ppedit/__init__.py` | package docs, re-exports | pdoc landing page |
 | `ppedit/cli.py` | CLI `main()`: serve, convert, check | entry point `ppedit`; tested by `_test/test_cli.py` |
-| `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O, edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
+| `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O (and `.raw` input), edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
+| `ppedit/_psse.py` | PSS/E RAW reader (revisions 23–35), after MATPOWER `psse2mpc` | private; read only; tested by `_test/test_psse.py` |
 | `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
 | `ppedit/claude.py` | `Sessions`: Claude API conversations with tools that edit the case, web and local data sources | tested by `_test/test_claude.py` with a fake client |
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
@@ -53,6 +55,8 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/_test/data/README.md` | test data provenance | |
 | `ppedit/_test/test_examples.py` | checks `examples/pypower/` | each `.glm` matches its `.py` |
 | `ppedit/_test/data/case3.glm` | 3-bus GLM test model | curated, hand-written |
+| `ppedit/_test/data/psse_v33.raw` | 4-bus PSS/E revision 33 test case (loads, shunts, 2- and 3-winding transformers, DC line) | curated, hand-written; used by `test_psse.py` |
+| `ppedit/_test/data/psse_v35.raw` | 3-bus PSS/E revision 35 test case (system-wide data, `@!` headers, switching devices) | curated, hand-written; used by `test_psse.py` |
 | `ppedit/_test/data/case9_geodata.csv` | synthetic `case9` bus locations | curated, hand-written; used by `test_geodata.py` |
 
 ## Examples

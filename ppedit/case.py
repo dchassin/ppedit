@@ -12,6 +12,13 @@ and writes:
   - Arras Energy GridLAB-D models (`.glm`) that use `module pypower`
     (`bus`, `gen`, `branch`, `gencost` and `dcline` objects).
 
+It also reads, but does not write, Siemens PTI PSS/E power flow cases
+(`.raw`, revisions 23 to 35): buses, loads, fixed and switched shunts,
+generators, branches, 2- and 3-winding transformers (a star bus is added
+for each 3-winding transformer) and two-terminal DC lines are converted as
+MATPOWER's `psse2mpc` does; `Case.notes` lists what was not converted
+(see `ppedit._psse`). Save the case as `.py`, `.json` or `.glm`.
+
 DC lines (`dcline`, columns as in `pypower.idx_dcline`) connect two buses
 with a controlled real power flow `Pf` and linear losses `loss0 +
 loss1*Pf`; optional `dclinecost` rows (one per DC line, in the `gencost`
@@ -93,6 +100,13 @@ Caveats
     pypower` names buses by row order and DC lines from 0 instead; the bus
     names agree when bus numbers run 1..N in order.
 
+  - PSS/E `.raw` input keeps no names (buses, branches, machines) and no
+    data that PYPOWER cannot hold (owners, zones, magnetizing admittance,
+    impedance correction tables, VSC and multi-terminal DC lines, FACTS
+    devices, ...); constant current and constant admittance loads become
+    constant power loads at the case bus voltage, and there are no cost
+    rows (`gencost`), so OPF needs costs added first.
+
   - PYPOWER result columns (e.g. `PF`, `QF`, `lam_P`) present in an input
     case are dropped on load; only the input columns are edited.
 
@@ -116,6 +130,7 @@ References
 
   - PYPOWER case format: `pypower.caseformat`
   - Arras Energy `module pypower`: https://github.com/arras-energy/gridlabd/tree/master/module/pypower
+  - PSS/E RAW conversion: MATPOWER `psse2mpc`, https://matpower.org
 """
 
 import ast
@@ -276,12 +291,26 @@ GLM_UNITS = {
 FORMATS = {".py":"py",".json":"json",".glm":"glm"}
 """File extensions and the format each is read and written in"""
 
+INPUT_FORMATS = {**FORMATS,".raw":"raw"}
+"""File extensions `Case.load` reads (`.raw`: PSS/E, read only)"""
+
 GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
 latitude and longitude are decimal degrees (WGS84)"""
 
 class CaseError(ValueError):
     """Raised for invalid case data or an unreadable case file"""
+
+def writable_format(path:str) -> str:
+    """Return the output format of `path` from its extension (`FORMATS`);
+    raise `CaseError` for read-only (`.raw`) or unknown extensions"""
+    ext = os.path.splitext(path)[1].lower()
+    if ext in FORMATS:
+        return FORMATS[ext]
+    if ext in INPUT_FORMATS:
+        raise CaseError(f"'{path}': {ext} files are read only; save as "
+            f"{', '.join(FORMATS)}")
+    raise CaseError(f"'{path}' has an unsupported extension (use {', '.join(FORMATS)})")
 
 # ---------------------------------------------------------------------------
 # helpers
@@ -439,7 +468,8 @@ class Case:
         Arguments
         ---------
 
-          - `path`: file name; the extension selects the format (`FORMATS`)
+          - `path`: file name; the extension selects the format
+            (`INPUT_FORMATS`)
 
           - `text`: file contents (read from `path` if `None`)
 
@@ -453,12 +483,13 @@ class Case:
 
           - `CaseError`: unknown extension or unreadable content
         """
-        fmt = FORMATS.get(os.path.splitext(path)[1].lower())
+        fmt = INPUT_FORMATS.get(os.path.splitext(path)[1].lower())
         if fmt is None:
             raise CaseError(f"'{path}' has an unsupported extension "
-                f"(use {', '.join(FORMATS)})")
+                f"(use {', '.join(INPUT_FORMATS)})")
         if text is None:
-            with open(path,"r",encoding="utf-8") as fh:
+            errors = "replace" if fmt == "raw" else "strict"  # PSS/E names may be Latin-1
+            with open(path,"r",encoding="utf-8",errors=errors) as fh:
                 text = fh.read()
         name = re.sub(r"\W","_",os.path.splitext(os.path.basename(path))[0]) or "case"
         if name[0].isdigit():
@@ -471,6 +502,14 @@ class Case:
             except json.JSONDecodeError as err:
                 raise CaseError(f"invalid JSON: {err}") from err
             case = cls(data,name)
+        elif fmt == "raw":
+            from ppedit._psse import parse_raw,RawError # pylint: disable=import-outside-toplevel
+            try:
+                data,notes = parse_raw(text)
+            except RawError as err:
+                raise CaseError(f"invalid PSS/E RAW file: {err}") from err
+            case = cls(data,name)
+            case.notes = notes
         else:
             data,notes = _parse_glm(text)
             case = cls(data,name)
@@ -543,10 +582,8 @@ class Case:
         raise CaseError(f"unknown format '{fmt}'")
 
     def save(self,path:str):
-        """Write the case to `path`; the extension selects the format"""
-        fmt = FORMATS.get(os.path.splitext(path)[1].lower())
-        if fmt is None:
-            raise CaseError(f"'{path}' has an unsupported extension")
+        """Write the case to `path`; the extension selects the format (`FORMATS`)"""
+        fmt = writable_format(path)
         text = self.dumps(fmt)
         with open(path,"w",encoding="utf-8") as fh:
             fh.write(text)

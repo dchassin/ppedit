@@ -2259,7 +2259,7 @@ async function onAction(btn) {
     else if (a === "open") { if (confirmDiscard()) $("#file-input").click(); }
     else if (a === "save") await saveTo(null);
     else if (a === "save-as") {
-      const def = S.state.path || `${S.state.case.name}.glm`;
+      const def = (S.state.path || `${S.state.case.name}.glm`).replace(/\.raw$/i, ".glm");
       const path = prompt("Save to this path on the server machine (.py, .json or .glm):", def);
       if (path) await saveTo(path);
     }

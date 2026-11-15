@@ -15,6 +15,8 @@
 - [ ] Edit geodata in the editor (drag buses in the geodata layout, a geodata table)
 - [ ] Persist force-layout positions
 - [x] `dcline` and `dclinecost` tables (edit, validate, draw, solve; GLM `dcline` objects)
+- [x] Open PSS/E `.raw` cases, revisions 23–35 (read only; issue #54)
+- [ ] Keep PSS/E bus names and revision 35 substation locations as geodata
 - [x] `areas` table (edit, validate, area colors in the diagram, per-area results)
 - [ ] Copy/paste of cell ranges to and from spreadsheets
 - [x] Claude tab: multiple Claude API sessions that edit the case, with web and local data sources

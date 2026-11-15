@@ -13,11 +13,13 @@ Positional arguments
 
   - `serve`: start the editor web server and open it in a browser
 
-  - `convert`: convert a case between `.py`, `.json`, and `.glm`
+  - `convert`: convert a case between `.py`, `.json`, and `.glm`, or from a
+    PSS/E `.raw` case (read only) to one of them
 
   - `check`: print validation issues; exit code 1 if there are errors
 
   - `FILE`, `INPUT`, `OUTPUT`: case files; the extension selects the format
+    (`INPUT` and `FILE` may also be PSS/E `.raw`, revisions 23 to 35)
 
 Optional arguments
 ------------------
@@ -113,6 +115,15 @@ What is not promised
     are not expanded; a GLM whose buses come only from them is refused with
     an error naming the files to open instead.
 
+  - PSS/E `.raw` cases (revisions 23 to 35) are read, not written, and
+    are converted as MATPOWER's `psse2mpc` does (see `ppedit._psse`):
+    names and the data PYPOWER cannot hold (owners, zones, magnetizing
+    admittance, impedance correction, switched shunt blocks other than the
+    initial susceptance, VSC and multi-terminal DC lines, FACTS devices,
+    ...) are listed when the case is opened and dropped; constant current
+    and admittance loads become constant power at the case voltage; each
+    3-winding transformer adds a star bus; there are no cost rows.
+
   - `areas` is not written to GLM (there is no GridLAB-D object for it).
     `dclinecost` is written to GLM as `dclinecost` runtime-class objects
     with the `pypower.gencost` properties, parent the DC line (GridLAB-D
@@ -161,7 +172,8 @@ Columns follow `pypower.caseformat`; units are listed in `ppedit.case.COLUMNS`.
 
 ```mermaid
 flowchart LR
-    file[(.py / .json / .glm)] --> Case
+    file[(.py / .json / .glm)] <--> Case
+    raw[(PSS/E .raw)] --> Case
     csv[(geodata .csv)] --> Case
     maps[USGS / TIGERweb map services] --> browser
     Case <-->|JSON API| server[Flask server]
