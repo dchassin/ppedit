@@ -77,6 +77,8 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/wecc240_gentypes.csv` | polynomial costs (`c2,c1,c0`) by generator type (the PSS/E generator ID) | written by `wecc240_gentypes.py` |
 | `examples/wecc240_gentypes.py` | derives `wecc240_gentypes.csv` from NREL's WECC 240 scheduling workbook | maintenance script; needs `openpyxl` |
 | `examples/wecc240_2011.py` | the 2011 WECC 240-bus case (`wecc240_case.raw` converted by ppedit) | written by ppedit; ~85 kB, use `head` |
+| `examples/wecc240_2018.py` | `wecc240_2011.py` with generator costs by type from `wecc240_gentypes.csv` | written by `build_wecc240_2018.py`; ~95 kB, use `head` |
+| `examples/build_wecc240_2018.py` | builds `wecc240_2018.py` | maintenance script |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~85 kB, use `head` |
 | `examples/wecc240_geodata.csv` | bus locations for the WECC 240-bus case (`BUS_I,LAT,LON` plus `GEOHASH,NAME,GEN,LOAD,BA,COUNTY`) | for `--geodata` or **Map ▸ Load CSV…** |
 | `examples/wecc240_map.py` | WECC 240-bus case with its `geodata` and `geotags` | written by ppedit; ~95 kB, use `head` |
