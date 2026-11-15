@@ -1921,7 +1921,7 @@ async function onAction(btn) {
       const path = prompt("Save to this path on the server machine (.py, .json or .glm):", def);
       if (path) await saveTo(path);
     }
-    else if (a === "download") { window.location = `/api/export?format=${btn.dataset.format}`; }
+    else if (a === "download") downloadUrl(`/api/export?format=${btn.dataset.format}`);
     else if (a === "undo") await act("/api/undo");
     else if (a === "redo") await act("/api/redo");
     else if (a === "solve") {
@@ -1939,13 +1939,22 @@ async function onAction(btn) {
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
     else if (a === "geodata-load") $("#geodata-input").click();
-    else if (a === "geodata-export") { window.location = "/api/export?format=csv"; }
+    else if (a === "geodata-export") downloadUrl("/api/export?format=csv");
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
     else if (a === "claude-new") await newClaudeSession();
     else if (a === "exit") await exitServer();
   } catch (_) { /* toast already shown */ }
+}
+
+// Download through a temporary <a download> link: assigning window.location
+// would fire "beforeunload" and show the leave-site prompt when the case is dirty.
+function downloadUrl(url) {
+  const a = h("a", { href: url, download: "" });
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
 }
 
 async function saveTo(path) {
