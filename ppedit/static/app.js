@@ -116,6 +116,9 @@ function issuesFor(table) {
 
 // ---------------------------------------------------------------- chrome
 
+const OPF_NO_COST = "Run OPF is disabled: OPF needs generator cost data (gencost). "
+  + "Add cost rows on the Gen costs tab or open a case that has them.";
+
 function renderChrome() {
   const st = S.state, c = st.case;
   const name = $("#case-name");
@@ -126,6 +129,9 @@ function renderChrome() {
   $("#save-btn").disabled = !st.path;
   $("#undo-btn").disabled = !st.can_undo;
   $("#redo-btn").disabled = !st.can_redo;
+  const noCost = !c.tables.gencost.length;
+  $("#opf-btn").disabled = noCost;
+  $("#opf-wrap").title = noCost ? OPF_NO_COST : "Run an optimal power flow";
   for (const el of [$("#baseMVA"), $("#version")]) {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
@@ -2295,7 +2301,7 @@ async function onAction(btn) {
         const r = S.state.result;
         toast(r.success ? `${r.kind.toUpperCase()} converged` : `${r.kind.toUpperCase()} did not converge — see Results`, !r.success);
         if (S.view !== "network") show("results"); else renderNetwork();
-      } finally { btn.disabled = false; }
+      } finally { btn.disabled = false; renderChrome(); }
     }
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
@@ -2361,6 +2367,7 @@ async function init() {
   loadLabels();
   buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
+  $("#opf-wrap").addEventListener("click", () => { if ($("#opf-btn").disabled) toast(OPF_NO_COST, true); });
   document.addEventListener("click", e => {
     const m = e.target.closest("[data-menu]");
     if (m) { const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus(); if (!open) d.classList.add("open"); return; }
