@@ -56,7 +56,7 @@ def test_glm_round_trip_auxiliary(case):
     text = case.dumps("glm")
     assert "latitude 38.5816;" in text and "longitude -121.4944;" in text
     assert "class pp_geodata\n{\n    char256 NAME;\n    int64 KV;\n}" in text
-    assert 'parent "pp_bus_1";\n    NAME "Sacramento";\n    KV 345;' in text
+    assert 'name "pp_geodata_1";\n    parent "pp_bus_1";\n    NAME "Sacramento";\n    KV 345;' in text
     again = Case.load("x.glm",text)
     assert again.geodata == case.geodata and again.geotags == case.geotags
     assert again.tables["bus"] == case.tables["bus"] and again.notes == []
@@ -69,6 +69,8 @@ def test_glm_auxiliary_names_and_rows():
     text = case.dumps("glm")
     assert "char256 Plant_name; // Plant name" in text and "int64 name_; // name" in text
     assert "double rating;" in text
+    assert 'name "pp_geodata_1_1";' in text and 'name "pp_geodata_1_3";' in text
+    assert 'name "pp_geodata_2";' in text
     again = Case.load("x.glm",text)
     assert again.geotags == ["Plant_name","rating","name_"]
     assert again.geodata == [[1,37.0,-120.0,"A 'b'",1.5,""],[2,38.0,-121.0,"",2,7],

@@ -96,7 +96,9 @@ Caveats
     class `pp_geodata` with one property per tag (`int64`, `double` or
     `char256`/`char1024`) and writes one `pp_geodata` object per geodata row
     with its bus as parent (and its own `latitude`/`longitude` when it is
-    not the bus's first row). Tags that are not GLM names are changed to
+    not the bus's first row), named `pp_geodata_<bus_i>`, or
+    `pp_geodata_<bus_i>_<n>` (`n` the 1-based geodata row) when the bus has
+    more than one row. Tags that are not GLM names are changed to
     ones that are (`KV level` becomes `KV_level`; a name GLM objects already
     have, such as `name`, gets a trailing `_`) and are read back that way;
     `"` in text becomes `'`, and empty values are not written. Geodata rows
@@ -649,9 +651,13 @@ def {name}():
             out.write(f"    {_glm_geo_type(values)} {name};"
                 + (f" // {tag}" if name != tag else "") + "\n")
         out.write("}\n")
+        count = {}
+        for row in self.geodata:
+            count[row[0]] = count.get(row[0],0) + 1
         seen = set()
         for n,row in enumerate(self.geodata):
-            out.write(f'object {GEODATA_CLASS}\n{{\n    name "pp_geodata_{n+1}";\n'
+            name = f"pp_geodata_{row[0]}" + (f"_{n+1}" if count[row[0]] > 1 else "")
+            out.write(f'object {GEODATA_CLASS}\n{{\n    name "{name}";\n'
                 f'    parent "pp_bus_{row[0]}";\n')
             if row[0] in seen: # not the bus's first row: its location is not on the bus
                 out.write(f"    latitude {_fmt(float(row[1]))};\n"

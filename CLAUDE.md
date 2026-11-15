@@ -104,7 +104,8 @@ API key to start sessions; tests use a fake client).
   `OVERLAP_PX` screen pixels of each other opens `#bus-menu` at the
   pointer to choose one (`busesAt`/`openBusMenu`), instead of picking
   the topmost. GLM output keeps lat/lon on the bus and writes
-  auxiliary values as `pp_geodata` runtime-class objects (parent the bus;
+  auxiliary values as `pp_geodata` runtime-class objects (parent the bus,
+  named `pp_geodata_<bus_i>`, plus `_<row>` when the bus has several rows;
   `_dump_glm_geodata`/`_glm_geodata` in `case.py`); tags that are not GLM
   names are renamed (`_glm_tag_names`) and read back renamed.
 - One-line style (`onelineLayout`/`renderOneline` in `app.js`): its own
