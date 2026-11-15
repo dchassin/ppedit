@@ -1655,6 +1655,53 @@ function pick(kind, index) {
   renderNetwork();
 }
 
+// Geodata layout: buses at the same (or nearly the same) location are drawn on
+// top of each other, so a click there lists them in #bus-menu to choose from.
+const OVERLAP_PX = 10; // screen distance from the pointer within which buses count as under it
+function busesAt(cx, cy, index) {
+  // bus row indices drawn within OVERLAP_PX of the client point, nearest first;
+  // always includes the clicked bus `index`
+  const svg = $("#net"), R = svg.getBoundingClientRect(), P = positions(), T = S.state.case.tables.bus;
+  const mx = cx - R.left, my = cy - R.top, near = [];
+  T.forEach((b, i) => {
+    const p = P[b[0]];
+    if (!p) return;
+    const d = Math.hypot(S.zoom.x + S.zoom.k * p.x - mx, S.zoom.y + S.zoom.k * p.y - my);
+    if (d <= OVERLAP_PX || i === index) near.push({ i, d });
+  });
+  return near.sort((a, b) => a.d - b.d || T[a.i][0] - T[b.i][0]).map(n => n.i);
+}
+function openBusMenu(rows, cx, cy) {
+  const c = S.state.case, T = c.tables.bus, menu = $("#bus-menu"), wrap = menu.parentElement.getBoundingClientRect();
+  const G = geoLayout(), types = S.meta.columns.bus[1].options;
+  const tag = n => { const r = G.where.get(n); return r && r.length > 3 ? r.slice(3).filter(v => v !== null && v !== "").join(" · ") : ""; };
+  closeMenus();
+  menu.replaceChildren(
+    h("div", { class: "sep" }, `${rows.length} buses here`),
+    ...rows.map(i => {
+      const b = T[i], extra = tag(b[0]);
+      return h("button", { role: "option", onclick: () => { closeMenus(); pick("bus", i); } },
+        h("span", {}, `bus ${b[0]}`),
+        h("span", { class: "sub" }, `${types[b[1]] || b[1]}, area ${b[6]}${extra ? " · " + extra : ""}${G.estimated.has(b[0]) ? " (no geodata)" : ""}`));
+    }));
+  menu.style.left = `${Math.max(4, Math.min(cx - wrap.left + 8, wrap.width - 280))}px`;
+  menu.style.top = `${Math.max(4, Math.min(cy - wrap.top + 8, wrap.height - 40))}px`;
+  // open after this pointerup's click event, which closes open menus
+  setTimeout(() => { menu.classList.add("open"); menu.scrollTop = 0; menu.querySelector("button").focus(); });
+}
+function setupBusMenu() {
+  const menu = $("#bus-menu");
+  menu.addEventListener("keydown", e => {
+    const opts = $$("button", menu), i = opts.indexOf(document.activeElement);
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      const j = Math.max(0, Math.min(opts.length - 1, i + (e.key === "ArrowDown" ? 1 : -1)));
+      opts[j].focus();
+    } else if (e.key === "Home" || e.key === "End") { e.preventDefault(); opts[e.key === "Home" ? 0 : opts.length - 1].focus(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeMenus(); }
+  });
+}
+
 // ---------------------------------------------------------------- search
 
 // Buses, branches and DC lines matching a network search query, in table
@@ -1938,8 +1985,15 @@ function setupNetworkEvents() {
       scheduleRender();
     }
   });
-  svg.addEventListener("pointerup", () => {
-    if (drag) { if (!drag.moved) pick("bus", drag.index); drag = null; }
+  svg.addEventListener("pointerup", e => {
+    if (drag) {
+      if (!drag.moved) {
+        const here = drag.fixed ? busesAt(e.clientX, e.clientY, drag.index) : [];
+        if (here.length > 1) openBusMenu(here, e.clientX, e.clientY);
+        else pick("bus", drag.index);
+      }
+      drag = null;
+    }
     else if (pan) { if (!pan.moved && S.pick) pick(null); pan = null; }
     svg.classList.remove("panning");
   });
@@ -2333,6 +2387,7 @@ async function init() {
   $("#claude-local").addEventListener("change", e => { $("#claude-root").disabled = !e.target.checked; });
   setupNetworkEvents();
   setupSearch();
+  setupBusMenu();
   setInterval(pollClaude, 1000);
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");
