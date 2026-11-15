@@ -2041,6 +2041,7 @@ async function init() {
   setInterval(pollClaude, 1000);
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");
+  if (S.state.case.notes.length) toast(S.state.case.notes[0]);
 }
 
 init().catch(err => toast(err.message, true));

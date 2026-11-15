@@ -1687,6 +1687,8 @@ def _parse_glm(text):
     """Extract a ppc dict from an Arras Energy GLM model"""
     text = _strip_comments(text)
     directives = sum(1 for line in text.splitlines() if line.strip().startswith("#"))
+    sources = [" ".join(line.split()[:2]) for line in text.splitlines()
+        if re.match(r"\s*#(include|input|begin)\b",line)]
     text = "\n".join("" if line.strip().startswith("#") else line for line in text.splitlines())
     data = {"version":"2","baseMVA":100.0,"bus":[],"gen":[],"branch":[],"gencost":[],"dcline":[]}
     geodata = []
@@ -1723,6 +1725,11 @@ def _parse_glm(text):
                 objects[oclass].append(props)
             else:
                 others[oclass] = others.get(oclass,0) + 1
+    if not objects["bus"] and sources:
+        # the network comes from files the preprocessor would load; reading this
+        # file alone would silently give an empty case
+        raise CaseError("no pypower bus objects found in GLM; its data comes from "
+            + ", ".join(sources) + ", which ppedit does not expand (open that file instead)")
     if not module and not any(objects.values()):
         raise CaseError("no 'module pypower' objects found in GLM")
     # buses
