@@ -131,7 +131,9 @@ API key to start sessions; tests use a fake client).
   are not placed to avoid collisions; DC lines get none.
 - Search box (`#net-search`, `searchItems`/`runSearch`/`centerOn` in
   `app.js`): runs on Enter; client-side only, over buses, branches and DC
-  lines (`A-B` and `branch N` include DC lines; free text matches geodata
+  lines (`A-B` and `branch N` include DC lines; `A-B` with no line between
+  them lists the lines at A and B, with `found.note` shown and no
+  auto-pick even for one; free text matches geodata
   aux columns only, since buses have no names). One match is picked and
   centered at the current zoom; several open `#search-menu` (at most 200
   listed).

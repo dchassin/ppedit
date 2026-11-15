@@ -118,7 +118,8 @@ In the editor:
     a query and press Enter. `N` or `bus N` finds bus N (or, if there is no
     bus N, the buses whose number contains N); `A-B`, `A B` or `A to B`
     finds the branches and DC lines between buses A and B (either
-    direction); `branch N` finds the branches and DC lines connected to bus
+    direction), or, if no line joins them, lists the lines at A and B to
+    choose from (with a note saying so); `branch N` finds the branches and DC lines connected to bus
     N; any other text finds the buses whose geodata columns (e.g. a name)
     contain it. A single match is selected for editing in the side panel
     and centered in the diagram; several matches open a list to choose from

@@ -163,6 +163,7 @@ td.bad input { color: var(--err); }
 #net-search { width: 170px; border: 1px solid var(--line-strong); background: var(--panel); color: var(--ink); border-radius: 5px; padding: 4px 8px; font: inherit; }
 #net-search:hover, #net-search:focus { border-color: var(--accent); outline: none; }
 .dropdown.search { min-width: 260px; }
+.dropdown.search .note { max-width: 300px; color: #8a5a00; font-size: 12px; }
 .dropdown.search button { display: flex; justify-content: space-between; gap: 12px; }
 .dropdown.search button:focus { background: var(--sel); outline: none; }
 .dropdown.search button .sub { color: var(--muted); font-size: 11px; white-space: nowrap; }

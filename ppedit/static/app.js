@@ -1660,7 +1660,8 @@ function pick(kind, index) {
 // Buses, branches and DC lines matching a network search query, in table
 // order, as [{kind, index, text, sub}]:
 //   N or "bus N"            the bus numbered N (else buses whose number contains N)
-//   "A-B", "A B", "A to B"  branches and DC lines between buses A and B, either direction
+//   "A-B", "A B", "A to B"  branches and DC lines between buses A and B, either direction;
+//                           if none, the lines at A and B (the list then has a `note` saying so)
 //   "branch N"              branches and DC lines connected to bus N
 //   other text              buses whose geodata auxiliary columns contain it (any case)
 function searchItems(query) {
@@ -1679,7 +1680,15 @@ function searchItems(query) {
   let m;
   if ((m = q.match(/^(?:branch(?:es)?\s*)?(\d+)\s*(?:-+>?|–|—|→|to|\s)\s*(\d+)$/i))) {
     const a = +m[1], b = +m[2];
-    return lines((f, t) => (f === a && t === b) || (f === b && t === a));
+    const found = lines((f, t) => (f === a && t === b) || (f === b && t === a));
+    if (found.length) return found;
+    // no line joins them: offer the lines at whichever of the two buses exist
+    const known = [a, b].filter(n => T.bus.some(r => r[0] === n));
+    const near = lines((f, t) => known.includes(f) || known.includes(t));
+    const missing = [a, b].filter(n => !known.includes(n));
+    near.note = (known.length === 2 ? `No branch between buses ${a} and ${b}`
+      : `No bus ${missing[0]}`) + ` — lines at bus ${known.join(" and bus ")}`;
+    return near;
   }
   if ((m = q.match(/^branch(?:es)?\s*(\d+)$/i))) {
     const n = +m[1];
@@ -1735,9 +1744,10 @@ function runSearch() {
   if (!q) return;
   const found = searchItems(q);
   if (!found.length) return toast(`No bus or branch matches "${q}"`);
-  if (found.length === 1) return selectFound(found[0]);
+  if (found.length === 1 && !found.note) return selectFound(found[0]);
   menu.replaceChildren(...[
-    h("div", { class: "sep" }, `${found.length} matches for "${q}"`),
+    found.note ? h("div", { class: "note" }, found.note) : null,
+    h("div", { class: "sep" }, found.note ? `${found.length} line(s) to choose from` : `${found.length} matches for "${q}"`),
     ...found.slice(0, SEARCH_MAX).map(f => h("button", { role: "option", onclick: () => selectFound(f) },
       h("span", {}, f.text), h("span", { class: "sub" }, f.sub))),
     found.length > SEARCH_MAX ? h("div", { class: "note" }, `First ${SEARCH_MAX} shown; refine the search to see the others`) : null,
