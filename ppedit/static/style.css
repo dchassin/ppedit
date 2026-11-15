@@ -55,9 +55,10 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 }
 .name-input:hover, .name-input:focus { border-color: #3a4642; outline: none; }
 .dirty { color: #e3a33b; font-size: 11px; }
-.path {
-  color: #9aa6a1; font-family: var(--mono); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  margin-left: auto; min-width: 0; text-align: right;
+.path { margin-left: auto; min-width: 0; overflow: hidden; } /* ltr, carries the tooltip */
+.path-text {
+  display: block; color: #9aa6a1; font-family: var(--mono); font-size: 11px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;
   direction: rtl; /* ellipsis on the left so the basename stays visible; app.js adds LRMs to keep the path in order */
 }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; }
