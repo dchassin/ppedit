@@ -1,4 +1,4 @@
-// wecc240_case: written by ppedit
+// wecc240_map: written by ppedit
 module pypower
 {
     version 2;
@@ -20145,6 +20145,34 @@ object pypower.dcline
 }
 
 //
+// dclinecost (module pypower has no DC line cost class; same properties as pypower.gencost)
+//
+class dclinecost
+    enumeration {UNKNOWN=0,PIECEWISE=1,POLYNOMIAL=2} model;
+    double startup[$];
+    double shutdown[$];
+    char1024 costs;
+}
+object dclinecost
+{
+    name "pp_dclinecost_1";
+    parent "pp_dcline_1";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0,0,0";
+}
+object dclinecost
+{
+    name "pp_dclinecost_2";
+    parent "pp_dcline_2";
+    model POLYNOMIAL;
+    startup 0 $;
+    shutdown 0 $;
+    costs "0,0,0";
+}
+
+//
 // geodata auxiliary values (a comment gives each tag that is not a GLM name)
 //
 class pp_geodata
@@ -22634,5 +22662,3 @@ object pp_geodata
     BA "CA";
     COUNTY 6067;
 }
-
-// 2 dclinecost row(s) not written: module pypower has no DC line cost objects
