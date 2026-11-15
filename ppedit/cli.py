@@ -86,6 +86,8 @@ def main(argv:list[str]|None=None) -> int:
             path = os.path.abspath(args.files[0])
             if os.path.exists(path):
                 case = Case.load(path)
+                for note in case.notes:
+                    print(f"WARNING [ppedit]: {note}",file=sys.stderr)
             else:
                 case = Case(name=os.path.splitext(os.path.basename(path))[0])
         if args.geodata:

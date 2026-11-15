@@ -82,6 +82,10 @@ API key to start sessions; tests use a fake client).
   the solver; per-area results are computed in `Case._area_summary`.
 - GLM import keeps only `bus`, `gen`, `branch`, `gencost`, `dcline`; everything else
   is listed in `Case.notes`, and saving over the source file needs `force`.
+  Preprocessor directives are not expanded: a GLM with no bus objects that
+  uses `#include`/`#input`/`#begin` raises `CaseError` (it used to load as an
+  empty case, e.g. the gridlabd `module/pypower/autotest/test_case*.glm`).
+  `ppedit serve` prints `Case.notes` and the page toasts the first one.
 - GLM bus names are `pp_bus_<bus_i>`, unlike `py2glm.py` (`pp_bus_<row>`).
 - Force-layout positions are not persisted; only geodata is. The diagram is drawn in screen
   coordinates (symbols and text keep their size when zooming), so pan/zoom

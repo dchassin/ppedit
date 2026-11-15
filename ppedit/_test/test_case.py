@@ -226,6 +226,17 @@ object recorder { file "x.csv"; }
     for item in ("1 # directive","1 clock","1 recorder","1 module pypower setting"):
         assert item in note
 
+def test_glm_data_from_directives_rejected():
+    """A GLM whose buses come from #include/#input is an error, not an empty case"""
+    text = """#include "case14_verify.glm"
+#input "case14.py" -t pypower
+module pypower { save_case TRUE; }
+"""
+    with pytest.raises(CaseError,match="#include"):
+        Case.load("x.glm",text)
+    # without directives, an empty pypower model is still an empty case
+    assert not Case.load("x.glm","module pypower { baseMVA 100; }").tables["bus"]
+
 def test_solve_with_isolated_bus():
     """A bus with no in-service branch does not stop the solve"""
     case = Case.builtin("case9")

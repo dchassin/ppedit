@@ -96,7 +96,9 @@ What is not promised
   - Only the solver-layer GLM objects (`bus`, `gen`, `branch`, `gencost`,
     `dcline`) are edited; other `module pypower` objects (`load`,
     `powerplant`, ...) and other modules are reported on load and dropped on
-    save.
+    save. GLM preprocessor directives (`#include`, `#input`, `#begin`, ...)
+    are not expanded; a GLM whose buses come only from them is refused with
+    an error naming the files to open instead.
 
   - `dclinecost` and `areas` are not written to GLM (there are no
     GridLAB-D objects for them). `areas` is not passed to the solver: the
