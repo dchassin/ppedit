@@ -6,6 +6,7 @@ Examples
 --------
 
     ppedit convert case14.py case14.glm
+    ppedit convert wecc240.raw wecc240.glm
     ppedit check case14.glm
     ppedit serve case14.glm
     ppedit --version
@@ -50,7 +51,7 @@ def main(argv:list[str]|None=None) -> int:
         description="Browser-based editor for PYPOWER and module pypower models",
         epilog="See https://www.chassin.org/ppedit for full documentation.")
     parser.add_argument("command",choices=["serve","convert","check"])
-    parser.add_argument("files",nargs="*",help="case file(s): .py, .json, or .glm")
+    parser.add_argument("files",nargs="*",help="case file(s): .py, .json, .glm, or (input only) PSS/E .raw")
     parser.add_argument("-g","--geodata",help="CSV of bus locations (BUS_I,LAT,LON,...) to add to the case (serve, convert)")
     parser.add_argument("-p","--port",type=int,default=8050,help="server port (default 8050)")
     parser.add_argument("--host",default="127.0.0.1",help="interface to listen on (default 127.0.0.1)")

@@ -85,6 +85,8 @@ reversed decision in place and note the date.
 | 33 | The page polls `GET /api/claude` once a second while the Claude tab is open or a session is running, and reloads the state when `revision` changes or a session ran `solve` (no websockets or server push). |
 | 34 | The CLI (`ppedit serve/convert/check`) is a thin layer over `Case` and `create_app`; `check` exits 1 on validation errors. `-v` enables INFO messages (files loaded/saved and HTTP request lines); `-d` enables DEBUG and tracebacks (issue #49). |
 | 35 | Nothing needs network or credentials to build or test; the API session tests use a fake client. |
+| 36 | Siemens PTI PSS/E power flow cases (`.raw`, revisions 23–35) are an input format only (issue #54): `INPUT_FORMATS` adds `.raw` to `FORMATS`, and saving to `.raw` raises `CaseError` (`writable_format`). `ppedit/_psse.py` follows MATPOWER's `psse2mpc` conversion so results can be checked against its expected outputs (optional test when the `matpower` package is installed; its PSS/E sample data is not redistributed), adding revisions 34–35, field lookup by `@!` header names, switched shunt and load/shunt status, switching devices as branches, `NOMV = 0` as the bus base voltage, star buses at the winding 1 base voltage, and `Vg` = the generator bus voltage in the case for generators that regulate another bus (`IREG`), so solved cases such as `examples/wecc240_case.raw` solve to their stored voltages. Data PYPOWER cannot hold is listed in `Case.notes`; names are not kept. |
+| 36b | How a case was read is kept as `Case.source` (file, format, PSS/E revision, rows per table, and the load notes) and sent as editor state `source` until another case is opened; it survives saving, which clears `Case.notes`. The Results tab shows it, and opening a file with notes switches to Results instead of showing a toast. |
 
 ## Conventions inherited from the `eudoxys-package` skill
 
@@ -114,6 +116,7 @@ ppedit/
                     geodata, PF/OPF; Case(data=None,name="case"),
                     Case.load(path,text=None), Case.builtin(name)
   _dcline.py        add_dclines(ppc): DC line userfcn callbacks for pypower
+  _psse.py          parse_raw(text): PSS/E RAW case -> ppc dict and notes
   server.py         Editor (case, path, undo/redo, lock);
                     create_app(case,path,allow_remote,shutdown,claude_client)
   claude.py         Sessions(editor,client): Messages API tool-use loops
@@ -148,10 +151,11 @@ partially applied, because the server rolls back through `Editor.edit()`.
 | `Case.tables` | `bus`, `gen`, `branch`, `gencost`, `dcline`, `dclinecost`, `areas`: lists of rows in `COLUMNS[table]` order (columns and units: `ppedit.case.COLUMNS`) |
 | `Case` globals | `baseMVA`, `version`, `name` |
 | `Case.geodata`, `Case.geotags` | rows `[BUS_I,LAT,LON,aux...]` (WGS84 degrees); auxiliary column names |
-| `Case.notes` | GLM content read but not kept |
+| `Case.notes` | content read but not kept (GLM objects, PSS/E data) |
+| `Case.source` | how `Case.load` read the case: `file`, `format`, `revision`, `size`, `notes` (#36b) |
 | `Case.validate()` | list of `{level,table,row,column,message}`, `level` `error` or `warning` |
 | `Case.solve(kind,algorithm)` | `success`, `kind`, `iterations`, `objective`, `losses_MW`, `dcline_losses_MW`, `log`, rows `bus`, `gen`, `branch`, `dcline`, `areas` (see the `Case.solve` docstring) |
-| editor state (every API response) | `case`, `path`, `format`, `dirty`, `issues`, `can_undo`, `can_redo`, `result`, `cascade`, `revision`; Claude routes add `claude` |
+| editor state (every API response) | `case`, `path`, `format`, `dirty`, `issues`, `can_undo`, `can_redo`, `result`, `cascade`, `revision`, `source`; Claude routes add `claude` |
 
 The API routes are listed in the `ppedit.server` docstring, which is
 authoritative.
@@ -164,6 +168,7 @@ authoritative.
 | PYPOWER `.json` case | `json` | `json` |
 | GLM `module pypower` model | `_parse_glm` (solver objects, `dclinecost`, `pp_geodata`) | `_dump_glm`, `_dump_glm_dclinecost`, `_dump_glm_geodata` |
 | geodata CSV (`BUS_I,LAT,LON,...`) | `Case.load_geodata` | `Case.dumps_geodata` (`/api/export?format=csv`) |
+| PSS/E `.raw` case (revisions 23–35) | `ppedit._psse.parse_raw` (read only, #36) | — |
 | PYPOWER built-in cases | `Case.builtin` | — |
 | map tiles and boundaries | browser, from USGS and TIGERweb | — |
 | web pages, local files (API sessions) | `ppedit.claude` tools | — |
@@ -175,7 +180,8 @@ names, units and keywords; `converters/py2glm.py` for the
 
 ## Method
 
-1. **Load.** The file extension selects the parser. Result columns present
+1. **Load.** The file extension selects the parser (`.raw` is converted
+   to PYPOWER tables first, #36). Result columns present
    in an input case (`PF`, `lam_P`, ...) are dropped. Missing `areas` rows
    are filled from bus areas (#14). GLM content that is not kept goes to
    `Case.notes`.
@@ -206,6 +212,7 @@ editor state JSON (see Contracts). There are no generated data tables.
 ## Files and formats
 
 - Case files: `.py`, `.json`, `.glm`; the extension selects the format.
+  PSS/E `.raw` is read but not written.
 - Geodata: CSV with at least `BUS_I`, `LAT`, `LON`; other columns kept.
 - Examples: `examples/pypower/case*.py` (copied from `pypower`) and
   `case*.glm` (generated by `examples/import_pypower_cases.py`);
@@ -259,5 +266,8 @@ editor state JSON (see Contracts). There are no generated data tables.
   reference to another bus in the area.
 - **#24, #25 One-line layout on large cases.** Column compaction, bus
   splitting, or routing that avoids crossing intermediate bus bars.
+- **#54 PSS/E names and locations.** Bus names and (revision 35)
+  substation coordinates could become geodata auxiliary columns and
+  locations; they are dropped for now.
 - **#33 GLM files built with `#include`/`#input`.** Use an installed
   `gridlabd` to convert to JSON first, or keep refusing (decision #19).

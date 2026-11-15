@@ -5,7 +5,9 @@ Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 
 `ppedit` runs a small local web server and opens an editor in your
 browser. It reads and writes PYPOWER case files (`.py`, `.json`) and Arras
-Energy GridLAB-D models that use `module pypower` (`.glm`). You edit the bus,
+Energy GridLAB-D models that use `module pypower` (`.glm`), and opens
+Siemens PTI PSS/E power flow cases (`.raw`, revisions 23 to 35; read only,
+save them as `.py`, `.json` or `.glm`). You edit the bus,
 generator, branch, generator-cost, DC line, DC line cost and area tables, see the network drawn as a
 one-line diagram, get immediate validation (missing REF bus, dangling
 references, zero-impedance branches, malformed cost curves, ...), and run
@@ -29,6 +31,7 @@ Install using `pip`:
     ppedit serve case14.glm      # edit a file; Save writes back to it
     ppedit serve case14.py --geodata case14_geodata.csv   # add bus locations
     ppedit convert case14.py case14.glm
+    ppedit convert wecc240.raw wecc240.glm   # PSS/E input (read only)
     ppedit check case14.glm
 
 The editor opens at http://localhost:8050/. Start from **New ▸** to load
@@ -138,7 +141,9 @@ In the editor:
   - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
     branch flows and loading, DC line flows and losses, area totals, the
     PYPOWER report, and **Apply solution to case** to copy the solved
-    Vm/Va/Pg/Qg and DC line flows into the model.
+    Vm/Va/Pg/Qg and DC line flows into the model. Results also reports how
+    the open file was read (format, PSS/E revision, rows read, and what was
+    not converted or kept); opening a file with such notes shows this page.
   - **Issues**: every validation error and warning; click one to jump to
     the cell.
   - **Claude**: any number of conversations with Claude, each in its own tab (the
@@ -173,6 +178,23 @@ the price (λP) at its price reference bus. The `areas` table is not passed
 to PYPOWER and is kept only in `.py` and `.json`: GridLAB-D has no area
 objects (each GLM bus keeps its `area`, and the rows are rebuilt when the
 file is opened).
+
+PSS/E `.raw` cases are converted as MATPOWER's `psse2mpc` does: loads,
+fixed shunts and the initial switched shunt susceptance become bus
+demand and shunts (constant current and admittance loads at the case
+voltage), 2-winding transformers become branches with a turns ratio and
+phase shift, each 3-winding transformer becomes three branches to an added
+star bus (numbered from the next power of ten above the largest bus
+number), and two-terminal DC lines become `dcline` rows. A generator that
+regulates another bus gets its own bus voltage as `Vg` (PYPOWER regulates
+only the generator bus), so a solved case solves to the same voltages,
+unless generators are held at a reactive power limit in the case
+(PYPOWER power flow does not enforce those; the notes say how many). Names, owners,
+zones, magnetizing admittance, impedance correction, VSC and multi-terminal
+DC lines, FACTS devices and the other PSS/E data PYPOWER cannot hold are
+dropped, and the editor lists them when the file is opened. PSS/E has no
+costs, so add `gencost` rows before running OPF. **Save** does not write
+`.raw`: use **Save as** with `.py`, `.json` or `.glm`.
 
 The server listens on `127.0.0.1` only and has no authentication; it is a
 single-user desktop tool.

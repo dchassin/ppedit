@@ -16,14 +16,17 @@ Every successful call returns the editor state: `case` (see
 `ppedit.Case.to_dict`), `path`, `format`, `dirty`, `issues`, `can_undo`,
 `can_redo`, `result` (last solution or `null`), `cascade` (whether the
 last edit changed cells other than the one edited), and `revision` (a
-counter that changes whenever the case changes). Errors return
+counter that changes whenever the case changes), and `source` (how the
+open case was read, see `ppedit.Case.source`, or `null`). Errors return
 `{"error": message}` with status 400.
 
-  - `GET  /api/meta`: columns, tables, built-in case names, formats, version
+  - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
+    input formats (read), version
   - `GET  /api/state`: current state
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload) or
-    `{"path": ...}` (server file)
+    `{"path": ...}` (server file); `.py`, `.json`, `.glm`, or PSS/E `.raw`
+    (read only: Save needs a `.py`, `.json` or `.glm` path)
   - `POST /api/global`: `{"key": "baseMVA"|"version"|"name", "value": ...}`
   - `POST /api/cell`: `{"table", "row", "column", "value"}`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
@@ -68,7 +71,8 @@ import threading
 
 from flask import Flask, jsonify, request, send_from_directory, Response
 
-from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, builtin_cases
+from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
+    builtin_cases, writable_format
 from ppedit.claude import Sessions
 
 _logger = logging.getLogger(__file__)
@@ -169,7 +173,7 @@ class Editor:
 
     def state(self,cascade:bool=False) -> dict:
         """Return the editor state sent to the browser"""
-        fmt = FORMATS.get(os.path.splitext(self.path)[1].lower()) if self.path else None
+        fmt = INPUT_FORMATS.get(os.path.splitext(self.path)[1].lower()) if self.path else None
         return {
             "case": self.case.to_dict(),
             "path": self.path,
@@ -181,6 +185,7 @@ class Editor:
             "result": self.result,
             "cascade": cascade,
             "revision": self.revision,
+            "source": self.case.source,
         }
 
 def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
@@ -247,7 +252,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     def meta():
         from ppedit import __version__ # pylint: disable=import-outside-toplevel
         return jsonify(columns=COLUMNS,tables=TABLES,builtin=builtin_cases(),
-            formats=list(FORMATS.values()),version=__version__)
+            formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
+            version=__version__)
 
     @app.get("/api/state")
     def state():
@@ -366,6 +372,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             if not path:
                 raise CaseError("no file name: use Save as or Download")
             path = os.path.abspath(os.path.expanduser(path))
+            writable_format(path)
             if editor.case.notes and os.path.exists(path) and not data.get("force"):
                 return jsonify(error="saving would drop content that ppedit does not edit ("
                     + "; ".join(editor.case.notes) + ")",confirm=True),409
