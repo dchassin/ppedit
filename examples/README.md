@@ -42,7 +42,7 @@ power, and `Vf`, `Vt` are the case voltages.
 `wecc240_2018.py` is `wecc240_2011.py` (with its geodata) plus one
 polynomial cost row per generator, the costs of its type from
 `wecc240_gentypes.csv`, and each branch `rateA` (0 in the source case) set
-to its first nonzero `rateB` or `rateC`, else 99999 MVA; rebuild it after
+to its first nonzero `rateB` or `rateC` (0, unlimited, if both are 0); rebuild it after
 changing the costs with
 
     python3 examples/build_wecc240_2018.py
