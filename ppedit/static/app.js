@@ -8,6 +8,7 @@ const S = {
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
   resSort: {},         // Results table title -> {col, dir} (see block)
+  tableSort: {},       // case table -> {col, dir} (see tableOrder)
   claude: null,        // Claude sessions from /api/claude
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
@@ -213,9 +214,20 @@ function renderTable(table) {
       checked: rows.length > 0 && sel.size === rows.length,
       onchange: e => { S.selected[table] = new Set(e.target.checked ? rows.map((_, i) => i) : []); renderTable(table); },
     })),
-    cols.map(c => h("th", { title: c.desc }, c.name, h("span", { class: "unit" }, c.unit || " ")))));
+    cols.map((c, k) => {
+      const st = S.tableSort[table], on = !!st && st.col === k;
+      return h("th", { class: "sortable" + (on ? (st.dir === 1 ? " asc" : " desc") : ""),
+        "aria-sort": on ? (st.dir === 1 ? "ascending" : "descending") : "none",
+        title: `${c.desc ? c.desc + "\n" : ""}Click to sort by this column (again to reverse, a third time to restore the case order)`,
+        onclick: () => {
+          const cur = S.tableSort[table];
+          S.tableSort[table] = !cur || cur.col !== k ? { col: k, dir: 1 } : cur.dir === 1 ? { col: k, dir: -1 } : null;
+          renderTable(table);
+        } }, c.name, h("span", { class: "unit" }, c.unit || " "));
+    })));
   const body = h("tbody");
-  rows.forEach((r, i) => {
+  tableOrder(table, rows).forEach(i => {
+    const r = rows[i];
     if (filt && !r.join(" ").toLowerCase().includes(filt) && !rowLabel(table, i).toLowerCase().includes(filt)) return;
     const rowIssue = issues.get(`${i}:*`);
     const tr = h("tr", { class: sel.has(i) ? "selected" : null, "data-index": i },
@@ -242,6 +254,33 @@ function renderTable(table) {
     if (el) { el.focus(); try { el.setSelectionRange(focus.start, focus.end); } catch (_) {} }
   }
   updateTableHint();
+}
+
+// Case tables sort by column for display only: a header click sorts
+// ascending, a second descending, a third restores the case order. Rows keep
+// their case index (row labels, selection, edits), the sort is kept per table
+// in S.tableSort for the page session, and an edited row moves to its new
+// place when the table re-renders. Blanks always last, ties in case order.
+function tableKey(v) {
+  if (typeof v === "number") return v;
+  const t = String(v ?? "").trim();
+  if (t === "") return null;
+  if (t === "Inf") return Infinity;
+  if (t === "-Inf") return -Infinity;
+  const x = Number(t);
+  return Number.isFinite(x) ? x : t;
+}
+function tableOrder(table, rows) {
+  const idx = rows.map((_, i) => i);
+  const st = S.tableSort[table];
+  if (!st || st.col >= S.meta.columns[table].length) return idx;
+  const keys = rows.map(r => tableKey(r[st.col]));
+  return idx.sort((a, b) => {
+    const p = keys[a], q = keys[b];
+    if (p === null || q === null) return (p === null) - (q === null) || a - b;
+    if (p === q) return a - b;
+    return st.dir * (typeof p === "number" && typeof q === "number" ? (p < q ? -1 : 1) : compareKeys(p, q)) || a - b;
+  });
 }
 
 function updateTableHint() {

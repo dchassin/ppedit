@@ -137,7 +137,9 @@ In the editor:
     and area price reference buses that use it; deleting a bus asks before
     deleting its connections; generator cost rows follow their generators
     and DC line cost rows their DC lines. Renumbering an area in the Areas
-    table moves its buses with it.
+    table moves its buses with it. Click a column header to sort the rows
+    by it (again to reverse, a third time to restore the case order); the
+    sort changes only the display, not the row order saved in the case.
   - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
     branch flows and loading, DC line flows and losses, area totals, the
     PYPOWER report, and **Apply solution to case** to copy the solved
