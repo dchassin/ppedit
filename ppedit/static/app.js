@@ -2071,17 +2071,19 @@ function renderResults() {
       const spec = c.tables.bus[i];
       return spec && (b.Vm > spec[11] + 1e-6 || b.Vm < spec[12] - 1e-6) ? [null, "hi"] : [];
     });
+    const branchBlock = block("Branch flows", ["#", "from", "to", "P from MW", "Q from MVAr", "loading"],
+      r.branch.map((b, i) => [i + 1, b.fbus, b.tbus, fmt(b.PF, 2), fmt(b.QF, 2), loadCell(b.loading_pct)]),
+      r.branch.map(b => [null, null, null, null, null, b.loading_pct > 100 ? "hi" : b.loading_pct > 80 ? "mid" : null]));
+    const dclineBlock = r.dcline && r.dcline.length ? block("DC line flows", ["#", "from", "to", "Pf MW", "Pt MW", "loss MW", "Qf MVAr", "Qt MVAr"]
+      .concat(r.kind === "opf" ? ["μPmax $/MWh"] : []),
+      r.dcline.map((d, i) => [i + 1, d.fbus, d.tbus].concat(d.solved
+        ? [fmt(d.Pf, 2), fmt(d.Pt, 2), fmt(d.loss_MW, 2), fmt(d.Qf, 2), fmt(d.Qt, 2)].concat(r.kind === "opf" ? [fmt(d.mu_Pmax, 3)] : [])
+        : ["–", "–", "–", "–", "–"].concat(r.kind === "opf" ? ["–"] : [])))) : null;
     kids.push(h("div", { class: "res-grid" },
       block("Bus voltages", ["bus", "Vm pu", "Va deg"].concat(r.kind === "opf" ? ["λP $/MWh"] : []), busRows, busCls),
       block("Generator dispatch", ["gen", "bus", "Pg MW", "Qg MVAr"], r.gen.map((g, i) => [i + 1, g.bus, fmt(g.Pg, 2), fmt(g.Qg, 2)])),
-      block("Branch flows", ["#", "from", "to", "P from MW", "Q from MVAr", "loading"],
-        r.branch.map((b, i) => [i + 1, b.fbus, b.tbus, fmt(b.PF, 2), fmt(b.QF, 2), loadCell(b.loading_pct)]),
-        r.branch.map(b => [null, null, null, null, null, b.loading_pct > 100 ? "hi" : b.loading_pct > 80 ? "mid" : null])),
-      r.dcline && r.dcline.length ? block("DC line flows", ["#", "from", "to", "Pf MW", "Pt MW", "loss MW", "Qf MVAr", "Qt MVAr"]
-        .concat(r.kind === "opf" ? ["μPmax $/MWh"] : []),
-        r.dcline.map((d, i) => [i + 1, d.fbus, d.tbus].concat(d.solved
-          ? [fmt(d.Pf, 2), fmt(d.Pt, 2), fmt(d.loss_MW, 2), fmt(d.Qf, 2), fmt(d.Qt, 2)].concat(r.kind === "opf" ? [fmt(d.mu_Pmax, 3)] : [])
-          : ["–", "–", "–", "–", "–"].concat(r.kind === "opf" ? ["–"] : [])))) : null,
+      // branch and DC line flows share a row, branch on the left, so they read side by side
+      dclineBlock ? h("div", { class: "res-pair" }, branchBlock, dclineBlock) : branchBlock,
       r.areas && (r.areas.length > 1 || c.tables.areas.length) ? block("Areas", ["area", "buses", "Pg MW", "Pd MW", "shunt MW", "loss MW", "export MW", "ref bus"]
         .concat(r.kind === "opf" ? ["price $/MWh"] : []),
         r.areas.map(a => [a.area, a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
