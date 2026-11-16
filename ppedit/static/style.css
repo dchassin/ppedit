@@ -179,8 +179,7 @@ td.bad input { color: var(--err); }
 #net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
 #net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 #net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
-.res-block.wide { grid-column: 1 / -1; }
-.res-pair { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+.res-pair { display: flex; flex-wrap: wrap; gap: 14px; flex: 1 1 auto; min-width: 0; } /* branch + DC line flows, kept together */
 .dropdown.left { left: 0; right: auto; }
 .dropdown.at-point { right: auto; max-height: 50vh; } /* left/top set where it opens (#bus-menu) */
 .dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
@@ -291,8 +290,14 @@ td.bad input { color: var(--err); }
 .card .v { font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .card .v.ok { color: var(--accent); }
 .card .v.fail { color: var(--err); }
-.res-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
+/* Results tables fill the window: each starts at its natural width (flex-basis auto),
+   wraps when a row is full, and the row's tables grow to share the spare width;
+   a table wider than the window scrolls inside its block. */
+.res-grid { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 14px; }
 .res-block { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.res-grid .res-block, .res-pair .res-block { flex: 1 1 auto; min-width: 0; }
+.res-grid .res-block.wide { flex-basis: 100%; }
+.res-block td { white-space: nowrap; }
 .res-block h3 { margin: 0; padding: 8px 12px; font-size: 13px; border-bottom: 1px solid var(--line); background: #f7f8f6; }
 .res-block .scroll { max-height: 360px; overflow: auto; }
 .res-block table { width: 100%; }
