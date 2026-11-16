@@ -298,6 +298,11 @@ td.bad input { color: var(--err); }
 .res-block table { width: 100%; }
 .res-block td, .res-block th { padding: 4px 10px; text-align: right; font-family: var(--mono); font-size: 12px; border-right: 0; }
 .res-block thead th { font-family: var(--sans); cursor: default; }
+.res-block thead th.sortable { cursor: pointer; user-select: none; }
+.res-block thead th.sortable:hover { background: #e2e6e0; }
+.res-block thead th.sortable::after { content: "\2195"; margin-left: 4px; color: var(--muted); opacity: .45; font-size: 10px; }
+.res-block thead th.asc::after { content: "\25B2"; opacity: 1; color: var(--ink); }
+.res-block thead th.desc::after { content: "\25BC"; opacity: 1; color: var(--ink); }
 .res-block td.hi { color: var(--err); font-weight: 600; }
 .res-block td.mid { color: var(--warn); font-weight: 600; }
 .loadbar { display: inline-block; height: 6px; border-radius: 3px; background: var(--accent); vertical-align: middle; margin-right: 6px; }
