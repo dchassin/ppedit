@@ -180,6 +180,7 @@ td.bad input { color: var(--err); }
 #net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
 #net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
 .res-block.wide { grid-column: 1 / -1; }
+.res-pair { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 14px; }
 .dropdown.left { left: 0; right: auto; }
 .dropdown.at-point { right: auto; max-height: 50vh; } /* left/top set where it opens (#bus-menu) */
 .dropdown label { display: flex; align-items: center; gap: 6px; padding: 4px 10px; cursor: pointer; }
