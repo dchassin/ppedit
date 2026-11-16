@@ -114,7 +114,13 @@ def main(argv:list[str]|None=None) -> int:
             shutdown=lambda: server.shutdown())
         server = make_server(args.host,args.port,app,threaded=True)
         url = f"http://{'localhost' if args.host in ('127.0.0.1','0.0.0.0') else args.host}:{args.port}/"
-        print(f"ppedit: editing {path or 'new case'} at {url} (Ctrl-C to stop)")
+        print(f"")
+        print(f"ppedit: create or edit power system models in your browser")
+        print(f"")
+        print(f"    File... {path or 'new case'}")
+        print(f"    URL.... {url}")
+        print(f"")
+        print(f"    Ctrl-C to stop server")
         if not args.no_browser:
             threading.Timer(1.0,lambda: webbrowser.open(url)).start()
         try:
@@ -123,7 +129,9 @@ def main(argv:list[str]|None=None) -> int:
             pass
         finally:
             server.server_close()
-        print("ppedit: server stopped")
+        print(f"")
+        print(f"ppedit: thanks for using ppedit!")
+        print(f"")
         return 0
     except Exception as err: # pylint: disable=broad-exception-caught
         if args.debug:
