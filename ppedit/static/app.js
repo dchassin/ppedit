@@ -7,6 +7,7 @@ const S = {
   view: "network",
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
+  resSort: {},         // Results table title -> {col, dir} (see block)
   claude: null,        // Claude sessions from /api/claude
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
@@ -2096,13 +2097,52 @@ function renderResults() {
 function card(k, v, cls) { return h("div", { class: "card" }, h("div", { class: "k" }, k), h("div", { class: "v " + (cls || "") }, v)); }
 function loadCell(L) {
   if (L === null) return "unrated";
-  const span = h("span", {}, h("span", { class: "loadbar", style: `width:${Math.min(L, 120) * 0.5}px;background:${L > 100 ? "#b42318" : L > 80 ? "#c27c0e" : "#5f8f80"}` }), `${fmt(L, 0)}%`);
+  const span = h("span", { "data-sort": L }, h("span", { class: "loadbar", style: `width:${Math.min(L, 120) * 0.5}px;background:${L > 100 ? "#b42318" : L > 80 ? "#c27c0e" : "#5f8f80"}` }), `${fmt(L, 0)}%`);
   return span;
 }
+// Results tables sort by column: a header click sorts ascending, a second
+// descending, a third restores the solver order. The sort is kept per table
+// title in S.resSort, so it survives re-rendering after a new solve.
+function cellKey(v) {
+  if (typeof v === "number") return v;
+  if (v instanceof Element && v.dataset.sort !== undefined) return Number(v.dataset.sort);  // exact value behind a rounded display
+  const t = (v instanceof Node ? v.textContent : String(v ?? "")).trim();
+  const x = parseFloat(t);
+  return Number.isFinite(x) ? x : (t === "" || t === "–" || t === "unrated" ? null : t);
+}
+function compareKeys(a, b) {  // blanks last in both directions (handled by caller)
+  if (typeof a === "number" && typeof b === "number") return a - b;
+  if (typeof a === "number") return -1;
+  if (typeof b === "number") return 1;
+  return String(a).localeCompare(String(b), undefined, { numeric: true });
+}
 function block(title, head, rows, cls = [], extra = "") {
+  const trs = rows.map((r, i) => ({ i, keys: r.map(cellKey),
+    el: h("tr", {}, r.map((v, j) => h("td", { class: (cls[i] || [])[j] || null }, v))) }));
+  const tbody = h("tbody", {});
+  const ths = head.map((x, j) => h("th", { class: "sortable", title: "Sort by this column (click again to reverse, a third time to restore)",
+    onclick: () => {
+      const cur = S.resSort[title];
+      S.resSort[title] = !cur || cur.col !== j ? { col: j, dir: 1 } : cur.dir === 1 ? { col: j, dir: -1 } : null;
+      apply();
+    } }, x));
+  function apply() {
+    const st = S.resSort[title];
+    const order = st && st.col < head.length ? [...trs].sort((a, b) => {
+      const p = a.keys[st.col], q = b.keys[st.col];
+      if (p === null || q === null) return (p === null) - (q === null) || a.i - b.i;
+      return st.dir * compareKeys(p, q) || a.i - b.i;
+    }) : trs;
+    tbody.replaceChildren(...order.map(t => t.el));
+    ths.forEach((th, j) => {
+      th.classList.toggle("asc", !!st && st.col === j && st.dir === 1);
+      th.classList.toggle("desc", !!st && st.col === j && st.dir === -1);
+      th.setAttribute("aria-sort", st && st.col === j ? (st.dir === 1 ? "ascending" : "descending") : "none");
+    });
+  }
+  apply();
   return h("div", { class: "res-block" + (extra ? ` ${extra}` : "") }, h("h3", {}, title), h("div", { class: "scroll" },
-    h("table", {}, h("thead", {}, h("tr", {}, head.map(x => h("th", {}, x)))),
-      h("tbody", {}, rows.map((r, i) => h("tr", {}, r.map((v, j) => h("td", { class: (cls[i] || [])[j] || null }, v))))))));
+    h("table", {}, h("thead", {}, h("tr", {}, ths)), tbody)));
 }
 
 // ---------------------------------------------------------------- issues
