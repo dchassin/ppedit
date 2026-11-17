@@ -2536,6 +2536,15 @@ async function init() {
   setState(await api("/api/state"));
   if (!S.state.case.tables.bus.length) show("network");
   if (S.state.source && S.state.source.notes.length) show("results");  // conversion report
+  // page parameters (used by pptools pprun's Network tab): ?solve=pf|opf solves on load
+  // (with ?algorithm=NAME, else the default solver) and ?view=NAME opens that tab
+  const qs = new URLSearchParams(location.search);
+  if (["pf", "opf"].includes(qs.get("solve"))) {
+    const req = { kind: qs.get("solve") };
+    if (qs.get("algorithm")) req.algorithm = qs.get("algorithm");
+    await act("/api/solve", req).catch(() => {});
+  }
+  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
 }
 
 init().catch(err => toast(err.message, true));

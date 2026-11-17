@@ -91,6 +91,13 @@ read and edit the case through the same checked, undoable edits as the
 browser, optionally using web data or local files, when an Anthropic API
 key is configured.
 
+The page takes optional URL parameters, so another tool can open it ready to
+show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver
+when the page loads (`&algorithm=NAME` picks a PF algorithm or OPF solver as
+in `POST /api/solve`, else the default), and `?view=NAME` opens the tab
+`NAME` (`network`, `results`, `issues`, or a table name such as `bus`).
+Unknown values are ignored, and a solver error is shown as usual.
+
 The network diagram has a *Geodata* layout, available when the case has
 geodata, that places buses at their locations on a map (Web Mercator) with
 optional USGS satellite imagery, Census TIGERweb roads, and state and county
