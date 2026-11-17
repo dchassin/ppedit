@@ -1,3 +1,5 @@
+# recipes use bash "source"
+SHELL=/bin/bash
 PACKAGE=$(notdir $(PWD))
 LOGO="https://github.com/eudoxys/.github/blob/main/eudoxys_banner.png?raw=true"
 LINK="https://www.eudoxys.com/"
