@@ -109,8 +109,8 @@ conversations resolved as you address them. If the branch falls behind
 ### Your PR is merged
 
 Congratulations, and thank you. Once merged, your change is installable
-from `main` with `epm install ppedit` or
-`pip install git+https://github.com/dchassin/ppedit`, and appears in the next
+from `main` with `pip install git+https://github.com/dchassin/ppedit`, and
+appears in the next
 tagged release.
 
 ## License

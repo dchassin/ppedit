@@ -3,11 +3,12 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["ppedit"]
+packages = ["ppedit","ppedit.static"]
 
 [tool.setuptools.package-data]
 # list every file pattern the package reads at run time
-ppedit = ["*.py", "static/*.html", "static/*.css", "static/*.js"]
+ppedit = ["*.py"]
+"ppedit.static" = ["*.html", "*.css", "*.js"]
 
 [tool.setuptools.dynamic]
 dependencies = {file=["requirements.txt"]}
@@ -23,7 +24,7 @@ maintainers = [
     {name = "David P. Chassin"},
     ]
 readme = "README.md"
-requires-python = ">=3.10" # CI runs 3.12
+requires-python = "== 3.12.*" # must match the CI python version
 keywords = ["eudoxys","python","pypower","gridlabd","arras-energy","power-flow","editor"]
 license-files = ["LICENSE"]
 classifiers = [

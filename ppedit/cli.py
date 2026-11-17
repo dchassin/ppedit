@@ -15,7 +15,7 @@ Examples
 
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
 and opens it in a browser; `--version` prints `ppedit` and the installed
-version (e.g. `ppedit 0.2.0`); `--verbose` adds `INFO:` messages on stderr
+version (e.g. `ppedit 0.3.1`); `--verbose` adds `INFO:` messages on stderr
 (files loaded and saved, and with `serve` each HTTP request, which only
 `--verbose` shows).
 """

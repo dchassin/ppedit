@@ -10,7 +10,7 @@ specific to this package.
 A local web application for editing PYPOWER cases and Arras Energy
 GridLAB-D `module pypower` models: a Flask server (`ppedit/server.py`) holds
 one `Case` (`ppedit/case.py`) in memory and serves a plain HTML/CSS/JS editor
-(`ppedit/static/`, no build step, no JS dependencies). Python 3.10+, alpha.
+(`ppedit/static/`, no build step, no JS dependencies). Python 3.12, alpha.
 
 - Docs site: https://www.chassin.org/ppedit (pdoc from docstrings)
 - Maintainer: David P. Chassin
