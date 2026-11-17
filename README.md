@@ -141,7 +141,8 @@ In the editor:
     by it (again to reverse, a third time to restore the case order); the
     sort changes only the display, not the row order saved in the case.
   - **Run PF ▾** and **Run OPF ▾** (toolbar) each open a menu of solvers;
-    choosing one runs it. Run PF lists the PYPOWER power flow algorithms
+    choosing one runs it; while it runs, the button's ▾ turns into ● and
+    the button is disabled until the solver returns. Run PF lists the PYPOWER power flow algorithms
     (Newton, fast-decoupled XB and BX, Gauss-Seidel). Run OPF lists the
     OPF solvers that are installed: AC OPF with PIPS (interior point or
     step-controlled) and IPOPT (needs `pyipopt`), and DC OPF with PIPS,

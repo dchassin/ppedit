@@ -35,6 +35,8 @@ button:disabled { opacity: .45; cursor: default; }
 /* a disabled button gets no mouse events: let its wrapper show why (title, click) */
 .btn-wrap { display: inline-flex; }
 .btn-wrap > button:disabled { pointer-events: none; }
+button.solving:disabled { opacity: 1; cursor: progress; } /* Run PF/OPF while solving: caret shows ● */
+.btn-wrap:has(> button.solving) { cursor: progress; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
 button.primary.alt { background: var(--accent-2); border-color: var(--accent-2); }
 button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err); }

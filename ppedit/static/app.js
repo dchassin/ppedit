@@ -118,6 +118,7 @@ function issuesFor(table) {
 
 // ---------------------------------------------------------------- chrome
 
+const SOLVING = "Solving: wait for the solver to finish";
 const OPF_NO_COST = "Run OPF is disabled: OPF needs generator cost data (gencost). "
   + "Add cost rows on the Gen costs tab or open a case that has them.";
 
@@ -132,8 +133,9 @@ function renderChrome() {
   $("#undo-btn").disabled = !st.can_undo;
   $("#redo-btn").disabled = !st.can_redo;
   const noCost = !c.tables.gencost.length;
-  $("#opf-btn").disabled = noCost;
-  $("#opf-wrap").title = noCost ? OPF_NO_COST : "Run an optimal power flow: choose the solver";
+  const opfSolving = $("#opf-btn").classList.contains("solving");
+  $("#opf-btn").disabled = noCost || opfSolving;
+  $("#opf-wrap").title = opfSolving ? SOLVING : noCost ? OPF_NO_COST : "Run an optimal power flow: choose the solver";
   for (const el of [$("#baseMVA"), $("#version")]) {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
@@ -2378,14 +2380,25 @@ async function onAction(btn) {
     else if (a === "redo") await act("/api/redo");
     else if (a === "solve") {
       const trigger = $(btn.dataset.kind === "pf" ? "#pf-btn" : "#opf-btn");
+      const caret = trigger.querySelector(".caret"), title = trigger.title;
       trigger.disabled = true;
+      trigger.classList.add("solving"); // ● replaces ▾ until the solver returns
+      caret.textContent = "●";
+      trigger.title = SOLVING;
+      renderChrome();
       try {
         await act("/api/solve", { kind: btn.dataset.kind, algorithm: btn.dataset.algorithm });
         const r = S.state.result;
         const what = (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
         toast(r.success ? `${what} converged` : `${what} did not converge — see Results`, !r.success);
         if (S.view !== "network") show("results"); else renderNetwork();
-      } finally { trigger.disabled = false; renderChrome(); }
+      } finally {
+        trigger.disabled = false;
+        trigger.classList.remove("solving");
+        caret.textContent = "▾";
+        trigger.title = title;
+        renderChrome();
+      }
     }
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
@@ -2464,7 +2477,10 @@ async function init() {
   buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
   buildSolverMenus();
-  $("#opf-wrap").addEventListener("click", () => { if ($("#opf-btn").disabled) toast(OPF_NO_COST, true); });
+  $("#opf-wrap").addEventListener("click", () => {
+    const b = $("#opf-btn");
+    if (b.disabled && !b.classList.contains("solving")) toast(OPF_NO_COST, true);
+  });
   document.addEventListener("click", e => {
     const m = e.target.closest("[data-menu]");
     if (m) { const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus(); if (!open) d.classList.add("open"); return; }
