@@ -172,6 +172,14 @@ What is not promised
     voltages, no reactive power and no losses; applying it copies those
     into the case.
 
+  - The cvxopf solvers (`CVXOPF-*`, offered when cvxopf is installed)
+    report no LMPs or multipliers; ignore reactive power costs; model DC
+    lines without `loss0`, terminal reactive power or voltage set points
+    (the copper plate ignores DC lines and has no branch flows); and
+    give the SOCP relaxation's voltages, which need not be AC feasible
+    (the log says whether they are). The cvxopf DC network-flow model has no
+    voltage angles.
+
 Data
 ----
 

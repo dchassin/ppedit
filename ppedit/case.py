@@ -313,9 +313,16 @@ OPF_SOLVERS = {
     "DC-CPLEX":("DC: CPLEX",True,500,"cplex"),
     "DC-MOSEK":("DC: MOSEK",True,600,"pymosek"),
     "DC-GUROBI":("DC: Gurobi",True,700,"gurobipy"),
+    "CVXOPF-AC":("AC: CVXOPF (IPOPT)",False,"ac","cvxopf"),
+    "CVXOPF-SOCP":("AC: CVXOPF SOCP relaxation",False,"socp","cvxopf"),
+    "CVXOPF-DC":("DC: CVXOPF lossy network flow",True,"lossy_dc","cvxopf"),
+    "CVXOPF-1NODE":("DC: CVXOPF copper plate",True,"singlenode_dc","cvxopf"),
 }
 """OPF solvers: `algorithm: (label, DC formulation, PYPOWER OPF_ALG or
-OPF_ALG_DC code, Python module the solver needs or None)`"""
+OPF_ALG_DC code (int) or cvxopf formulation (str), Python module the
+solver needs or None)`. The `CVXOPF-*` solvers use cvxopf
+(https://github.com/cvxgrp/cvxopf, Python 3.11+, needs the IPOPT library)
+instead of PYPOWER's `runopf`; see `Case.solve`."""
 
 GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
@@ -1260,7 +1267,9 @@ def {name}():
             default, `FDXB`, `FDBX`, or `GS`); for `opf`, a key of
             `OPF_SOLVERS` (`PIPS`, the default, `PIPS-SC`, `IPOPT`, or a
             DC OPF solver `DC-PIPS`, `DC-PIPS-SC`, `DC-IPOPT`, `DC-CPLEX`,
-            `DC-MOSEK`, `DC-GUROBI`); `solvers()` lists those installed
+            `DC-MOSEK`, `DC-GUROBI`; or a cvxopf formulation `CVXOPF-AC`,
+            `CVXOPF-SOCP`, `CVXOPF-DC`, `CVXOPF-1NODE`); `solvers()` lists
+            those installed
 
         Returns
         -------
@@ -1299,6 +1308,17 @@ def {name}():
         solved (type NONE or isolated) count only toward `buses`: their
         load, shunts and generators are left out of the sums.
 
+        The `CVXOPF-*` solvers pass the case to cvxopf (`ac`: full AC with
+        IPOPT; `socp`: second-order cone relaxation, with `Vm` = sqrt(w)
+        and `Va` from cvxopf's voltage recovery; `lossy_dc`: network-flow
+        approximation, flat voltages, `PT = -PF`; `singlenode_dc`: copper
+        plate, flat voltages and no `branch` rows). cvxopf gives no
+        multipliers, so `lam_P`, `mu_Pmin` and `mu_Pmax` are `None`. It
+        has no reactive power costs (those rows are ignored) and models DC
+        lines without `loss0`, terminal reactive power or voltage set
+        points (the copper plate ignores them); `log` lists these notes
+        and cvxopf's warnings. cvxopf accepts piecewise-linear costs.
+
         Exceptions
         ----------
 
@@ -1320,6 +1340,7 @@ def {name}():
         if kind == "opf" and not self.tables["gencost"]:
             raise CaseError("OPF needs generator cost data (gencost)")
         dc = kind == "opf" and OPF_SOLVERS[algorithm][1]
+        cvx = kind == "opf" and isinstance(OPF_SOLVERS[algorithm][2],str)
         if kind == "opf" and OPF_SOLVERS[algorithm][3] \
                 and importlib.util.find_spec(OPF_SOLVERS[algorithm][3]) is None:
             raise CaseError(f"OPF solver {algorithm} needs the Python module "
@@ -1334,6 +1355,8 @@ def {name}():
                 ppc["bus"][n,1] = 4
         if kind == "pf":
             opt = ppoption(PF_ALG=PF_SOLVERS[algorithm][1],VERBOSE=0,OUT_ALL=0)
+        elif cvx:
+            opt = ppoption(VERBOSE=0,OUT_ALL=0)
         elif dc:
             opt = ppoption(PF_DC=1,OPF_ALG_DC=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
         else:
@@ -1353,13 +1376,17 @@ def {name}():
             if cut:
                 log.write(f"DC line(s) {', '.join(str(n+1) for n in cut)} not solved: "
                     "terminal bus is isolated\n")
-            ppc = add_dclines(ppc)
+            if not cvx:
+                ppc = add_dclines(ppc)
         with contextlib.redirect_stdout(log), warnings.catch_warnings():
             warnings.simplefilter("ignore")
             try:
                 if kind == "pf":
                     res,success = runpf(ppc,opt)
                     res["success"] = bool(success)
+                elif cvx:
+                    from ppedit._cvxopf import runopf as cvxopf_runopf # pylint: disable=import-outside-toplevel
+                    res = cvxopf_runopf(ppc,OPF_SOLVERS[algorithm][2],log)
                 else:
                     res = runopf(ppc,opt)
             except Exception as err: # pylint: disable=broad-exception-caught
@@ -1370,7 +1397,14 @@ def {name}():
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
-                printpf(res,log,ppoption(opt,OUT_ALL=1)) # results form: (results, fd, ppopt)
+                if cvx: # no multipliers: report as a power flow, objective first
+                    if "f" in res:
+                        log.write(f"\nObjective Function Value = {res['f']:.2f} $/hr\n")
+                    printpf({k:v for k,v in res.items() if k != "f"},log,
+                        ppoption(opt,OUT_ALL=-1,OUT_SYS_SUM=1,OUT_BUS=1,OUT_GEN=1,
+                            OUT_BRANCH=int(res["flows"])))
+                else:
+                    printpf(res,log,ppoption(opt,OUT_ALL=1)) # results form: (results, fd, ppopt)
         except Exception as err: # pylint: disable=broad-exception-caught
             log.write(f"(report unavailable: {err})\n")
         dclines = []
@@ -1379,8 +1413,8 @@ def {name}():
             dclines.append({"fbus":int(d[0]),"tbus":int(d[1]),"solved":solved,
                 "Pf":float(d[3]),"Pt":float(d[4]),"Qf":float(d[5]),"Qt":float(d[6]),
                 "Vf":float(d[7]),"Vt":float(d[8]),"loss_MW":float(d[3]-d[4]) if solved else 0.0,
-                "mu_Pmin":float(d[17]) if kind == "opf" else None,
-                "mu_Pmax":float(d[18]) if kind == "opf" else None})
+                "mu_Pmin":float(d[17]) if kind == "opf" and not cvx else None,
+                "mu_Pmax":float(d[18]) if kind == "opf" and not cvx else None})
         if dclines:
             log.write("\nDC lines\n   #   from     to      Pf MW      Pt MW    loss MW"
                 "    Qf MVAr    Qt MVAr\n")
@@ -1396,14 +1430,14 @@ def {name}():
             "objective": float(res["f"]) if kind == "opf" and "f" in res else None,
             "log": log.getvalue(),
             "bus": [{"bus_i":int(b[0]),"Vm":float(b[7]),"Va":float(b[8]),
-                "lam_P":float(b[13]) if kind == "opf" and len(b) > 13 else None}
+                "lam_P":float(b[13]) if kind == "opf" and not cvx and len(b) > 13 else None}
                 for b in bus],
             "gen": [{"bus":int(g[0]),"Pg":float(g[1]),"Qg":float(g[2])} for g in gen],
             "branch": [],
             "dcline": dclines,
         }
         losses = 0.0
-        for b in branch:
+        for b in branch if res.get("flows",True) else []:
             pf,qf,pt,qt = (float(x) for x in b[13:17])
             rate = float(b[5])
             smax = max(math.hypot(pf,qf),math.hypot(pt,qt))
@@ -1419,7 +1453,7 @@ def {name}():
         if result["success"] and (self.tables["areas"] or len(result["areas"]) > 1):
             log = io.StringIO()
             log.write("\nAreas\n  area  buses      Pg MW      Pd MW"
-                "   shunt MW    loss MW  export MW" + ("  price $/MWh" if kind == "opf" else "") + "\n")
+                "   shunt MW    loss MW  export MW" + ("  price $/MWh" if kind == "opf" and not cvx else "") + "\n")
             for a in result["areas"]:
                 log.write(f"{a['area']:6d} {a['buses']:6d} " + "".join(f"{a[k]:11.2f}"
                     for k in ("Pg","Pd","shunt_MW","losses_MW","export_MW"))
