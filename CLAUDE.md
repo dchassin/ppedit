@@ -71,8 +71,13 @@ API key to start sessions; tests use a fake client).
 
 - PYPOWER's OPF fails (inside pypower) on piecewise-linear costs and on
   reactive-power cost rows (`case30pwl`, `case9Q`, `case30Q`) with current
-  numpy; the editor reports the solver error. `case9target` PF does not
-  converge in PYPOWER either.
+  numpy; the editor reports the solver error (DC OPF solves them).
+  `case9target` PF does not converge in PYPOWER either. DC OPF (PIPS) on
+  `pypower/t/t_case9_dcline` fails numerically inside pypower, with or
+  without its DC lines.
+- OPF solvers (`OPF_SOLVERS` in `case.py`, Run OPF ▾): only those whose
+  module is installed are offered; IPOPT, CPLEX, MOSEK and Gurobi paths
+  in pypower are untested here (none installed in CI).
 - DC lines are solved by `ppedit/_dcline.py`, not `pypower.toggle_dcline`
   (which fails with current numpy and mishandles `dclinecost`,
   out-of-service lines and Q cost rows); results are checked against the

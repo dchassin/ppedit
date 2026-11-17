@@ -54,7 +54,7 @@ import time
 import urllib.error
 import urllib.request
 
-from ppedit.case import COLUMNS, TABLES, CaseError
+from ppedit.case import COLUMNS, TABLES, PF_SOLVERS, OPF_SOLVERS, CaseError
 
 API_URL = "https://api.anthropic.com/v1/messages"
 """Anthropic Messages API endpoint"""
@@ -174,10 +174,13 @@ CASE_TOOLS = [
     {"name":"validate","description":"Check the case; returns the list of errors and warnings.",
         "input_schema":{"type":"object","properties":{}}},
     {"name":"solve","description":"Run a PYPOWER power flow (pf) or optimal power "
-        "flow (opf, needs gencost). Returns a summary; the full result is shown "
+        "flow (opf, needs gencost). algorithm: for pf one of "+", ".join(PF_SOLVERS)
+        +" (default NR); for opf one of "+", ".join(OPF_SOLVERS)+" (default PIPS; "
+        "DC-* solve the DC OPF; IPOPT, CPLEX, MOSEK and Gurobi need their Python "
+        "module installed). Returns a summary; the full result is shown "
         "in the editor's Results tab.",
         "input_schema":{"type":"object","properties":{"kind":{"type":"string","enum":["pf","opf"]},
-            "algorithm":{"type":"string","enum":["NR","FDXB","FDBX","GS"]}}}},
+            "algorithm":{"type":"string","enum":[*PF_SOLVERS,*OPF_SOLVERS]}}}},
     {"name":"apply_result","description":"Copy the last solution (voltages, "
         "generator outputs) into the case.",
         "input_schema":{"type":"object","properties":{}}},
@@ -482,9 +485,9 @@ class Session:
             return {"issues":issues} if issues else "no issues found",False
         if name == "solve":
             with editor.lock:
-                result = editor.case.solve(args.get("kind","pf"),args.get("algorithm","NR"))
+                result = editor.case.solve(args.get("kind","pf"),args.get("algorithm"))
                 editor.result = result
-            return {k:result.get(k) for k in ("success","kind","iterations","objective",
+            return {k:result.get(k) for k in ("success","kind","algorithm","iterations","objective",
                 "losses_MW","areas")} | {"log":(result.get("log") or "")[-6000:]},False
         if name == "apply_result":
             def apply_result():

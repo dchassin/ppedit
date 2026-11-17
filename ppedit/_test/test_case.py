@@ -6,6 +6,7 @@ import os
 import pytest
 
 from ppedit import Case, CaseError, COLUMNS, builtin_cases
+from ppedit.case import PF_SOLVERS, OPF_SOLVERS, solvers
 
 DATA = os.path.join(os.path.dirname(__file__),"data")
 
@@ -198,6 +199,35 @@ def test_solve_pf_and_opf():
     assert gen == pytest.approx(load + pf["losses_MW"],abs=1e-3)
     opf = case.solve("opf")
     assert opf["success"] and opf["objective"] > 0
+
+def test_solve_algorithms():
+    """Every PF algorithm and installed OPF solver runs case9; DC OPF has no losses"""
+    case = Case.builtin("case9")
+    assert [x["algorithm"] for x in solvers()["pf"]] == list(PF_SOLVERS)
+    for x in solvers()["pf"]:
+        assert case.solve("pf",x["algorithm"])["success"]
+    found = {x["algorithm"] for x in solvers()["opf"]}
+    assert {"PIPS","PIPS-SC","DC-PIPS","DC-PIPS-SC"} <= found <= set(OPF_SOLVERS)
+    ac,dc = case.solve("opf","PIPS-SC"),case.solve("opf","DC-PIPS")
+    assert ac["success"] and not ac["dc"] and ac["solver"] == "AC: PIPS step-controlled"
+    assert ac["objective"] == pytest.approx(case.solve("opf")["objective"])
+    assert dc["success"] and dc["dc"] and dc["algorithm"] == "DC-PIPS"
+    assert dc["losses_MW"] == pytest.approx(0,abs=1e-6)
+    assert all(b["Vm"] == 1 for b in dc["bus"]) and all(g["Qg"] == 0 for g in dc["gen"])
+    assert dc["objective"] < ac["objective"]
+
+def test_solve_algorithm_errors():
+    """Algorithms belong to their kind; solvers without their module are refused"""
+    case = Case.builtin("case9")
+    with pytest.raises(CaseError,match="PF algorithm"):
+        case.solve("pf","PIPS")
+    with pytest.raises(CaseError,match="OPF algorithm"):
+        case.solve("opf","NR")
+    missing = [k for k,v in OPF_SOLVERS.items() if v[3] and k not in
+        {x["algorithm"] for x in solvers()["opf"]}]
+    if missing:
+        with pytest.raises(CaseError,match="not installed"):
+            case.solve("opf",missing[0])
 
 def test_solve_refuses_errors():
     case = Case.builtin("case9")

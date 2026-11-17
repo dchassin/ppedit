@@ -5,6 +5,8 @@ def test_index_and_meta(client):
     assert client.get("/static/app.js").status_code == 200
     meta = client.get("/api/meta").get_json()
     assert "case14" in meta["builtin"] and meta["tables"][0] == "bus"
+    assert meta["solvers"]["pf"][0] == {"algorithm":"NR","label":"Newton"}
+    assert meta["solvers"]["opf"][0]["algorithm"] == "PIPS"
 
 def test_index_has_network_search(client):
     """The network search box follows the Map menu and app.js handles it"""
@@ -44,6 +46,13 @@ def test_rows_and_cascade(post):
     assert status == 400
     _,st = post("/api/rows/delete",{"table":"bus","rows":[0],"cascade":True})
     assert st["removed"]["gen"] == 1
+
+def test_solve_algorithm(post):
+    """The menu's algorithm reaches Case.solve; a wrong one is a 400 with the message"""
+    _,st = post("/api/solve",{"kind":"opf","algorithm":"DC-PIPS"})
+    assert st["result"]["success"] and st["result"]["dc"]
+    code,st = post("/api/solve",{"kind":"pf","algorithm":"PIPS"})
+    assert code == 400 and "PF algorithm" in st["error"]
 
 def test_solve_apply_and_clear(post):
     _,st = post("/api/solve",{"kind":"opf"})
