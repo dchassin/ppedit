@@ -43,6 +43,12 @@ jobs:
         pip install --upgrade pip
         pip install . pytest pylint   # non-editable: catches missing package-data
 
+    - name: Install cvxopf (optional OPF solvers)
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev gfortran
+        pip install git+https://github.com/cvxgrp/cvxopf
+
     - name: Analyse code
       run: |
         cd ppedit

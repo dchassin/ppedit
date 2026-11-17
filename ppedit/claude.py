@@ -177,7 +177,8 @@ CASE_TOOLS = [
         "flow (opf, needs gencost). algorithm: for pf one of "+", ".join(PF_SOLVERS)
         +" (default NR); for opf one of "+", ".join(OPF_SOLVERS)+" (default PIPS; "
         "DC-* solve the DC OPF; IPOPT, CPLEX, MOSEK and Gurobi need their Python "
-        "module installed). Returns a summary; the full result is shown "
+        "module installed; CVXOPF-* use cvxopf if installed: AC, SOCP relaxation, "
+        "lossy DC network flow, copper plate (1NODE), no prices). Returns a summary; the full result is shown "
         "in the editor's Results tab.",
         "input_schema":{"type":"object","properties":{"kind":{"type":"string","enum":["pf","opf"]},
             "algorithm":{"type":"string","enum":[*PF_SOLVERS,*OPF_SOLVERS]}}}},

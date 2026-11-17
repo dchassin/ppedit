@@ -77,7 +77,15 @@ API key to start sessions; tests use a fake client).
   without its DC lines.
 - OPF solvers (`OPF_SOLVERS` in `case.py`, Run OPF ▾): only those whose
   module is installed are offered; IPOPT, CPLEX, MOSEK and Gurobi paths
-  in pypower are untested here (none installed in CI).
+  in pypower are untested here (none installed in CI). The `CVXOPF-*`
+  solvers run cvxopf (`ppedit/_cvxopf.py`, optional, Python 3.11+ and the
+  IPOPT library; CI installs it), not pypower: results are converted to
+  the `runopf` layout so `Case.solve` and `printpf` read them unchanged
+  (the report is printed without "f", as a PF, since cvxopf has no
+  multipliers; `lam_P`/`mu_*` are `None`). DC lines are built as
+  `HVDCLink` with `p_in = -Pf` because `cvxopf.hvdc_from_dcline` runs
+  PYPOWER DC lines backwards (as of cvxopf b6edcc7, 2026-11-12); switch
+  to it once that is fixed upstream.
 - DC lines are solved by `ppedit/_dcline.py`, not `pypower.toggle_dcline`
   (which fails with current numpy and mishandles `dclinecost`,
   out-of-service lines and Q cost rows); results are checked against the
