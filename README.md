@@ -25,6 +25,13 @@ Install using `pip`:
 
     pip install git+https://github.com/dchassin/ppedit
 
+Optional: the cvxopf OPF solvers (Run OPF ▾, `CVXOPF-*`) appear when
+[cvxopf](https://github.com/cvxgrp/cvxopf) is installed. It needs Python
+3.11+ and the IPOPT library, installed first (Ubuntu: `sudo apt-get install
+coinor-libipopt-dev`; macOS: `brew install ipopt`):
+
+    pip install git+https://github.com/cvxgrp/cvxopf
+
 # Usage
 
     ppedit serve                 # new, empty case
@@ -146,7 +153,12 @@ In the editor:
     (Newton, fast-decoupled XB and BX, Gauss-Seidel). Run OPF lists the
     OPF solvers that are installed: AC OPF with PIPS (interior point or
     step-controlled) and IPOPT (needs `pyipopt`), and DC OPF with PIPS,
-    IPOPT, CPLEX (`cplex`), MOSEK (`pymosek`) or Gurobi (`gurobipy`).
+    IPOPT, CPLEX (`cplex`), MOSEK (`pymosek`) or Gurobi (`gurobipy`), and,
+    with cvxopf installed, its four network models: full AC (IPOPT), the
+    SOCP relaxation of AC, a lossy DC network-flow model and a copper
+    plate (no branch flows). cvxopf reports no prices (LMPs), solves
+    piecewise-linear costs, ignores reactive power costs, and models DC
+    lines without `loss0`, terminal reactive power or voltage set points.
     `Case.solve(kind,algorithm)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
