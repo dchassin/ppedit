@@ -42,14 +42,14 @@
     <button data-action="undo" id="undo-btn" title="Undo (Ctrl+Z)">↶</button>
     <button data-action="redo" id="redo-btn" title="Redo (Ctrl+Shift+Z)">↷</button>
     <span class="divider"></span>
-    <select id="algorithm" title="Power flow algorithm">
-      <option value="NR">Newton</option>
-      <option value="FDXB">Fast-decoupled XB</option>
-      <option value="FDBX">Fast-decoupled BX</option>
-      <option value="GS">Gauss-Seidel</option>
-    </select>
-    <button class="primary" data-action="solve" data-kind="pf">Run PF</button>
-    <span id="opf-wrap" class="btn-wrap"><button class="primary alt" data-action="solve" data-kind="opf" id="opf-btn">Run OPF</button></span>
+    <div class="menu">
+      <button class="primary" data-menu="pf-menu" id="pf-btn" title="Run a power flow: choose the algorithm">Run PF ▾</button>
+      <div id="pf-menu" class="dropdown" role="menu"></div>
+    </div>
+    <div class="menu">
+      <span id="opf-wrap" class="btn-wrap"><button class="primary alt" data-menu="opf-menu" id="opf-btn">Run OPF ▾</button></span>
+      <div id="opf-menu" class="dropdown" role="menu"></div>
+    </div>
     <span class="divider"></span>
     <button data-action="exit" class="exit" title="Stop the ppedit server">Exit</button>
   </div>

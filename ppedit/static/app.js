@@ -133,7 +133,7 @@ function renderChrome() {
   $("#redo-btn").disabled = !st.can_redo;
   const noCost = !c.tables.gencost.length;
   $("#opf-btn").disabled = noCost;
-  $("#opf-wrap").title = noCost ? OPF_NO_COST : "Run an optimal power flow";
+  $("#opf-wrap").title = noCost ? OPF_NO_COST : "Run an optimal power flow: choose the solver";
   for (const el of [$("#baseMVA"), $("#version")]) {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
@@ -2090,7 +2090,8 @@ function renderResults() {
     return;
   }
   const c = S.state.case;
-  const kind = r.kind === "pf" ? "Power flow" : "Optimal power flow";
+  const kind = (r.kind === "pf" ? "Power flow" : r.dc ? "DC optimal power flow" : "Optimal power flow")
+    + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
   const totalPg = r.gen.reduce((s, g) => s + g.Pg, 0);
   const totalPd = c.tables.bus.reduce((s, b) => s + b[2], 0);
   const cards = h("div", { class: "cards" },
@@ -2376,13 +2377,15 @@ async function onAction(btn) {
     else if (a === "undo") await act("/api/undo");
     else if (a === "redo") await act("/api/redo");
     else if (a === "solve") {
-      btn.disabled = true;
+      const trigger = $(btn.dataset.kind === "pf" ? "#pf-btn" : "#opf-btn");
+      trigger.disabled = true;
       try {
-        await act("/api/solve", { kind: btn.dataset.kind, algorithm: $("#algorithm").value });
+        await act("/api/solve", { kind: btn.dataset.kind, algorithm: btn.dataset.algorithm });
         const r = S.state.result;
-        toast(r.success ? `${r.kind.toUpperCase()} converged` : `${r.kind.toUpperCase()} did not converge — see Results`, !r.success);
+        const what = (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
+        toast(r.success ? `${what} converged` : `${what} did not converge — see Results`, !r.success);
         if (S.view !== "network") show("results"); else renderNetwork();
-      } finally { btn.disabled = false; renderChrome(); }
+      } finally { trigger.disabled = false; renderChrome(); }
     }
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
@@ -2441,6 +2444,18 @@ async function exitServer() {
   window.close(); // browsers allow this only for some tabs (e.g. no back history); otherwise the page above stays
 }
 
+// Run PF ▾ and Run OPF ▾ list the solvers from /api/meta (OPF: only those
+// installed, AC then DC); choosing one runs it.
+function buildSolverMenus() {
+  const item = (kind, x) => h("button", { "data-action": "solve", "data-kind": kind, "data-algorithm": x.algorithm, role: "menuitem" }, x.label);
+  $("#pf-menu").replaceChildren(...S.meta.solvers.pf.map(x => item("pf", x)));
+  const opf = S.meta.solvers.opf;
+  $("#opf-menu").replaceChildren(...[["AC OPF", false], ["DC OPF", true]].flatMap(([title, dc]) => {
+    const rows = opf.filter(x => x.dc === dc);
+    return rows.length ? [h("div", { class: "sep" }, title), ...rows.map(x => item("opf", { ...x, label: x.label.replace(/^(AC|DC): /, "") }))] : [];
+  }));
+}
+
 function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("open")); }
 
 async function init() {
@@ -2448,6 +2463,7 @@ async function init() {
   loadLabels();
   buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
+  buildSolverMenus();
   $("#opf-wrap").addEventListener("click", () => { if ($("#opf-btn").disabled) toast(OPF_NO_COST, true); });
   document.addEventListener("click", e => {
     const m = e.target.closest("[data-menu]");

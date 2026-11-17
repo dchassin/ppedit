@@ -165,6 +165,13 @@ What is not promised
   - Buses with no in-service branch are solved as isolated (type NONE)
     without changing the case.
 
+  - Run OPF offers only the OPF solvers whose Python module is installed
+    (`ppedit.case.solvers`); PIPS (AC and DC) ships with `pypower`, while
+    IPOPT, CPLEX, MOSEK and Gurobi are offered when their modules are
+    present but are not tested by ppedit. A DC OPF solution has flat
+    voltages, no reactive power and no losses; applying it copies those
+    into the case.
+
 Data
 ----
 

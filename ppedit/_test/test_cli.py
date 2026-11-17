@@ -50,7 +50,9 @@ def test_serve_exit(capsys):
             time.sleep(0.1)
     thread.join(5)
     assert not thread.is_alive() and out["code"] == 0
-    assert "server stopped" in capsys.readouterr().out
+    printed = capsys.readouterr().out
+    assert f"URL.... http://localhost:{port}/" in printed
+    assert "thanks for using ppedit!" in printed
 
 def test_verbose(tmp_path,caplog):
     import logging # pylint: disable=import-outside-toplevel

@@ -140,7 +140,16 @@ In the editor:
     table moves its buses with it. Click a column header to sort the rows
     by it (again to reverse, a third time to restore the case order); the
     sort changes only the display, not the row order saved in the case.
-  - **Results**: PF/OPF summary, bus voltages (and LMPs for OPF), dispatch,
+  - **Run PF ▾** and **Run OPF ▾** (toolbar) each open a menu of solvers;
+    choosing one runs it. Run PF lists the PYPOWER power flow algorithms
+    (Newton, fast-decoupled XB and BX, Gauss-Seidel). Run OPF lists the
+    OPF solvers that are installed: AC OPF with PIPS (interior point or
+    step-controlled) and IPOPT (needs `pyipopt`), and DC OPF with PIPS,
+    IPOPT, CPLEX (`cplex`), MOSEK (`pymosek`) or Gurobi (`gurobipy`).
+    `Case.solve(kind,algorithm)` takes the same choices (`ppedit.case.solvers()`
+    lists them). A DC OPF solution has flat voltages (1 pu), no reactive
+    power and no losses.
+  - **Results**: PF/OPF summary (with the solver used), bus voltages (and LMPs for OPF), dispatch,
     branch flows and loading, DC line flows and losses, area totals, the
     PYPOWER report, and **Apply solution to case** to copy the solved
     Vm/Va/Pg/Qg and DC line flows into the model. Results also reports how

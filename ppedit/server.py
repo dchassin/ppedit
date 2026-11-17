@@ -21,7 +21,8 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
-    input formats (read), version
+    input formats (read), solvers (`ppedit.case.solvers`: the PF algorithms
+    and the installed OPF solvers), version
   - `GET  /api/state`: current state
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload) or
@@ -32,7 +33,10 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
   - `POST /api/undo`, `POST /api/redo`
-  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm": "NR"|...}`
+  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?}`; `algorithm`
+    is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`) or an OPF
+    solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
+    `ppedit.case.OPF_SOLVERS`)
   - `POST /api/apply`: copy the last solution into the case
   - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
     `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the
@@ -72,7 +76,7 @@ import threading
 from flask import Flask, jsonify, request, send_from_directory, Response
 
 from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
-    builtin_cases, writable_format
+    builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
 
 _logger = logging.getLogger(__file__)
@@ -253,7 +257,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         from ppedit import __version__ # pylint: disable=import-outside-toplevel
         return jsonify(columns=COLUMNS,tables=TABLES,builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            version=__version__)
+            solvers=solvers(),version=__version__)
 
     @app.get("/api/state")
     def state():
@@ -337,7 +341,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         data = body()
         with editor.lock:
             editor.result = editor.case.solve(data.get("kind","pf"),
-                data.get("algorithm","NR"))
+                data.get("algorithm"))
             return jsonify(editor.state())
 
     @app.post("/api/apply")

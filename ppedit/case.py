@@ -142,6 +142,7 @@ import math
 import os
 import re
 import contextlib
+import importlib.util
 import warnings
 
 _logger = logging.getLogger(__file__)
@@ -293,6 +294,28 @@ FORMATS = {".py":"py",".json":"json",".glm":"glm"}
 
 INPUT_FORMATS = {**FORMATS,".raw":"raw"}
 """File extensions `Case.load` reads (`.raw`: PSS/E, read only)"""
+
+PF_SOLVERS = {
+    "NR":("Newton",1),
+    "FDXB":("Fast-decoupled XB",2),
+    "FDBX":("Fast-decoupled BX",3),
+    "GS":("Gauss-Seidel",4),
+}
+"""Power flow algorithms: `algorithm: (label, PYPOWER PF_ALG)`"""
+
+OPF_SOLVERS = {
+    "PIPS":("AC: PIPS interior point",False,560,None),
+    "PIPS-SC":("AC: PIPS step-controlled",False,565,None),
+    "IPOPT":("AC: IPOPT",False,580,"pyipopt"),
+    "DC-PIPS":("DC: PIPS interior point",True,200,None),
+    "DC-PIPS-SC":("DC: PIPS step-controlled",True,250,None),
+    "DC-IPOPT":("DC: IPOPT",True,400,"pyipopt"),
+    "DC-CPLEX":("DC: CPLEX",True,500,"cplex"),
+    "DC-MOSEK":("DC: MOSEK",True,600,"pymosek"),
+    "DC-GUROBI":("DC: Gurobi",True,700,"gurobipy"),
+}
+"""OPF solvers: `algorithm: (label, DC formulation, PYPOWER OPF_ALG or
+OPF_ALG_DC code, Python module the solver needs or None)`"""
 
 GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
@@ -1225,7 +1248,7 @@ def {name}():
                     + ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else ""))
         return issues
 
-    def solve(self,kind:str="pf",algorithm:str="NR") -> dict:
+    def solve(self,kind:str="pf",algorithm:str|None=None) -> dict:
         """Run a PYPOWER power flow (`pf`) or optimal power flow (`opf`)
 
         Arguments
@@ -1233,12 +1256,17 @@ def {name}():
 
           - `kind`: `pf` or `opf` (OPF needs `gencost`)
 
-          - `algorithm`: power flow method: `NR`, `FDXB`, `FDBX`, or `GS`
+          - `algorithm`: for `pf`, a key of `PF_SOLVERS` (`NR`, the
+            default, `FDXB`, `FDBX`, or `GS`); for `opf`, a key of
+            `OPF_SOLVERS` (`PIPS`, the default, `PIPS-SC`, `IPOPT`, or a
+            DC OPF solver `DC-PIPS`, `DC-PIPS-SC`, `DC-IPOPT`, `DC-CPLEX`,
+            `DC-MOSEK`, `DC-GUROBI`); `solvers()` lists those installed
 
         Returns
         -------
 
-          - `dict`: `success`, `kind`, `iterations` (PF), `objective`
+          - `dict`: `success`, `kind`, `algorithm`, `solver` (its label),
+            `dc` (DC OPF: flat voltages, no reactive power), `iterations` (PF), `objective`
             (OPF, $/h), `losses_MW`, `log` (solver text output), and the rows
             `bus` (`bus_i`, `Vm`, `Va`, `lam_P`), `gen` (`bus`, `Pg`, `Qg`),
             `branch` (`fbus`, `tbus`, `PF`, `QF`, `PT`, `QT`,
@@ -1274,20 +1302,28 @@ def {name}():
         Exceptions
         ----------
 
-          - `CaseError`: the case has validation errors, or OPF without costs
+          - `CaseError`: the case has validation errors, OPF without costs,
+            an unknown algorithm, or a solver whose module is not installed
         """
         errors = [x for x in self.validate() if x["level"] == "error"]
         if errors:
             raise CaseError(f"case has {len(errors)} error(s); first: "
                 f"{errors[0]['table']}: {errors[0]['message']}")
         from pypower.api import runpf, runopf, ppoption # pylint: disable=import-outside-toplevel,no-name-in-module
-        algs = {"NR":1,"FDXB":2,"FDBX":3,"GS":4}
-        if algorithm not in algs:
-            raise CaseError(f"algorithm must be one of {', '.join(algs)}")
-        if kind == "opf" and not self.tables["gencost"]:
-            raise CaseError("OPF needs generator cost data (gencost)")
         if kind not in ("pf","opf"):
             raise CaseError("kind must be 'pf' or 'opf'")
+        algs = PF_SOLVERS if kind == "pf" else OPF_SOLVERS
+        if algorithm is None:
+            algorithm = "NR" if kind == "pf" else "PIPS"
+        if algorithm not in algs:
+            raise CaseError(f"{kind.upper()} algorithm must be one of {', '.join(algs)}")
+        if kind == "opf" and not self.tables["gencost"]:
+            raise CaseError("OPF needs generator cost data (gencost)")
+        dc = kind == "opf" and OPF_SOLVERS[algorithm][1]
+        if kind == "opf" and OPF_SOLVERS[algorithm][3] \
+                and importlib.util.find_spec(OPF_SOLVERS[algorithm][3]) is None:
+            raise CaseError(f"OPF solver {algorithm} needs the Python module "
+                f"'{OPF_SOLVERS[algorithm][3]}', which is not installed")
         ppc = self.to_ppc(arrays=True)
         # buses with no in-service branch make the solver fail; solve them as isolated
         connected = {r[k] for r in self.tables["branch"] if r[10] == 1 and r[0] != r[1] for k in (0,1)}
@@ -1296,7 +1332,13 @@ def {name}():
         for n,row in enumerate(self.tables["bus"]):
             if row[0] in isolated:
                 ppc["bus"][n,1] = 4
-        opt = ppoption(PF_ALG=algs[algorithm],VERBOSE=0,OUT_ALL=0)
+        if kind == "pf":
+            opt = ppoption(PF_ALG=PF_SOLVERS[algorithm][1],VERBOSE=0,OUT_ALL=0)
+        elif dc:
+            opt = ppoption(PF_DC=1,OPF_ALG_DC=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
+        else:
+            opt = ppoption(OPF_ALG=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
+        info = {"kind":kind,"algorithm":algorithm,"solver":algs[algorithm][0],"dc":dc}
         log = io.StringIO()
         if isolated:
             log.write(f"Solved bus(es) {', '.join(str(x) for x in isolated)} as isolated "
@@ -1322,7 +1364,7 @@ def {name}():
                     res = runopf(ppc,opt)
             except Exception as err: # pylint: disable=broad-exception-caught
                 _logger.debug("solver failed: %s",err)
-                return {"success":False,"kind":kind,"log":log.getvalue()+f"\n{err}",
+                return {"success":False,**info,"log":log.getvalue()+f"\n{err}",
                     "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
         try:
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
@@ -1349,8 +1391,7 @@ def {name}():
         bus,gen,branch = res["bus"],res["gen"],res["branch"]
         result = {
             "success": bool(res["success"]),
-            "kind": kind,
-            "algorithm": algorithm,
+            **info,
             "iterations": int(res["iterations"]) if "iterations" in res else None,
             "objective": float(res["f"]) if kind == "opf" and "f" in res else None,
             "log": log.getvalue(),
@@ -1434,6 +1475,30 @@ def {name}():
 # ---------------------------------------------------------------------------
 # module helpers
 # ---------------------------------------------------------------------------
+
+def solvers() -> dict:
+    """Return the PF and OPF solvers that can run here
+
+    Returns
+    -------
+
+      - `dict`: `pf` and `opf`, each a list of `{"algorithm", "label"}` in
+        menu order; `opf` lists only the solvers whose Python module is
+        installed (see `OPF_SOLVERS`), plus `dc` (DC formulation)
+
+    Example
+    -------
+
+        >>> [x["algorithm"] for x in solvers()["pf"]]
+        ['NR', 'FDXB', 'FDBX', 'GS']
+        >>> solvers()["opf"][0]
+        {'algorithm': 'PIPS', 'label': 'AC: PIPS interior point', 'dc': False}
+    """
+    return {
+        "pf":[{"algorithm":k,"label":v[0]} for k,v in PF_SOLVERS.items()],
+        "opf":[{"algorithm":k,"label":v[0],"dc":v[1]} for k,v in OPF_SOLVERS.items()
+            if v[3] is None or importlib.util.find_spec(v[3]) is not None],
+    }
 
 def builtin_cases() -> list[str]:
     """Return the names of the cases shipped with the `pypower` package"""

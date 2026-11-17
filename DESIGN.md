@@ -89,6 +89,7 @@ reversed decision in place and note the date.
 | 36b | How a case was read is kept as `Case.source` (file, format, PSS/E revision, rows per table, and the load notes) and sent as editor state `source` until another case is opened; it survives saving, which clears `Case.notes`. The Results tab shows it, and opening a file with notes switches to Results instead of showing a toast. |
 | 36c | Results tables sort client-side by column (`block` in `app.js`): a header click sorts ascending, a second descending, a third restores the solver order. Keys are the displayed numbers (a cell may carry an exact `data-sort` value, e.g. loading), blanks (`–`, `unrated`) always last, ties in solver order. The sort is kept per table title in `S.resSort` for the page session (not in `localStorage`), so it survives new solves. |
 | 36d | Case tables (Buses through Areas; issue #63) sort client-side by column for display only (`tableOrder` in `app.js`): a header click sorts ascending, a second descending, a third restores the case order. The case row order is never changed; rows keep their case index (row labels, selection, edits, Issues links). Keys are the cell values (`"Inf"`/`"-Inf"` as infinities, text such as `costs` compared numerically by character runs), blanks last, ties in case order. The sort is kept per table in `S.tableSort` for the page session (not in `localStorage`), so it survives edits and tab switches; an edited row moves to its sorted place when the table re-renders. |
+| 36e | Run PF ▾ and Run OPF ▾ are menus, not a solver select beside buttons: picking a solver runs it. The choices come from `GET /api/meta` `solvers` (`ppedit.case.solvers()`): every `PF_SOLVERS` algorithm, and the `OPF_SOLVERS` whose Python module is installed (checked with `importlib.util.find_spec`, not imported), grouped AC then DC. `Case.solve(kind,algorithm)` validates `algorithm` against the table for `kind` (default `NR` for PF, `PIPS` for OPF) and refuses a solver whose module is missing; DC OPF runs `runopf` with `PF_DC=1` and the result carries `dc`, `algorithm` and `solver` (its label). |
 
 ## Conventions inherited from the `eudoxys-package` skill
 
@@ -156,7 +157,7 @@ partially applied, because the server rolls back through `Editor.edit()`.
 | `Case.notes` | content read but not kept (GLM objects, PSS/E data) |
 | `Case.source` | how `Case.load` read the case: `file`, `format`, `revision`, `size`, `notes` (#36b) |
 | `Case.validate()` | list of `{level,table,row,column,message}`, `level` `error` or `warning` |
-| `Case.solve(kind,algorithm)` | `success`, `kind`, `iterations`, `objective`, `losses_MW`, `dcline_losses_MW`, `log`, rows `bus`, `gen`, `branch`, `dcline`, `areas` (see the `Case.solve` docstring) |
+| `Case.solve(kind,algorithm)` | `success`, `kind`, `algorithm`, `solver`, `dc`, `iterations`, `objective`, `losses_MW`, `dcline_losses_MW`, `log`, rows `bus`, `gen`, `branch`, `dcline`, `areas` (see the `Case.solve` docstring) |
 | editor state (every API response) | `case`, `path`, `format`, `dirty`, `issues`, `can_undo`, `can_redo`, `result`, `cascade`, `revision`, `source`; Claude routes add `claude` |
 
 The API routes are listed in the `ppedit.server` docstring, which is
@@ -237,7 +238,10 @@ editor state JSON (see Contracts). There are no generated data tables.
 ## Known issues to handle
 
 - PYPOWER's OPF fails on piecewise-linear and reactive-power cost rows
-  with current numpy; `case9target` PF does not converge in PYPOWER either.
+  with current numpy (AC OPF only: the DC OPF solves them); `case9target`
+  PF does not converge in PYPOWER either. DC OPF (PIPS) on PYPOWER's
+  `t_case9_dcline` fails numerically inside pypower, with or without its
+  DC lines.
 - GridLAB-D replaces DC line `loss1 = 0` with its default loss factor
   (0.05), so ppedit and GridLAB-D can solve the same GLM differently
   (issue #12).
