@@ -257,7 +257,7 @@ outputs
 
     ppedit/_test/data/case3.glm: no issues found
 
-`ppedit --version` prints the installed version, e.g. `ppedit 0.2.0`.
+`ppedit --version` prints the installed version, e.g. `ppedit 0.3.1`.
 
 ## Python
 

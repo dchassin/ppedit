@@ -1,6 +1,6 @@
 # dchassin/ppedit — package design (draft 1)
 
-Status: design recorded as built, 2026-11-15 (version 0.2.0, after PR #50; issue #52); decision #36f added 2026-11-17 (issue #69).
+Status: design recorded as built, 2026-11-15 (version 0.2.0, after PR #50; issue #52); decision #36f added 2026-11-17 (issue #69); inherited conventions revised 2026-11-17.
 Draft 1 documents the current state; it was written after the code, so
 every decision below is already implemented unless it is listed under
 `# planned` or in Open questions.
@@ -102,12 +102,16 @@ reversed decision in place and note the date.
   https://www.chassin.org/ppedit by `.github/workflows/deploy-pages.yaml`.
 - `MANIFEST.md` maps every tracked file (`python .github/check_manifest.py`).
 - Pull requests from new contributors must link an issue with the
-  `approved` label (`.github/workflows/approved-issue.yaml`).
+  `approved` label (`.github/workflows/approved-issue.yaml`); every open
+  issue is assigned to the owner (`.github/workflows/assign-issues.yaml`).
+- `requires-python` matches the CI Python version (3.12).
 - House style: no spaces after commas in calls and signatures, 4-space
   indent.
 
 `ppedit` departs from the skill in one way: it lives at `dchassin/ppedit`
-and is documented at chassin.org rather than eudoxys.com.
+and is documented at chassin.org rather than eudoxys.com. Since `epm`
+indexes only the eudoxys organization, `epm install ppedit` does not work;
+install with `pip install git+https://github.com/dchassin/ppedit`.
 
 ## Module layout
 
