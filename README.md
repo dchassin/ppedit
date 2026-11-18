@@ -54,7 +54,8 @@ In the editor:
     new linked bus from the panel. DC lines are drawn as purple dash-dot
     lines (with a "DC" tag in the simple and classic styles and a converter
     box at each end in the one-line style). Three styles:
-    - *Simple*: buses colored by type; after a solve, by voltage.
+    - *Simple*: buses colored by type; after a solve, by voltage
+      magnitude (blue low, red high).
     - *Classic* (utility one-line diagram conventions): generator buses
       are circles, load buses triangles, other buses squares, and
       disconnected buses are drawn empty; transformers show as interlocking
