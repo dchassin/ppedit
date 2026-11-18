@@ -67,20 +67,11 @@
 
 <nav class="tabs" id="tabs">
   <button data-view="network">Network</button>
-  <button data-view="bus">Buses <span class="count" data-count="bus"></span></button>
-  <button data-view="gen">Generators <span class="count" data-count="gen"></span></button>
-  <button data-view="branch">Branches <span class="count" data-count="branch"></span></button>
-  <button data-view="gencost">Gen costs <span class="count" data-count="gencost"></span></button>
-  <button data-view="dcline">DC lines <span class="count" data-count="dcline"></span></button>
-  <button data-view="dclinecost">DC line costs <span class="count" data-count="dclinecost"></span></button>
-  <button data-view="areas">Areas <span class="count" data-count="areas"></span></button>
+  <button data-view="tables" title="Case data tables">Tables</button>
   <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
   <button data-view="issues">Issues <span class="count issues" id="issue-count"></span></button>
   <button data-view="claude" title="Claude sessions that edit the case">Claude <span class="status-dot" id="claude-dot"></span></button>
-  <div class="globals">
-    <label>baseMVA <input id="baseMVA" class="num" size="6"></label>
-    <label>version <input id="version" class="num" size="2"></label>
-  </div>
+  <button data-view="settings" title="Case settings: baseMVA and version">Settings</button>
 </nav>
 
 <main id="main">
@@ -139,6 +130,15 @@
     </div>
   </section>
   <section id="view-table" class="view">
+    <nav class="table-tabs" id="table-tabs">
+      <button data-view="bus">Buses <span class="count" data-count="bus"></span></button>
+      <button data-view="gen">Generators <span class="count" data-count="gen"></span></button>
+      <button data-view="branch">Branches <span class="count" data-count="branch"></span></button>
+      <button data-view="gencost">Gen costs <span class="count" data-count="gencost"></span></button>
+      <button data-view="dcline">DC lines <span class="count" data-count="dcline"></span></button>
+      <button data-view="dclinecost">DC line costs <span class="count" data-count="dclinecost"></span></button>
+      <button data-view="areas">Areas <span class="count" data-count="areas"></span></button>
+    </nav>
     <div class="table-tools">
       <button data-action="add-row">+ Add row</button>
       <button data-action="dup-row" title="Duplicate selected rows">Duplicate</button>
@@ -150,6 +150,13 @@
   </section>
   <section id="view-results" class="view"></section>
   <section id="view-issues" class="view"></section>
+  <section id="view-settings" class="view">
+    <div class="settings">
+      <h2>Case settings</h2>
+      <label><span>baseMVA</span> <input id="baseMVA" class="num" size="8" title="System MVA base (MVA)"> <span class="unit">MVA</span></label>
+      <label><span>version</span> <input id="version" class="num" size="8" title="PYPOWER case format version"></label>
+    </div>
+  </section>
   <section id="view-claude" class="view">
     <div class="claude-tools">
       <input id="claude-title" placeholder="Session title (optional)" size="22">

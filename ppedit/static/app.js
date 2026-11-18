@@ -5,6 +5,7 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
+  table: "bus",        // table the Tables tab opens (the one shown last)
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
   resSort: {},         // Results table title -> {col, dir} (see block)
@@ -152,10 +153,16 @@ function renderChrome() {
   $("#claude-dot").className = "status-dot" + (busy ? " ok" : "");
   $("#claude-dot").title = busy ? "Claude is working" : "";
   document.title = `${st.dirty ? "• " : ""}${c.name} — ppedit`;
-  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
+  const isTable = S.meta.tables.includes(S.view);
+  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "tables")));
+  $$("#table-tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
 }
 
+// The Tables tab opens the table shown last (S.table); the table tabs below
+// it pick the table. Table names stay view names (?view=bus, Issues links).
 function show(view) {
+  if (view === "tables") view = S.table;
+  if (S.meta.tables.includes(view)) S.table = view;
   S.view = view;
   renderChrome();
   renderView();
@@ -168,6 +175,7 @@ function renderView() {
   else if (S.view === "network") { $("#view-network").classList.add("active"); renderNetwork(); }
   else if (S.view === "results") { $("#view-results").classList.add("active"); renderResults(); }
   else if (S.view === "claude") { $("#view-claude").classList.add("active"); renderClaude(); }
+  else if (S.view === "settings") { $("#view-settings").classList.add("active"); }
   else { $("#view-issues").classList.add("active"); renderIssues(); }
 }
 
@@ -2579,7 +2587,7 @@ async function init() {
     if (qs.get("algorithm")) req.algorithm = qs.get("algorithm");
     await act("/api/solve", req).catch(() => {});
   }
-  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
+  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
 }
 
 init().catch(err => toast(err.message, true));
