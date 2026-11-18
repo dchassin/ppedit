@@ -53,3 +53,49 @@ and 1400 MVAr of shunt reactors (`Bs`) are added at buses 2901 (300), 2902
 changing the costs with
 
     python3 examples/build_wecc240_2018.py
+
+In `wecc240_2020.py` the areas are the balancing authorities of EIA Form 930
+(issue #90), replacing the four NREL areas. `wecc240_ba.csv` gives the
+EIA-930 code of each bus (`BUS_I,NAME,BA,NOTE`, the note saying why), and
+
+    python3 examples/wecc240_areas.py
+
+numbers the areas in alphabetical order of the codes, rebuilds the `areas`
+rows with their default price reference buses, sets the geodata `BA` column
+to the code, and saves `wecc240_2020.py` in place:
+
+| area | BA | name | buses |
+|---:|---|---|---:|
+| 1 | AESO | Alberta Electric System Operator | 2 |
+| 2 | AZPS | Arizona Public Service | 7 |
+| 3 | BANC | Balancing Authority of Northern California | 8 |
+| 4 | BCHA | BC Hydro | 4 |
+| 5 | BPAT | Bonneville Power Administration | 31 |
+| 6 | CEN | CENACE (Baja California) | 2 |
+| 7 | CISO | California ISO | 106 |
+| 8 | IID | Imperial Irrigation District | 2 |
+| 9 | IPCO | Idaho Power | 5 |
+| 10 | LDWP | Los Angeles Department of Water and Power | 26 |
+| 11 | NEVP | Nevada Power (NV Energy) | 8 |
+| 12 | NWMT | NorthWestern Energy | 6 |
+| 13 | PACE | PacifiCorp East | 16 |
+| 14 | PACW | PacifiCorp West | 1 |
+| 15 | PNM | Public Service Company of New Mexico | 4 |
+| 16 | PSCO | Public Service Company of Colorado | 2 |
+| 17 | PSEI | Puget Sound Energy | 2 |
+| 18 | SRP | Salt River Project | 4 |
+| 19 | SWPW | SPP RTO West (WACM until April 2026) | 4 |
+| 20 | WALC | WAPA Desert Southwest | 3 |
+
+A bus is assigned to the balancing authority of the substation or plant it
+is named for (by voltage where a station is shared: Four Corners 500 kV is
+AZPS and 345/230 kV PNM; Garrison 500 kV is BPAT and 230 kV NWMT; Sylmar
+and Cottonwood have a bus per owner). The case's aggregate load buses take
+the balancing authority of the station they are placed at, so an area's load
+is not that balancing authority's EIA-930 demand: for example, the
+northern Washington load at NORTH (PSEI) also serves SCL and TPWR, and BPAT
+includes the Portland and Willamette Valley loads of PGE and PACW at
+WILLAMET and WCASCADE. Balancing authorities with no bus of their own in the
+240-bus case (AVA, CHPD, DOPD, EPE, GCPD, PGE, SCL, TEPC, TIDC, TPWR and the
+generation-only ones) have no area. The other example files still have the
+NREL areas, including `wecc240_2018.py`.
