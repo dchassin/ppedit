@@ -54,12 +54,15 @@ changing the costs with
 
     python3 examples/build_wecc240_2018.py
 
-In `wecc240_2018.py` the areas are the balancing authorities of EIA Form 930
-(issue #90), replacing the four NREL areas of the source case. 
-`wecc240_ba.csv` gives the EIA-930 code of each bus (`BUS_I,NAME,BA,NOTE`,
-the note saying why), and `build_wecc240_2018.py` numbers the areas in
-alphabetical order of the codes, rebuilds the `areas` rows with their default
-price reference buses, and sets the geodata `BA` column to the code:
+In `wecc240_2020.py` the areas are the balancing authorities of EIA Form 930
+(issue #90), replacing the four NREL areas. `wecc240_ba.csv` gives the
+EIA-930 code of each bus (`BUS_I,NAME,BA,NOTE`, the note saying why), and
+
+    python3 examples/wecc240_areas.py
+
+numbers the areas in alphabetical order of the codes, rebuilds the `areas`
+rows with their default price reference buses, sets the geodata `BA` column
+to the code, and saves `wecc240_2020.py` in place:
 
 | area | BA | name | buses |
 |---:|---|---|---:|
@@ -95,4 +98,4 @@ includes the Portland and Willamette Valley loads of PGE and PACW at
 WILLAMET and WCASCADE. Balancing authorities with no bus of their own in the
 240-bus case (AVA, CHPD, DOPD, EPE, GCPD, PGE, SCL, TEPC, TIDC, TPWR and the
 generation-only ones) have no area. The other example files still have the
-NREL areas.
+NREL areas, including `wecc240_2018.py`.
