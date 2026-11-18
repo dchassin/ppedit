@@ -2351,6 +2351,14 @@ async function openFile(file) {
   else toast(`Opened ${file.name} — use Save as to keep changes`);
 }
 
+async function openUrl(url) {
+  await act("/api/open", { url });
+  afterOpen();
+  $("#open-url").value = "";
+  if (S.state.source && S.state.source.notes.length) show("results");  // conversion report
+  else toast(`Opened ${url.split("/").pop()} — use Save as to keep changes`);
+}
+
 function afterOpen() {
   S.pos = {}; S.pick = null; needFit = true;
   for (const t of S.meta.tables) S.selected[t].clear();
@@ -2482,7 +2490,11 @@ async function init() {
   });
   document.addEventListener("click", e => {
     const m = e.target.closest("[data-menu]");
-    if (m) { const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus(); if (!open) d.classList.add("open"); return; }
+    if (m) {
+      const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus();
+      if (!open) { d.classList.add("open"); d.querySelector("input[type=url]")?.focus(); }
+      return;
+    }
     const b = e.target.closest("[data-action]");
     if (b) return onAction(b);
     const tab = e.target.closest("[data-view]");
@@ -2496,6 +2508,13 @@ async function init() {
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";
     if (f) loadGeodata(f).catch(() => { /* toast already shown */ });
+  });
+  $("#open-url-form").addEventListener("submit", e => {
+    e.preventDefault();
+    const url = $("#open-url").value.trim();
+    if (!url || !confirmDiscard()) return;
+    closeMenus();
+    openUrl(url).catch(() => { /* toast already shown */ });
   });
   $("#file-input").addEventListener("change", e => { const f = e.target.files[0]; e.target.value = ""; if (f) openFile(f); });
   $("#grid").addEventListener("change", e => { if (e.target.dataset.col) commitCell(e.target); });

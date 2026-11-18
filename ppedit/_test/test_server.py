@@ -144,3 +144,47 @@ def test_areas_api(client,post):
     assert st["removed"]["areas"] == 1 and st["case"]["tables"]["areas"] == [[1,5]]
     _,st = post("/api/undo")
     assert st["case"]["tables"]["areas"] == [[1,5],[2,9]]
+
+class _Response:
+    """Stand-in for `urllib.request.urlopen` results"""
+    def __init__(self,data):
+        self.data = data
+    def read(self,size=-1):
+        return self.data if size < 0 else self.data[:size]
+    def __enter__(self):
+        return self
+    def __exit__(self,*args):
+        return False
+
+def test_open_url(client,post,monkeypatch):
+    """A case opened from a URL is downloaded by the server (no network here)"""
+    import urllib.error
+    from ppedit import server
+    text = client.get("/api/export?format=glm").get_data(as_text=True)
+    seen = []
+    def fake_urlopen(req,timeout=None):
+        seen.append(req.full_url)
+        if req.full_url.endswith("missing.glm"):
+            raise urllib.error.HTTPError(req.full_url,404,"Not Found",{},None)
+        if req.full_url.endswith("down.glm"):
+            raise urllib.error.URLError("no route to host")
+        return _Response(text.encode())
+    monkeypatch.setattr(server.urllib.request,"urlopen",fake_urlopen)
+    url = "https://example.org/cases/my%20case.glm?raw=1"
+    _,st = post("/api/open",{"url":url})
+    assert seen == [url]
+    assert len(st["case"]["tables"]["bus"]) == 9 and st["path"] is None
+    assert st["source"]["file"] == url and st["source"]["format"] == "glm"
+    assert st["case"]["name"] == "my_case"
+    status,st = post("/api/save",{})
+    assert status == 400 # no file yet: Save as
+    for url,msg in [("file:///etc/passwd.glm","only http and https"),
+                    ("ftp://example.org/x.glm","only http and https"),
+                    ("https://example.org/case.txt","does not name"),
+                    ("https://example.org/missing.glm","HTTP 404"),
+                    ("https://example.org/down.glm","cannot download")]:
+        status,st = post("/api/open",{"url":url})
+        assert status == 400 and msg in st["error"], url
+    monkeypatch.setattr(server,"DOWNLOAD_LIMIT",10)
+    status,st = post("/api/open",{"url":"https://example.org/big.glm"})
+    assert status == 400 and "larger than" in st["error"]
