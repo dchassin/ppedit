@@ -144,8 +144,10 @@ In the editor:
     contain it. A single match is selected for editing in the side panel
     and centered in the diagram; several matches open a list to choose from
     (mouse, or arrow keys and Enter; Escape closes it).
-  - **Buses / Generators / Branches / Gen costs / DC lines / DC line
-    costs / Areas**: spreadsheet-style editing; Enter or Tab commits, Escape
+  - **Tables**: a second row of tabs below the main tabs picks the table
+    (**Buses / Generators / Branches / Gen costs / DC lines / DC line
+    costs / Areas**); the Tables tab reopens the table shown last.
+    Spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines
     and area price reference buses that use it; deleting a bus asks before
     deleting its connections; generator cost rows follow their generators
@@ -185,6 +187,11 @@ In the editor:
     one folder on the server machine. Every change Claude makes is one
     undoable edit and shows up in the other tabs as it happens. Needs an
     API key in `ANTHROPIC_API_KEY` or `~/.anthropic` (see `ppedit.claude`).
+  - **Settings**: the case `baseMVA` and `version`, and the display
+    precision (decimal places) of the case table values by unit (defaults:
+    MW, MVAr, MVA, MW/min, MVAr/min, $ 2; per-unit impedance, per-unit
+    voltage, deg, kV, MW/MW 3; no unit 4; blank for full precision). A value of exactly 0 shows as 0; editing a cell
+    shows its full value. Saved in the browser, not in the case.
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 
 DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are

@@ -5,6 +5,8 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
+  table: "bus",        // table the Tables tab opens (the one shown last)
+  precision: null,     // decimal places by unit (set from loadPrecision below)
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
   resSort: {},         // Results table title -> {col, dir} (see block)
@@ -44,6 +46,46 @@ const sv = (tag, attrs = {}) => {
 };
 const TABLE_TITLES = { bus: "bus", gen: "generator", branch: "branch", gencost: "generator cost", dcline: "DC line", dclinecost: "DC line cost", areas: "area" };
 const fmt = (v, d = 3) => (v === null || v === undefined) ? "–" : (typeof v === "number" ? v.toFixed(d) : v);
+
+// Display precision of case table values by unit (issue #70; Settings tab):
+// decimal places per precision key, null for full precision. Kept in the
+// browser's localStorage (ppedit.precision), not in the case. Per-unit
+// columns split into voltages (puV) and impedances on baseMVA (puMVA).
+const PRECISION_UNITS = [
+  ["MW", "MW"], ["MVAr", "MVAr"], ["puMVA", "pu (impedance on baseMVA)"], ["deg", "deg"],
+  ["puV", "pu (voltage)"], ["$", "$"], ["MW/MW", "MW/MW"],
+  ["MVA", "MVA"], ["kV", "kV"], ["MW/min", "MW/min"], ["MVAr/min", "MVAr/min"], ["none", "no unit"],
+];
+const PRECISION_DEFAULTS = { MW: 2, MVAr: 2, puMVA: 3, deg: 3, puV: 3, $: 2, "MW/MW": 3,
+  MVA: 2, kV: 3, "MW/min": 2, "MVAr/min": 2, none: 4 };
+const PU_VOLTAGE = new Set(["Vm", "Vmax", "Vmin", "Vg", "Vf", "Vt"]);
+function loadPrecision() {
+  try { return { ...PRECISION_DEFAULTS, ...JSON.parse(localStorage.getItem("ppedit.precision") || "{}") }; }
+  catch (_) { return { ...PRECISION_DEFAULTS }; }
+}
+S.precision = loadPrecision();
+function precisionKey(spec) {
+  if (spec.kind !== "float") return null;
+  if (spec.unit === "pu") return PU_VOLTAGE.has(spec.name) ? "puV" : "puMVA";
+  return spec.unit || "none";
+}
+// A value exactly 0 (within 1e-12) shows as "0"; others with the unit's
+// decimal places (so a small value shows as e.g. 0.00); text such as "Inf",
+// and columns at full precision, show unchanged.
+function fmtCell(v, spec) {
+  const key = precisionKey(spec), p = key ? S.precision[key] : null;
+  if (typeof v !== "number" || p === null || p === undefined) return String(v);
+  return Math.abs(v) <= 1e-12 ? "0" : v.toFixed(p);
+}
+// Number input showing the rounded value, and the full value while focused
+// (so editing never starts from, or commits, a rounded value).
+function numInput(attrs, value, spec) {
+  const shown = fmtCell(value, spec), full = String(value);
+  if (shown === full) return h("input", { ...attrs, value: full, spellcheck: "false" });
+  return h("input", { ...attrs, value: shown, spellcheck: "false", title: full,
+    onfocus: e => { e.target.value = full; },
+    onblur: e => { if (e.target.value === full) e.target.value = shown; } });
+}
 
 // ---------------------------------------------------------------- server
 
@@ -152,10 +194,16 @@ function renderChrome() {
   $("#claude-dot").className = "status-dot" + (busy ? " ok" : "");
   $("#claude-dot").title = busy ? "Claude is working" : "";
   document.title = `${st.dirty ? "• " : ""}${c.name} — ppedit`;
-  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
+  const isTable = S.meta.tables.includes(S.view);
+  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "tables")));
+  $$("#table-tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
 }
 
+// The Tables tab opens the table shown last (S.table); the table tabs below
+// it pick the table. Table names stay view names (?view=bus, Issues links).
 function show(view) {
+  if (view === "tables") view = S.table;
+  if (S.meta.tables.includes(view)) S.table = view;
   S.view = view;
   renderChrome();
   renderView();
@@ -168,7 +216,30 @@ function renderView() {
   else if (S.view === "network") { $("#view-network").classList.add("active"); renderNetwork(); }
   else if (S.view === "results") { $("#view-results").classList.add("active"); renderResults(); }
   else if (S.view === "claude") { $("#view-claude").classList.add("active"); renderClaude(); }
+  else if (S.view === "settings") { $("#view-settings").classList.add("active"); renderSettings(); }
   else { $("#view-issues").classList.add("active"); renderIssues(); }
+}
+
+// ---------------------------------------------------------------- settings
+
+// Display precision group (issue #70): decimal places per unit, blank for
+// full precision; saved in localStorage and applied when tables re-render.
+function renderSettings() {
+  const save = () => { try { localStorage.setItem("ppedit.precision", JSON.stringify(S.precision)); } catch (_) { /* storage unavailable */ } };
+  const rows = PRECISION_UNITS.map(([key, label]) => {
+    const inp = h("input", { type: "number", min: 0, max: 15, step: 1, class: "num", placeholder: "full",
+      value: S.precision[key] ?? "", "aria-label": `Decimal places for ${label}`,
+      onchange: e => {
+        const t = e.target.value.trim(), n = Math.round(Number(t));
+        S.precision[key] = t === "" || !Number.isFinite(n) ? null : Math.min(15, Math.max(0, n));
+        e.target.value = S.precision[key] ?? "";
+        save();
+      } });
+    return h("label", {}, h("span", {}, label), inp);
+  });
+  $("#precision-settings").replaceChildren(...rows,
+    h("div", { class: "hint" }, "Decimal places shown in the case tables; blank shows full precision. A value of exactly 0 shows as 0. Editing a cell shows its full value."),
+    h("div", {}, h("button", { onclick: () => { S.precision = { ...PRECISION_DEFAULTS }; save(); renderSettings(); } }, "Reset to defaults")));
 }
 
 // ---------------------------------------------------------------- tables
@@ -181,6 +252,7 @@ function cellEditor(table, row, col, value) {
       Object.entries(spec.options).map(([k, v]) => h("option", { value: k, selected: String(value) === k }, `${k} ${v}`)));
     return sel;
   }
+  if (spec.kind === "float") return numInput(attrs, value, spec);
   return h("input", { ...attrs, value: value, class: spec.kind === "text" ? "text" : null, spellcheck: "false" });
 }
 
@@ -307,7 +379,7 @@ async function commitCell(el) {
       toast(msg);
     }
   } catch (_) {
-    el.value = old;
+    el.value = document.activeElement === el ? String(old) : fmtCell(old, S.meta.columns[table][k]);
     el.parentElement.classList.add("bad");
     setTimeout(() => el.parentElement && el.parentElement.classList.remove("bad"), 1500);
   }
@@ -1895,10 +1967,10 @@ function renderInspector() {
     const spec = cols[k];
     const ed = spec.kind === "enum"
       ? h("select", {}, Object.entries(spec.options).map(([a, b]) => h("option", { value: a, selected: String(row[k]) === a }, `${a} ${b}`)))
-      : h("input", { value: row[k], spellcheck: "false" });
+      : spec.kind === "float" ? numInput({}, row[k], spec) : h("input", { value: row[k], spellcheck: "false" });
     ed.addEventListener("change", async () => {
       try { await act("/api/cell", { table: kind, row: index, column: spec.name, value: ed.value }); }
-      catch (_) { ed.value = row[k]; }
+      catch (_) { ed.value = document.activeElement === ed ? String(row[k]) : fmtCell(row[k], spec); }
     });
     if (ed.tagName === "INPUT") ed.addEventListener("keydown", e => { if (e.key === "Enter") ed.blur(); });
     return [h("dt", { title: spec.desc }, spec.name + (spec.unit ? ` [${spec.unit}]` : "")), h("dd", {}, ed)];
@@ -2579,7 +2651,7 @@ async function init() {
     if (qs.get("algorithm")) req.algorithm = qs.get("algorithm");
     await act("/api/solve", req).catch(() => {});
   }
-  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
+  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
 }
 
 init().catch(err => toast(err.message, true));

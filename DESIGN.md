@@ -94,6 +94,8 @@ reversed decision in place and note the date.
 | 36f | cvxopf (github.com/cvxgrp/cvxopf) is an optional OPF backend (issue #69), not a dependency (it needs Python 3.11+ and the IPOPT library): its four formulations are `OPF_SOLVERS` `CVXOPF-AC` (`ac`), `CVXOPF-SOCP` (`socp`, listed with AC), `CVXOPF-DC` (`lossy_dc`) and `CVXOPF-1NODE` (`singlenode_dc`), where the third tuple element is the cvxopf formulation name (a `str`) instead of a PYPOWER algorithm code. `ppedit/_cvxopf.py` passes the PYPOWER case (minus type NONE buses and what touches them, minus reactive cost rows) and returns the solution in `runopf` layout, so the rest of `Case.solve` (DC line rows, losses, areas, report) is shared. Values cvxopf does not compute are reported as unknown rather than estimated: `lam_P`/`mu_*` are `None`, the copper plate returns no branch rows, and DC models return flat voltages with zero angles. DC lines map to `HVDCLink(p_min_mw=-Pmax,p_max_mw=-Pmin)` (not `hvdc_from_dcline`, which reverses PYPOWER's direction). |
 | 36g | The page reads optional URL parameters at the end of `init()` in `app.js` (added 2026-11-17 for pptools `pprun`, whose Network tab embeds this page): `?solve=pf\|opf` runs `POST /api/solve` once on load (`&algorithm=NAME` passed through, else the default solver; errors toast as usual) and `?view=NAME` opens that tab when it exists. Other values are ignored; nothing is stored. |
 | 36h | Open ▾ is a menu (issue #83): *Local file…* is the browser file picker (upload, `{filename,text}`), and *From URL* is a URL text input in the menu that sends `POST /api/open {"url"}`. The ppedit server downloads the file (`download_case` in `server.py`, `urllib`, `http`/`https` only, `DOWNLOAD_TIMEOUT` seconds, at most `DOWNLOAD_LIMIT` bytes) outside `editor.lock`, rather than the browser, so hosts without CORS headers work; GitHub file page URLs (`github.com/OWNER/REPO/blob/REF/PATH`) are changed to `raw.githubusercontent.com` URLs (`github_raw_url`) and other HTML responses are refused with a hint to use the raw link, the extension of the URL path selects the format, `Case.source["file"]` is the URL downloaded, and like an upload the case has no path until Save as. `.py` cases stay parsed with `ast` (decision #7), so a remote case runs no code. The test patches `urlopen` (decision #35). |
+| 36i | Main tabs are Network, Tables, Results, Issues, Claude, Settings (2026-11-18). The seven case tables are one **Tables** tab with a second row of table tabs (`#table-tabs`) at the top of `#view-table`, shown only while a table is open; the Tables tab opens the table shown last (`S.table`, default `bus`, page session only). Table names stay view names (`show("bus")`), so `?view=bus` (decision #36g), Issues links and `goto` are unchanged, and `?view=tables` opens the last table. The case globals `baseMVA` and `version` moved from the tab bar to the **Settings** tab (`#view-settings`); the case name stays in the top bar. |
+| 36j | Display precision of case table values (issue #70) is a browser setting on the Settings tab, stored in `localStorage` (`ppedit.precision`) like label choices (#27), not in the case. Decimal places are set per precision key (`PRECISION_UNITS`/`PRECISION_DEFAULTS` in `app.js`): the column unit, except `pu` columns, split into `puV` (`Vm`, `Vmax`, `Vmin`, `Vg`, `Vf`, `Vt`) and `puMVA` (impedances `r`, `x`, `b`); defaults MW 2, MVAr 2, puMVA 3, deg 3, puV 3, $ 2, MW/MW 3 (from the issue), MVA 2, kV 3, MW/min 2, MVAr/min 2, unitless 4; a blank setting is full precision. A value within 1e-12 of 0 shows as `0`; otherwise `toFixed`, so a small value shows as `0.00`. Rounding is display only: table cells and side-panel inputs (`numInput`) show the full value while focused, so an edit never starts from or commits a rounded value; sorting and filtering use the stored values. Results, diagram labels and the solver report keep their own fixed formats. |
 
 ## Conventions inherited from the `eudoxys-package` skill
 
@@ -132,12 +134,12 @@ ppedit/
                     create_app(case,path,allow_remote,shutdown,claude_client)
   claude.py         Sessions(editor,client): Messages API tool-use loops
   static/
-    index.html      page layout: toolbar, tabs (Network, tables, Results,
-                    Issues, Claude), inspector, menus
+    index.html      page layout: toolbar, tabs (Network, Tables, Results,
+                    Issues, Claude, Settings), table tabs, inspector, menus
     style.css       styles
     app.js          state rendering, tables, network diagram (styles,
                     layouts, map layers, labels, areas, search), results,
-                    issues, Claude tab
+                    issues, Claude and Settings tabs
   _test/            pytest suite (fast, no network) and curated data
   # planned
   (none yet: planned work extends the modules above; see TODO.md)
