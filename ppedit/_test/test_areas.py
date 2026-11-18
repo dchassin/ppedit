@@ -1,5 +1,6 @@
 """Tests for areas (`areas` table and the per-area results; fast, no network)"""
 
+import json
 import os
 
 import pytest
@@ -17,8 +18,8 @@ def _messages(case,table="areas"):
 
 def test_load(case):
     """areas rows keep the 2 input columns"""
-    assert [c["name"] for c in COLUMNS["areas"]] == ["area","price_ref_bus"]
-    assert case.tables["areas"] == [[1,8],[2,23],[3,26]]
+    assert [c["name"] for c in COLUMNS["areas"]] == ["area","price_ref_bus","name"]
+    assert case.tables["areas"] == [[1,8,""],[2,23,""],[3,26,""]]
     assert case.validate() == []
 
 def test_rebuilt_from_bus_areas():
@@ -29,7 +30,7 @@ def test_rebuilt_from_bus_areas():
     ref = [r[0] for r in case.tables["bus"] if r[1] == 3][0]
     assert [ref] == [r[1] for r in case.tables["areas"]
         if r[0] == case.tables["bus"][[b[0] for b in case.tables["bus"]].index(ref)][6]]
-    assert Case.builtin("case14").tables["areas"] == [[1,1]]
+    assert Case.builtin("case14").tables["areas"] == [[1,1,""]]
     assert Case().tables["areas"] == []
 
 def test_default_price_ref_bus():
@@ -58,7 +59,7 @@ def test_glm_drops_areas(case):
     text = case.dumps("glm")
     assert "3 areas row(s) not written" in text
     again = Case.load("x.glm",text)
-    assert again.tables["areas"] == [[1,1],[2,13],[3,27]] # REF bus; most generating capacity
+    assert again.tables["areas"] == [[1,1,""],[2,13,""],[3,27,""]] # REF bus; most generating capacity
     assert [r[6] for r in again.tables["bus"]] == [r[6] for r in case.tables["bus"]]
     assert "areas row(s) not written" not in again.dumps("glm") # nothing lost
 
@@ -71,7 +72,7 @@ def test_not_passed_to_solver(case):
 def test_renumber_bus(case):
     """Renumbering a price reference bus updates its areas row"""
     assert case.set_value("bus",7,"bus_i",108) is True
-    assert case.tables["areas"][0] == [1,108]
+    assert case.tables["areas"][0] == [1,108,""]
     assert case.validate() == []
 
 def test_renumber_area(case):
@@ -95,9 +96,9 @@ def test_add_row(case):
     case.set_value("bus",0,"type",3)
     areas = [r[6] for r in case.tables["bus"]]
     index = case.add_row("areas")
-    assert case.tables["areas"][index] == [4,1]
+    assert case.tables["areas"][index] == [4,1,""]
     index = case.add_row("areas",{"area":9,"price_ref_bus":2})
-    assert case.tables["areas"][index] == [9,2]
+    assert case.tables["areas"][index] == [9,2,""]
     assert [r[6] for r in case.tables["bus"]] == areas
     assert case.default_row("areas")[0] == 10
     with pytest.raises(CaseError,match="already exists"):
@@ -112,12 +113,12 @@ def test_delete_price_ref_bus(case):
         case.delete_rows("bus",[7])
     removed = case.delete_rows("bus",[7],cascade=True)
     assert removed["areas"] == 1 and removed["bus"] == 1
-    assert case.tables["areas"] == [[2,23],[3,26]]
+    assert case.tables["areas"] == [[2,23,""],[3,26,""]]
 
 def test_validate(case):
     """Duplicate areas, bad price reference buses, empty and unlisted areas"""
     areas = case.tables["areas"]
-    areas.append([2,23])
+    areas.append([2,23,""])
     assert "area 2 duplicates row 2" in _messages(case)
     del areas[-1]
     areas[0][1] = 99
@@ -125,7 +126,7 @@ def test_validate(case):
     areas[0][1] = 23
     assert "price reference bus 23 is in area 2, not 1" in _messages(case)
     areas[0][1] = 8
-    areas.append([5,1])
+    areas.append([5,1,""])
     assert "area 5 has no buses" in _messages(case)
     del areas[-1]
     case.set_value("bus",0,"area",6)
@@ -188,3 +189,33 @@ def test_solve_dcline_tie():
     for kind in ("pf","opf"):
         result = case.solve(kind)
         _check_balance(result)
+
+def test_names(case):
+    """Area names are free text kept outside the PYPOWER areas array"""
+    assert case.set_value("areas",0,"name"," North ") is False
+    assert case.tables["areas"][0] == [1,8,"North"]
+    case.set_value("areas",1,"name",42)
+    assert case.tables["areas"][1][2] == "42"
+    ppc = case.to_ppc()
+    assert ppc["areas"] == [[1,8],[2,23],[3,26]]
+    assert ppc["areanames"] == ["North","42",""]
+    for fmt,ext in (("py",".py"),("json",".json")):
+        text = case.dumps(fmt)
+        assert "areanames" in text
+        assert Case.load(f"x{ext}",text).tables["areas"] == case.tables["areas"]
+    assert "(2 with names)" in case.dumps("glm")
+    assert case.validate() == []
+    result = case.solve("pf")
+    assert [a["name"] for a in result["areas"]] == ["North","42",""]
+    assert "North" in result["log"]
+
+def test_names_absent(case):
+    """Cases without names write no areanames; a wrong count is refused"""
+    assert "areanames" not in case.to_ppc()
+    assert "areanames" not in case.dumps("py")
+    index = case.add_row("areas",{"area":4,"price_ref_bus":1,"name":"BA4"})
+    assert case.tables["areas"][index] == [4,1,"BA4"]
+    data = case.to_ppc()
+    data["areanames"] = ["a"]
+    with pytest.raises(CaseError,match="areanames must list 4"):
+        Case.load("x.json",json.dumps(data))

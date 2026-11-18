@@ -7,8 +7,9 @@ its EIA Form 930 balancing authority code in `examples/wecc240_ba.csv` (one
 row per bus, `BUS_I,NAME,BA,NOTE`; the name is checked against the case
 geodata) and saves the case in place (issue #90). Areas are numbered 1, 2,
 ... in alphabetical order of the codes present, the `areas` rows are rebuilt
-with their default price reference buses (`Case._default_areas`), and the
-geodata `BA` column is set to the code. Nothing else in the case changes;
+with their default price reference buses (`Case._default_areas`) and the
+code as the area `name` (issue #93), and the geodata `BA` column is set to
+the code. Nothing else in the case changes;
 areas are not used by the solver.
 """
 
@@ -42,6 +43,9 @@ def balancing_authorities(case):
     for bus in case.tables["bus"]:
         bus[6] = areas[bas[bus[0]]]
     case.tables["areas"] = case._default_areas() # pylint: disable=protected-access
+    codes = {n:ba for ba,n in areas.items()}
+    for row in case.tables["areas"]:
+        row[2] = codes[row[0]]
     col = 3 + case.geotags.index("BA")
     for row in case.geodata:
         row[col] = bas[row[0]]

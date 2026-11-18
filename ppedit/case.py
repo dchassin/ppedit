@@ -27,7 +27,10 @@ format) price the flow `Pf` for OPF. `Case.solve` models them as in
 
 Areas (`areas`, columns as in `pypower.caseformat`) list the control areas
 named by the bus `area` column, each with a price reference bus
-(`price_ref_bus`). A case read without an `areas` table (every GLM file,
+(`price_ref_bus`) and an optional `name` (free text, e.g. a balancing
+authority code). The area number stays the key that matches the bus `area`
+column; names are kept outside PYPOWER's `areas` array, in
+`ppc["areanames"]` (one string per `areas` row), and are not written to GLM. A case read without an `areas` table (every GLM file,
 and PYPOWER cases such as `case39`) gets one row per bus area, with the
 area's REF bus, else its bus with the most in-service generating capacity,
 else its first bus as price reference bus. They are not passed to the solver; `Case.solve` sums the
@@ -259,9 +262,18 @@ COLUMNS = {
     "areas": [
         _col("area","","int",1,"area number (the bus area column)"),
         _col("price_ref_bus","","int",0,"price reference bus number"),
+        _col("name","","name","","area name (optional label, e.g. a balancing authority code)"),
     ],
 }
-"""Editable columns of each table (name, unit, kind, default, description)"""
+"""Editable columns of each table (name, unit, kind, default, description)
+
+Kinds: `float`, `int`, `enum` (one of `options`), `text` (comma-separated
+cost data) and `name` (free text).
+"""
+
+AREAS_PPC = 2
+"""Number of `areas` columns in PYPOWER's `areas` array (`area`,
+`price_ref_bus`); the `name` column is kept in `ppc["areanames"]`"""
 
 TABLES = list(COLUMNS)
 """Names of the editable tables, in display order"""
@@ -375,6 +387,24 @@ def _number(value,kind="float"):
         return int(value)
     return float(value)
 
+def _name(value):
+    """Convert a cell value to a `name` column value (stripped text)"""
+    if value is None:
+        return ""
+    if isinstance(value,float) and value == int(value):
+        value = int(value)
+    return str(value).strip()
+
+def _area_names(names,count):
+    """`count` area names from a case's `areanames` (or `""` each if absent)"""
+    if names is None:
+        return [""]*count
+    if hasattr(names,"tolist"):
+        names = names.tolist()
+    if not isinstance(names,(list,tuple)) or len(names) != count:
+        raise CaseError(f"areanames must list {count} name(s), one per areas row")
+    return [_name(x) for x in names]
+
 def _costs_list(text):
     """Parse a comma-separated cost string into a list of floats"""
     if isinstance(text,(list,tuple)):
@@ -459,7 +489,7 @@ class Case:
                 rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
             self.tables[table] = rows
         for table in ("dcline","areas"):
-            spec = COLUMNS[table]
+            spec = COLUMNS[table][:AREAS_PPC] if table == "areas" else COLUMNS[table]
             rows = []
             for n,row in enumerate(_tolist(data.get(table,[]))):
                 if len(row) < len(spec):
@@ -467,6 +497,9 @@ class Case:
                         f"expected at least {len(spec)}")
                 rows.append([_number(v,c["kind"]) for v,c in zip(row,spec)])
             self.tables[table] = rows
+        names = _area_names(data.get("areanames"),len(self.tables["areas"]))
+        for row,name in zip(self.tables["areas"],names):
+            row.append(name)
         for table in COST_TABLES:
             self.tables[table] = _cost_rows(table,data.get(table,[]))
         if not self.tables["areas"]:
@@ -475,7 +508,7 @@ class Case:
 
     def _default_areas(self):
         """Areas rows rebuilt from the bus areas (see `_price_ref`)"""
-        return [[a,self._price_ref(a)] for a in sorted({r[6] for r in self.tables["bus"]})]
+        return [[a,self._price_ref(a),""] for a in sorted({r[6] for r in self.tables["bus"]})]
 
     def _price_ref(self,area):
         """Default price reference bus of an area: its REF bus, else the bus with
@@ -573,7 +606,9 @@ class Case:
             geodata and `areas` are left out
 
         `gencost`, `dcline`, `dclinecost` and `areas` are included only when
-        they have rows.
+        they have rows. `areas` holds the two PYPOWER columns (`area`,
+        `price_ref_bus`); when any area has a name, `areanames` lists the
+        names, one per `areas` row (`""` for none).
         """
         data = {"version":self.version,"baseMVA":self.baseMVA}
         for table in ("bus","gen","branch","gencost","dcline","dclinecost","areas"):
@@ -586,6 +621,10 @@ class Case:
                         costs.append([model,startup,shutdown,ncost]+_costs_list(text))
                     width = max(len(x) for x in costs)
                     data[table] = [x+[0.0]*(width-len(x)) for x in costs]
+            elif table == "areas" and self.tables[table]:
+                data[table] = [list(row[:AREAS_PPC]) for row in self.tables[table]]
+                if any(row[AREAS_PPC] for row in self.tables[table]):
+                    data["areanames"] = [row[AREAS_PPC] for row in self.tables[table]]
             elif table in ("bus","gen","branch") or self.tables[table]:
                 data[table] = [list(row) for row in self.tables[table]]
         if arrays:
@@ -654,13 +693,17 @@ def {name}():
         for table in ("bus","gen","branch","gencost","dcline","dclinecost","areas"):
             if table not in data:
                 continue
-            header = " ".join(c["name"] for c in COLUMNS[table]) if table not in COST_TABLES \
+            header = " ".join(c["name"] for c in COLUMNS[table][:len(data[table][0])]) \
+                if table not in COST_TABLES \
                 else "model startup shutdown ncost c(n-1) ... c0 (or x1 y1 ... xn yn)"
             out.write(f"\n    ## {table} data\n    # {header}\n")
             out.write(f'    ppc["{table}"] = array([\n')
             rows = [", ".join(_fmt(v) for v in row) for row in data[table]]
             out.write(",\n".join(f"        [{r}]" for r in rows))
             out.write("\n    ])\n")
+            if table == "areas" and "areanames" in data:
+                out.write(f"\n    ## area names (one per areas row)\n"
+                    f"    ppc[\"areanames\"] = {json.dumps(data['areanames'])}\n")
         if self.geodata:
             out.write(f"\n    ## geodata (bus locations, decimal degrees)\n"
                 f"    # {' '.join(GEODATA_COLUMNS+self.geotags)}\n    ppc[\"geodata\"] = [\n")
@@ -724,9 +767,12 @@ def {name}():
         if self.geotags:
             self._dump_glm_geodata(out)
         if self.tables["areas"] != self._default_areas():
-            out.write(f"\n// {len(self.tables['areas'])} areas row(s) not written: "
+            named = sum(1 for r in self.tables["areas"] if r[AREAS_PPC])
+            out.write(f"\n// {len(self.tables['areas'])} areas row(s) not written"
+                + (f" ({named} with names)" if named else "") + ": "
                 "module pypower has no area objects (bus area numbers are kept; "
-                "reading this file rebuilds the rows with default price reference buses)\n")
+                "reading this file rebuilds the rows with default price reference buses "
+                "and no names)\n")
         return out.getvalue()
 
     def _dump_glm_dclinecost(self,out):
@@ -826,6 +872,9 @@ def {name}():
         k = names.index(column)
         spec = COLUMNS[table][k]
         record = self.tables[table][row]
+        if spec["kind"] == "name":
+            record[k] = _name(value)
+            return False
         if spec["kind"] == "text":
             costs = _costs_list(value)
             record[k] = _costs_text(costs)
@@ -929,6 +978,8 @@ def {name}():
         rows = self.tables[table]
         row = self.default_row(table)
         if isinstance(values,(list,tuple)):
+            if table == "areas" and len(values) == AREAS_PPC:
+                values = list(values) + [row[AREAS_PPC]]
             if len(values) != len(row):
                 raise CaseError(f"{table} rows have {len(row)} columns")
             row = list(values)
@@ -1229,7 +1280,7 @@ def {name}():
             for row in bus:
                 used[row[6]] = used.get(row[6],0) + 1
             listed = {}
-            for n,(area,ref) in enumerate(self.tables["areas"]):
+            for n,(area,ref,_) in enumerate(self.tables["areas"]):
                 if area in listed:
                     add("error","areas",n,"area",f"area {area} duplicates row {listed[area]+1}")
                 listed.setdefault(area,n)
@@ -1318,7 +1369,7 @@ def {name}():
         false, flows 0).
 
         Each `areas` result row sums the buses with that `area` number:
-        `area`, `buses` (count), in-service generation `Pg` and `Qg`, load
+        `area`, `name` (from the `areas` table, `""` if none), `buses` (count), in-service generation `Pg` and `Qg`, load
         `Pd` and `Qd`, `shunt_MW` (`Gs*Vm^2`), `losses_MW` (AC and DC lines
         with both ends in the area), `export_MW` (net real power leaving the
         area over AC and DC ties, measured at its own end of each tie, so
@@ -1506,7 +1557,7 @@ def {name}():
                 log.write(f"{a['area']:6d} {a['buses']:6d} " + "".join(f"{a[k]:11.2f}"
                     for k in ("Pg","Pd","shunt_MW","losses_MW","export_MW"))
                     + (f"{a['lam_P']:13.2f}" if kind == "opf" and a["lam_P"] is not None else "")
-                    + "\n")
+                    + (f"  {a['name']}" if a["name"] else "") + "\n")
             result["log"] += log.getvalue()
         return _jsonsafe(result)
 
@@ -1532,12 +1583,13 @@ def {name}():
             return []
         buses = self.tables["bus"]
         area = {row[0]:row[6] for row in buses}
-        refs = {}
-        for a,ref in self.tables["areas"]:
+        refs,names = {},{}
+        for a,ref,name in self.tables["areas"]:
             refs.setdefault(a,ref)
+            names.setdefault(a,name)
         out = {}
         for a in sorted(set(area.values())):
-            out[a] = {"area":a,"buses":0,"Pg":0.0,"Qg":0.0,"Pd":0.0,"Qd":0.0,
+            out[a] = {"area":a,"name":names.get(a,""),"buses":0,"Pg":0.0,"Qg":0.0,"Pd":0.0,"Qd":0.0,
                 "shunt_MW":0.0,"losses_MW":0.0,"export_MW":0.0,
                 "price_ref_bus":refs.get(a),"lam_P":None}
         lam = {}

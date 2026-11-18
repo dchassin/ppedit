@@ -61,7 +61,8 @@ EIA-930 code of each bus (`BUS_I,NAME,BA,NOTE`, the note saying why), and
     python3 examples/wecc240_areas.py
 
 numbers the areas in alphabetical order of the codes, rebuilds the `areas`
-rows with their default price reference buses, sets the geodata `BA` column
+rows with their default price reference buses and the code as the area
+`name` (issue #93), sets the geodata `BA` column
 to the code, and saves `wecc240_2020.py` in place:
 
 | area | BA | name | buses |

@@ -326,7 +326,7 @@ function cellEditor(table, row, col, value) {
     return sel;
   }
   if (spec.kind === "float") return numInput(attrs, value, spec);
-  return h("input", { ...attrs, value: value, class: spec.kind === "text" ? "text" : null, spellcheck: "false" });
+  return h("input", { ...attrs, value: value, class: spec.kind === "text" || spec.kind === "name" ? "text" : null, spellcheck: "false" });
 }
 
 function rowLabel(table, i) {
@@ -618,6 +618,20 @@ function showAreas() {
   // area regions are drawn when turned on and the case has more than one area
   return S.areas && areaList().length > 1;
 }
+function areaName(a) {
+  // the name of area a from the areas table ("" if none)
+  const row = S.state.case.tables.areas.find(r => r[0] === a);
+  return row && row[2] ? row[2] : "";
+}
+function areaText(a) {
+  // "area 3" or "area 3 (CISO)" for tooltips
+  const n = areaName(a);
+  return n ? `area ${a} (${n})` : `area ${a}`;
+}
+function areaTitle(a) {
+  // diagram label of area a: its name, else "Area 3"
+  return areaName(a) || `Area ${a}`;
+}
 function areaOutline(a) {
   // outline color of an area region (buses keep their own colors)
   const list = areaList();
@@ -678,13 +692,13 @@ function areaRegions(sites, R) {
       sv("path", { d, fill: tint(color, 0.88) }));
     const title = sv("title");
     const nb = sites.filter(p => p.area === a && p.bus).length;
-    title.textContent = `area ${a}: ${nb} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)");
+    title.textContent = `${areaText(a)}: ${nb} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)");
     grp.append(title);
     regions.append(grp);
     let top = null;
     polys.forEach(P => P.forEach(q => { if (!top || q.y < top.y) top = q; }));
     const label = sv("text", { x: top.x, y: top.y - 4, class: "area-name", fill: color, "text-anchor": "middle" });
-    label.textContent = `Area ${a}`;
+    label.textContent = areaTitle(a);
     names.append(label);
   }
   return { regions, names };
@@ -1026,7 +1040,7 @@ function renderNetwork() {
       if (lines.length) node.append(label);
     }
     const title = sv("title");
-    title.textContent = `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), area ${b[6]}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nPd ${b[2]} MW, Qd ${b[3]} MVAr\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`;
+    title.textContent = `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), ${areaText(b[6])}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nPd ${b[2]} MW, Qd ${b[3]} MVAr\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`;
     node.append(title);
     node.addEventListener("pointerdown", e => startDrag(e, b[0], i));
     g.append(node);
@@ -1457,7 +1471,7 @@ function renderOneline() {
     if (S.pick && S.pick.kind === "bus" && S.pick.index === i) cls.push("sel");
     bars.append(sv("line", { x1: B.x0, y1: B.y, x2: B.x1, y2: B.y, class: cls.join(" ") }));
     const hit = onPick(sv("rect", { x: B.x0 - 4, y: B.y - 7, width: B.x1 - B.x0 + 8, height: 14, class: "ol-bar-hit" }), "bus", i);
-    tip(hit, `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), area ${b[6]}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`);
+    tip(hit, `bus ${b[0]} (${S.meta.columns.bus[1].options[b[1]]}), ${areaText(b[6])}${priceRef.has(b[0]) ? " (price reference bus)" : ""}\nVm ${fmt(v.Vm, 4)} pu, Va ${fmt(v.Va, 2)}°${sum.res ? " (solution)" : " (case values)"}`);
     bars.append(hit);
     if (showText) {
       const t = sv("text", { x: B.x0 - 6, y: B.y - 3, class: "ol-bus", "text-anchor": "end" });
@@ -1482,10 +1496,10 @@ function renderOneline() {
     for (const [a, B] of [...L.boxes].sort((p, q) => p[0] - q[0])) {
       const color = areaOutline(a);
       const r = sv("rect", { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: B.y1 - B.y0, rx: 10, class: "area-box", stroke: color, fill: color });
-      tip(r, `area ${a}: ${T.bus.filter(b => b[6] === a).length} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)"));
+      tip(r, `${areaText(a)}: ${T.bus.filter(b => b[6] === a).length} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)"));
       regions.append(r);
       const t = sv("text", { x: B.x0 + 8 / k, y: B.y0 - 6 / k, class: "area-name", fill: color, style: `font-size:${13 / k}px;stroke-width:${3 / k}px` });
-      t.textContent = `Area ${a}`;
+      t.textContent = areaTitle(a);
       names.append(t);
     }
     g.prepend(regions);
@@ -2282,9 +2296,9 @@ function renderResults() {
       block("Generator dispatch", ["gen", "bus", "Pg MW", "Qg MVAr"], r.gen.map((g, i) => [i + 1, g.bus, fmt(g.Pg, 2), fmt(g.Qg, 2)])),
       // branch and DC line flows share a row, branch on the left, so they read side by side
       dclineBlock ? h("div", { class: "res-pair" }, branchBlock, dclineBlock) : branchBlock,
-      r.areas && (r.areas.length > 1 || c.tables.areas.length) ? block("Areas", ["area", "buses", "Pg MW", "Pd MW", "shunt MW", "loss MW", "export MW", "ref bus"]
+      r.areas && (r.areas.length > 1 || c.tables.areas.length) ? block("Areas", ["area", "name", "buses", "Pg MW", "Pd MW", "shunt MW", "loss MW", "export MW", "ref bus"]
         .concat(r.kind === "opf" ? ["price $/MWh"] : []),
-        r.areas.map(a => [a.area, a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
+        r.areas.map(a => [a.area, a.name || "–", a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
           .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null));
   }
   kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"), h("pre", { class: "log" }, r.log || "(no output)")));

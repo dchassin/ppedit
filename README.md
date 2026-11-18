@@ -218,6 +218,11 @@ them but does not solve with them.
 
 Areas follow the PYPOWER `areas` format (`area`, `price_ref_bus`; see
 `pypower.caseformat`) and list the areas named by the bus `area` column.
+Each area may also have a `name` (free text, e.g. a balancing authority
+code), shown in the diagram, tooltips and Results; the area number stays
+the key that matches the bus `area` column. Names are saved outside the
+PYPOWER `areas` array, as `ppc["areanames"]` (one string per `areas` row),
+so other PYPOWER tools read the case unchanged.
 A case opened without an `areas` table (every `.glm` file, and PYPOWER
 cases such as `case39`) gets one row per bus area, with the area's REF bus,
 else its bus with the most generating capacity, else its first bus as price

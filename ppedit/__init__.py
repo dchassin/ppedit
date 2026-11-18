@@ -61,7 +61,7 @@ Given a case file, `ppedit.Case` is expected to satisfy:
 
   1. **Round trip.** `Case.load(path).dumps(fmt)` re-read with `Case.load`
      gives the same tables for `py`, `json`, and `glm`, except the price
-     reference buses of `areas`, which GLM cannot hold (bus
+     reference buses and names of `areas`, which GLM cannot hold (bus
      `area` numbers are kept, and `areas` rows are rebuilt from them).
 
   2. **Referential integrity.** Edits through `Case.set_value`,

@@ -237,7 +237,8 @@ Conventions:
 - gencost and dclinecost rows follow gen and dcline row by row; costs is a \
 comma-separated string of coefficients (polynomial, highest order first) or \
 x,y pairs (piecewise).
-- areas rows are [area, price_ref_bus]; bus.area holds each bus's area.
+- areas rows are [area, price_ref_bus, name]; bus.area holds each bus's area number
+  (the key); name is an optional free-text label (e.g. a balancing authority code).
 - Infinite limits are the strings "Inf" and "-Inf".
 - Enum columns accept the code or the keyword shown in braces.
 
