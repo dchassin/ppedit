@@ -69,9 +69,9 @@
   <button data-view="network">Network</button>
   <button data-view="tables" title="Case data tables">Tables</button>
   <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
-  <button data-view="issues">Issues <span class="count issues" id="issue-count"></span></button>
+  <button data-view="issues">Issues <span class="count issues" id="issue-count"></span><span class="status-dot" id="issue-dot"></span></button>
   <button data-view="claude" title="Claude sessions that edit the case">Claude <span class="status-dot" id="claude-dot"></span></button>
-  <button data-view="settings" title="Case settings: baseMVA and version">Settings</button>
+  <button data-view="settings" title="Settings: baseMVA and version, display precision, cvxopf solve options">Settings</button>
 </nav>
 
 <main id="main">
@@ -157,6 +157,8 @@
       <label><span>version</span> <input id="version" class="num" size="8" title="PYPOWER case format version"></label>
       <h2>Display precision</h2>
       <div id="precision-settings" class="settings-group"></div>
+      <h2 id="cvxopf-title" hidden>CVXOPF solve options</h2>
+      <div id="cvxopf-settings" class="settings-group" hidden></div>
     </div>
   </section>
   <section id="view-claude" class="view">

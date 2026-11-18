@@ -167,7 +167,8 @@ In the editor:
     plate (no branch flows). cvxopf reports no prices (LMPs), solves
     piecewise-linear costs, ignores reactive power costs, and models DC
     lines without `loss0`, terminal reactive power or voltage set points.
-    `Case.solve(kind,algorithm)` takes the same choices (`ppedit.case.solvers()`
+    The cvxopf solve options are on the Settings tab.
+    `Case.solve(kind,algorithm,options)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
   - **Results**: PF/OPF summary (with the solver used), bus voltages (and LMPs for OPF), dispatch,
@@ -178,8 +179,12 @@ In the editor:
     not converted or kept); opening a file with such notes shows this page.
     Click a results column header to sort by it (again to reverse, a third
     time to restore the solver order); the sort is kept across solves.
-  - **Issues**: every validation error and warning; click one to jump to
-    the cell.
+  - **Issues**: every validation error and warning (click one to jump to
+    the cell), and under *Last solve* the errors and warnings of the last
+    PF/OPF (solver failures and non-convergence, isolated buses, DC lines
+    not solved, data cvxopf does not model, solver warnings); they clear
+    with the solution on the next edit. The tab's dot is red when there is
+    an error and yellow when there are only warnings.
   - **Claude**: any number of conversations with Claude, each in its own tab (the
     Anthropic Messages API) that read and edit the open case, check it and
     run PF/OPF. Each session chooses a model and its data sources: the case
@@ -191,7 +196,13 @@ In the editor:
     precision (decimal places) of the case table values by unit (defaults:
     MW, MVAr, MVA, MW/min, MVAr/min, $ 2; per-unit impedance, per-unit
     voltage, deg, kV, MW/MW 3; no unit 4; blank for full precision). A value of exactly 0 shows as 0; editing a cell
-    shows its full value. Saved in the browser, not in the case.
+    shows its full value. With cvxopf installed, the CVXOPF solve options:
+    numerical preparation (*CVXOPF default*, or *Recommended for this
+    model*: the scaling and reformulation the cvxopf authors recommend for
+    each network model, solved with CLARABEL, or IPOPT for full AC), the
+    solver for the convex models (SOCP, DC, copper plate), solver output in
+    the log, and other solver options as `name=value` pairs (e.g. IPOPT
+    `max_iter=500, tol=1e-8`). Saved in the browser, not in the case.
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 
 DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are

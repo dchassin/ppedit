@@ -324,6 +324,10 @@ solver needs or None)`. The `CVXOPF-*` solvers use cvxopf
 (https://github.com/cvxgrp/cvxopf, Python 3.11+, needs the IPOPT library)
 instead of PYPOWER's `runopf`; see `Case.solve`."""
 
+SOLVER_WARNINGS = 10
+"""Most distinct Python warnings from a solver that `Case.solve` lists in
+`messages` (the rest are counted)"""
+
 GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
 latitude and longitude are decimal degrees (WGS84)"""
@@ -1255,7 +1259,7 @@ def {name}():
                     + ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else ""))
         return issues
 
-    def solve(self,kind:str="pf",algorithm:str|None=None) -> dict:
+    def solve(self,kind:str="pf",algorithm:str|None=None,options:dict|None=None) -> dict:
         """Run a PYPOWER power flow (`pf`) or optimal power flow (`opf`)
 
         Arguments
@@ -1271,6 +1275,13 @@ def {name}():
             `CVXOPF-SOCP`, `CVXOPF-DC`, `CVXOPF-1NODE`); `solvers()` lists
             those installed
 
+          - `options`: solve options for the `CVXOPF-*` solvers (ignored by
+            the others): `preparation` (`default` or `recommended`, the
+            per-model numerical preparation profile), `solver` (CVXPY
+            solver for the convex models; default CLARABEL), `verbose`
+            (solver output in `log`), and `solver_options` (a dict of other
+            solver keyword arguments, e.g. `{"max_iter": 500}`)
+
         Returns
         -------
 
@@ -1284,7 +1295,17 @@ def {name}():
             `loss_MW`, and for OPF the multipliers `mu_Pmin`, `mu_Pmax`
             in $/MWh). `losses_MW` includes the DC line losses, which are
             also given alone as `dcline_losses_MW`. `areas` has a row for
-            each bus area (see below).
+            each bus area (see below). `messages` lists the solver's errors
+            and warnings as `{"level": "error"|"warning", "message"}`
+            (see below); `options` gives the cvxopf solve options used
+            (`None` for other solvers).
+
+        `messages` has an error when the solver fails or does not
+        converge, and warnings for buses solved as isolated, DC lines not
+        solved, data the solver does not model (cvxopf), cvxopf's warnings,
+        an SOCP relaxation that is not exact, and the distinct Python
+        warnings the solver raised (at most `SOLVER_WARNINGS`). Each is
+        also written to `log`.
 
         Buses with no in-service branch are solved as isolated (type NONE)
         without changing the case; `log` names them. DC lines are modeled
@@ -1323,7 +1344,8 @@ def {name}():
         ----------
 
           - `CaseError`: the case has validation errors, OPF without costs,
-            an unknown algorithm, or a solver whose module is not installed
+            an unknown algorithm, a solver whose module is not installed, or
+            invalid cvxopf `options`
         """
         errors = [x for x in self.validate() if x["level"] == "error"]
         if errors:
@@ -1345,6 +1367,13 @@ def {name}():
                 and importlib.util.find_spec(OPF_SOLVERS[algorithm][3]) is None:
             raise CaseError(f"OPF solver {algorithm} needs the Python module "
                 f"'{OPF_SOLVERS[algorithm][3]}', which is not installed")
+        cvx_options = None
+        if cvx:
+            from ppedit._cvxopf import solve_options # pylint: disable=import-outside-toplevel
+            try:
+                cvx_options = solve_options(options,OPF_SOLVERS[algorithm][2])
+            except ValueError as err:
+                raise CaseError(str(err)) from err
         ppc = self.to_ppc(arrays=True)
         # buses with no in-service branch make the solver fail; solve them as isolated
         connected = {r[k] for r in self.tables["branch"] if r[10] == 1 and r[0] != r[1] for k in (0,1)}
@@ -1361,11 +1390,16 @@ def {name}():
             opt = ppoption(PF_DC=1,OPF_ALG_DC=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
         else:
             opt = ppoption(OPF_ALG=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
-        info = {"kind":kind,"algorithm":algorithm,"solver":algs[algorithm][0],"dc":dc}
+        info = {"kind":kind,"algorithm":algorithm,"solver":algs[algorithm][0],"dc":dc,
+            "options":cvx_options}
         log = io.StringIO()
+        messages = []
+        def message(level,text):
+            messages.append({"level":level,"message":text})
+            log.write(text + "\n")
         if isolated:
-            log.write(f"Solved bus(es) {', '.join(str(x) for x in isolated)} as isolated "
-                "(type NONE): no in-service branch\n")
+            message("warning",f"Solved bus(es) {', '.join(str(x) for x in isolated)} as isolated "
+                "(type NONE): no in-service branch")
         if "dcline" in ppc:
             from ppedit._dcline import add_dclines # pylint: disable=import-outside-toplevel
             dead = {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated)
@@ -1374,25 +1408,38 @@ def {name}():
             for n in cut:
                 ppc["dcline"][n,2] = 0
             if cut:
-                log.write(f"DC line(s) {', '.join(str(n+1) for n in cut)} not solved: "
-                    "terminal bus is isolated\n")
+                message("warning",f"DC line(s) {', '.join(str(n+1) for n in cut)} not solved: "
+                    "terminal bus is isolated")
             if not cvx:
                 ppc = add_dclines(ppc)
-        with contextlib.redirect_stdout(log), warnings.catch_warnings():
-            warnings.simplefilter("ignore")
+        what = ("DC " if dc else "") + kind.upper() + f" ({re.sub(r'^(AC|DC): ','',algs[algorithm][0])})"
+        failed = None
+        with contextlib.redirect_stdout(log), warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
             try:
                 if kind == "pf":
                     res,success = runpf(ppc,opt)
                     res["success"] = bool(success)
                 elif cvx:
                     from ppedit._cvxopf import runopf as cvxopf_runopf # pylint: disable=import-outside-toplevel
-                    res = cvxopf_runopf(ppc,OPF_SOLVERS[algorithm][2],log)
+                    res = cvxopf_runopf(ppc,OPF_SOLVERS[algorithm][2],log,cvx_options)
                 else:
                     res = runopf(ppc,opt)
             except Exception as err: # pylint: disable=broad-exception-caught
                 _logger.debug("solver failed: %s",err)
-                return {"success":False,**info,"log":log.getvalue()+f"\n{err}",
-                    "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
+                failed = err
+        self._solver_warnings(caught,message)
+        if failed is not None:
+            log.write("\n")
+            message("error",f"{what} failed: {failed}")
+            return {"success":False,**info,"log":log.getvalue(),"messages":messages,
+                "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
+        for text in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
+            messages.append({"level":"warning","message":text})
+        if not res["success"]:
+            message("error",f"{what} did not converge"
+                + (f" (solver status {res['status']})" if "status" in res else "")
+                + "; see the solver log on the Results tab")
         try:
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
             with warnings.catch_warnings():
@@ -1426,6 +1473,7 @@ def {name}():
         result = {
             "success": bool(res["success"]),
             **info,
+            "messages": messages,
             "iterations": int(res["iterations"]) if "iterations" in res else None,
             "objective": float(res["f"]) if kind == "opf" and "f" in res else None,
             "log": log.getvalue(),
@@ -1461,6 +1509,22 @@ def {name}():
                     + "\n")
             result["log"] += log.getvalue()
         return _jsonsafe(result)
+
+    @staticmethod
+    def _solver_warnings(caught,message):
+        """Report the distinct Python warnings in `caught` (at most
+        `SOLVER_WARNINGS`) through `message`"""
+        seen = {}
+        for w in caught:
+            if issubclass(w.category,(DeprecationWarning,PendingDeprecationWarning,FutureWarning)):
+                continue # about the code, not the solution
+            key = f"{w.category.__name__}: {str(w.message).strip()}"
+            seen[key] = seen.get(key,0) + 1
+        for n,(key,count) in enumerate(seen.items()):
+            if n == SOLVER_WARNINGS:
+                message("warning",f"{len(seen)-n} more distinct solver warning(s) not listed")
+                break
+            message("warning",f"Solver warning: {key}" + (f" ({count} times)" if count > 1 else ""))
 
     def _area_summary(self,result,dead):
         """Per-area sums of a solution (see `solve`); `dead`: unsolved bus numbers"""
@@ -1518,7 +1582,10 @@ def solvers() -> dict:
 
       - `dict`: `pf` and `opf`, each a list of `{"algorithm", "label"}` in
         menu order; `opf` lists only the solvers whose Python module is
-        installed (see `OPF_SOLVERS`), plus `dc` (DC formulation)
+        installed (see `OPF_SOLVERS`), plus `dc` (DC formulation); and
+        `cvxopf`: `None` when cvxopf is not installed, else the choices of
+        the `CVXOPF-*` solve options (`Case.solve`): `preparation` and
+        `solvers`, the installed CVXPY solvers for the convex models
 
     Example
     -------
@@ -1528,10 +1595,20 @@ def solvers() -> dict:
         >>> solvers()["opf"][0]
         {'algorithm': 'PIPS', 'label': 'AC: PIPS interior point', 'dc': False}
     """
+    cvx = None
+    if importlib.util.find_spec("cvxopf") is not None:
+        from ppedit._cvxopf import PREPARATIONS # pylint: disable=import-outside-toplevel
+        try:
+            import cvxpy # pylint: disable=import-outside-toplevel
+            installed = [x for x in cvxpy.installed_solvers() if x != "IPOPT"]
+        except ImportError:
+            installed = []
+        cvx = {"preparation":list(PREPARATIONS),"solvers":installed}
     return {
         "pf":[{"algorithm":k,"label":v[0]} for k,v in PF_SOLVERS.items()],
         "opf":[{"algorithm":k,"label":v[0],"dc":v[1]} for k,v in OPF_SOLVERS.items()
             if v[3] is None or importlib.util.find_spec(v[3]) is not None],
+        "cvxopf":cvx,
     }
 
 def builtin_cases() -> list[str]:
