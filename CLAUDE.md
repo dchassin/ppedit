@@ -142,7 +142,12 @@ API key to start sessions; tests use a fake client).
   where they overlap (longer jogs higher), and that gap grows to fit its
   tracks. Branches skipping rows cross bus bars below their jog (drawn
   with a white halo gap); wide and dense on case118/case300.
-- Areas check box (`S.areas`, `showAreas()` in `app.js`): draws each area
+- View menu (`#view-menu` in `index.html`): Re-layout, Fit, style and
+  layout radio items, and the Areas check box; Labels, Map and search stay
+  separate. Style and layout are set per opened case by `defaultView()`
+  (decision #26b: geodata layout when the case has geodata, else one-line
+  under `ONELINE_MAX` = 20 buses, else classic) and are not persisted.
+- Areas check box (`S.areas`, `showAreas()` in `app.js`, in View ▾): draws each area
   as the union of per-site discs clipped to the half-planes nearer than any
   other area's site (`areaRegions`; sites are buses plus points along
   internal lines), so regions never overlap; bus colors don't change.

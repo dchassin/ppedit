@@ -13,8 +13,8 @@ const S = {
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch"|"dcline", index}
-  style: (() => { try { return localStorage.getItem("ppedit.diagram") || "simple"; } catch (_) { return "simple"; } })(),
-  layout: (() => { try { return localStorage.getItem("ppedit.layout") || "force"; } catch (_) { return "force"; } })(),
+  style: "simple",     // diagram style: simple, classic or oneline (set per case by defaultView)
+  layout: "force",     // bus positions: force or geodata (set per case by defaultView)
   areas: (() => { try { return localStorage.getItem("ppedit.areas") === "1"; } catch (_) { return false; } })(), // color buses by area
   labels: null,        // style -> {bus, branch}: Sets of label keys (see loadLabels)
   map: (() => {
@@ -698,7 +698,6 @@ function renderNetwork() {
   const geo = useGeo();
   if (!geo) layout();
   if (needFit && svg.clientWidth) { fitView(); needFit = false; }
-  $("#net-style").value = S.style;
   svg.classList.toggle("classic", classic);
   svg.classList.toggle("geo", geo);
   svg.classList.toggle("imagery", geo && S.map.imagery);
@@ -1134,7 +1133,6 @@ function renderOneline() {
   const c = S.state.case, T = c.tables, res = S.state.result && S.state.result.success ? S.state.result : null;
   const L = onelineLayout();
   if (needFit && svg.clientWidth) { fitView(); needFit = false; }
-  $("#net-style").value = S.style;
   svg.classList.remove("classic");
   svg.classList.add("oneline");
   const { k, x, y } = S.zoom;
@@ -1487,7 +1485,6 @@ function geoLayout() {
 function setLayout(value) {
   const geo = useGeo();
   S.layout = value;
-  try { localStorage.setItem("ppedit.layout", value); } catch (_) { /* storage unavailable */ }
   if (useGeo() !== geo) needFit = true;
   renderNetwork();
 }
@@ -1497,17 +1494,21 @@ function updateNetTools() {
   const has = hasGeo(), oneline = S.style === "oneline";
   const now = oneline ? "oneline" : useGeo() ? "geo" : "force";
   if (now !== space) { needFit = true; space = now; }
-  const sel = $("#net-layout");
-  sel.querySelector('[value="geodata"]').disabled = !has;
-  sel.value = useGeo() ? "geodata" : "force";
-  sel.disabled = oneline;
-  sel.title = oneline ? "The one-line style computes its own layout"
-    : has ? "Bus positions" : "Geodata layout: load a CSV of bus locations (Map ▾) or open a case with geodata";
+  for (const r of $$('#view-menu [name="net-style"]')) r.checked = r.value === S.style;
+  const lay = useGeo() ? "geodata" : "force";
+  for (const r of $$('#view-menu [name="net-layout"]')) {
+    r.checked = r.value === lay;
+    r.disabled = oneline || (r.value === "geodata" && !has);
+    r.closest("label").classList.toggle("disabled", r.disabled);
+  }
+  $('#view-menu [name="net-layout"][value="geodata"]').closest("label").title = oneline ? "The one-line style computes its own layout"
+    : has ? "Bus locations from the case geodata, drawn on a map" : "Geodata layout: load a CSV of bus locations (Map ▾) or open a case with geodata";
   $("[data-action=relayout]").disabled = useGeo();
   updateLabelMenu();
   const na = areaList().length, ab = $("#net-areas");
   ab.checked = S.areas;
   ab.disabled = na < 2;
+  ab.closest("label").classList.toggle("disabled", ab.disabled);
   ab.closest("label").title = na < 2 ? "Show areas: the case has only one area" : `Outline and label the ${na} areas (the force layout groups each area's buses)`;
   $("#geodata-export").disabled = !has;
   $("#geodata-clear").disabled = !has;
@@ -1690,12 +1691,22 @@ async function loadGeodata(file) {
   toast(`Loaded ${n} bus location(s)${tags.length ? ` with ${tags.join(", ")}` : ""} from ${file.name}`);
 }
 
+// diagram style and layout chosen when a case is opened (decision #26b): the
+// geodata layout (classic style) when the case has geodata, else the one-line
+// style for cases with fewer than ONELINE_MAX buses, else the classic style
+const ONELINE_MAX = 20;
+function defaultView() {
+  const geo = hasGeo();
+  S.layout = geo ? "geodata" : "force";
+  S.style = !geo && S.state.case.tables.bus.length < ONELINE_MAX ? "oneline" : "classic";
+  needFit = true;
+}
+
 function setStyle(style) {
   const geo = useGeo();
   if ((style === "oneline") !== (S.style === "oneline")) needFit = true; // different coordinate spaces
   S.style = style;
   if (useGeo() !== geo) needFit = true;
-  try { localStorage.setItem("ppedit.diagram", style); } catch (_) { /* storage unavailable */ }
   renderNetwork();
 }
 
@@ -2361,6 +2372,7 @@ async function openUrl(url) {
 
 function afterOpen() {
   S.pos = {}; S.pick = null; needFit = true;
+  defaultView();
   for (const t of S.meta.tables) S.selected[t].clear();
   renderView();
 }
@@ -2501,9 +2513,12 @@ async function init() {
     if (tab) return show(tab.dataset.view);
     if (!e.target.closest(".dropdown")) closeMenus();
   });
-  $("#net-style").addEventListener("change", e => setStyle(e.target.value));
-  $("#net-layout").addEventListener("change", e => setLayout(e.target.value));
-  $("#net-areas").addEventListener("change", e => setAreas(e.target.checked));
+  $("#view-menu").addEventListener("change", e => {
+    const t = e.target;
+    if (t.name === "net-style") setStyle(t.value);
+    else if (t.name === "net-layout") setLayout(t.value);
+    else if (t.id === "net-areas") setAreas(t.checked);
+  });
   $("#map-menu").addEventListener("change", e => { if (e.target.dataset.layer) setMapLayer(e.target.dataset.layer, e.target.checked); });
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";
@@ -2551,7 +2566,9 @@ async function init() {
   setupSearch();
   setupBusMenu();
   setInterval(pollClaude, 1000);
-  setState(await api("/api/state"));
+  S.state = await api("/api/state");
+  defaultView();
+  setState(S.state);
   if (!S.state.case.tables.bus.length) show("network");
   if (S.state.source && S.state.source.notes.length) show("results");  // conversion report
   // page parameters (used by pptools pprun's Network tab): ?solve=pf|opf solves on load
