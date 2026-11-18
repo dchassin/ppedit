@@ -54,7 +54,11 @@ In the editor:
     to edit it in the side panel; add a generator, a branch, a DC line, or a
     new linked bus from the panel. DC lines are drawn as purple dash-dot
     lines (with a "DC" tag in the simple and classic styles and a converter
-    box at each end in the one-line style). Three styles:
+    box at each end in the one-line style). The **View ▾** menu holds
+    **Re-layout**, **Fit**, the style and layout choices, and **Areas**.
+    When a case is opened, the view is the geodata layout (classic style)
+    if the case has geodata, else the one-line style for cases with fewer
+    than 20 buses, else the classic style. Three styles:
     - *Simple*: buses colored by type; after a solve, by voltage
       magnitude (blue low, red high).
     - *Classic* (utility one-line diagram conventions): generator buses
@@ -105,7 +109,7 @@ In the editor:
       names that are not GLM names are changed, e.g. `KV level` to
       `KV_level`). **Map ▸ Download CSV** exports the geodata.
 
-    The **Areas** check box (enabled when the case has more than one area)
+    The **View ▸ Areas** check box (enabled when the case has more than one area)
     draws a labeled region around the buses of each area and marks price
     reference buses with ★; bus colors don't change. Regions never overlap:
     each bus claims the space nearer to it than to any bus of another area
@@ -117,7 +121,7 @@ In the editor:
     a line between two areas is drawn with a jog from its column in one box
     to its column in the other, so every bus bar stays inside its area.
 
-    The **Labels ▾** menu (between the layout selector and **Areas**) turns
+    The **Labels ▾** menu (to the right of **View ▾**) turns
     the diagram labels on and off. For buses: the bus number, voltage,
     generation and load; for branches: power flow and loading (% of
     `rateA`, after a solve). Any column of the bus and branch tables can

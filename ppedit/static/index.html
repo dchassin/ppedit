@@ -89,22 +89,26 @@
       <svg id="net" tabindex="0"></svg>
       <div class="legend" id="legend"></div>
       <div class="net-tools">
-        <button data-action="relayout" title="Recompute layout">Re-layout</button>
-        <button data-action="fit" title="Fit to window">Fit</button>
-        <select id="net-style" aria-label="Diagram style" title="Diagram style">
-          <option value="simple" title="Simple view: bus type colors">Simple</option>
-          <option value="classic" title="Classic utility one-line diagram: shapes by equipment, angles, MW and flows">Classic</option>
-          <option value="oneline" title="Utility one-line diagram: sources on top, horizontal bus bars, vertical branches, standard symbols, MW and MVAr flows">One-line</option>
-        </select>
-        <select id="net-layout" aria-label="Diagram layout" title="Bus positions">
-          <option value="force" title="Force-directed layout from the topology">Force layout</option>
-          <option value="geodata" title="Bus locations from the case geodata, drawn on a map">Geodata</option>
-        </select>
+        <div class="menu">
+          <button data-menu="view-menu" title="Diagram style, layout and areas">View ▾</button>
+          <div id="view-menu" class="dropdown left">
+            <button data-action="relayout" title="Recompute layout">Re-layout</button>
+            <button data-action="fit" title="Fit to window">Fit</button>
+            <div class="sep">Style</div>
+            <label title="Simple view: bus type colors"><input type="radio" name="net-style" value="simple"> Simple</label>
+            <label title="Classic utility one-line diagram: shapes by equipment, angles, MW and flows"><input type="radio" name="net-style" value="classic"> Classic</label>
+            <label title="Utility one-line diagram: sources on top, horizontal bus bars, vertical branches, standard symbols, MW and MVAr flows"><input type="radio" name="net-style" value="oneline"> One-line</label>
+            <div class="sep">Layout</div>
+            <label title="Force-directed layout from the topology"><input type="radio" name="net-layout" value="force"> Force layout</label>
+            <label><input type="radio" name="net-layout" value="geodata"> Geodata</label>
+            <div class="sep">Overlays</div>
+            <label><input type="checkbox" id="net-areas"> Areas</label>
+          </div>
+        </div>
         <div class="menu">
           <button data-menu="label-menu" title="Labels on buses and branches">Labels ▾</button>
           <div id="label-menu" class="dropdown left labels"></div>
         </div>
-        <label class="net-check"><input type="checkbox" id="net-areas"> Areas</label>
         <div class="menu">
           <button data-menu="map-menu" title="Geodata and map layers">Map ▾</button>
           <div id="map-menu" class="dropdown left">
