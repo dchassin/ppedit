@@ -51,7 +51,7 @@ reversed decision in place and note the date.
 | # | Decision |
 |---|---|
 | 1 | One Flask server process holds one `Case` in memory (in an `Editor`) for one local user; the browser is a view of it. There is no database and no session state outside the server process. |
-| 2 | The frontend is plain HTML/CSS/JS in `ppedit/static/` (one `app.js`, a tiny `h()` DOM helper), with no build step and no JS dependencies. |
+| 2 | The frontend is plain HTML/CSS/JS in `ppedit/static/` (one `app.js`, a tiny `h()` DOM helper), with no build step and no JS dependencies. The server sends the page and these files with `Cache-Control: no-cache`, so browsers revalidate them on every load and pick up an upgraded package without a hard reload. |
 | 3 | The browser keeps no model of its own: every mutating API call returns the full editor state and the page re-renders from it. |
 | 4 | Tables are plain Python lists of rows in `COLUMNS[table]` order (no numpy, no pandas in the model), so they edit row by row and serialize directly to JSON. Column metadata (unit, kind, default, options, GLM name) lives in `COLUMNS`. |
 | 5 | Every edit goes through `Case.set_value`, `add_row`, `delete_rows`, `set_global`, `set_geodata`/`load_geodata` or `apply_result`, which keep references valid. The server wraps each call in `Editor.edit()`, which snapshots the case, rolls back on any exception, and records one undo step only if the case changed. |
