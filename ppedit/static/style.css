@@ -100,6 +100,7 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-left: 4px; vertical-align: middle; background: transparent; }
 .status-dot.ok { background: var(--accent); }
 .status-dot.fail { background: var(--err); }
+.status-dot.warn { background: #e3b008; }
 .table-tabs { display: flex; gap: 2px; padding: 0 14px; background: var(--panel); border-bottom: 1px solid var(--line); overflow-x: auto; }
 .table-tabs > button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 7px 10px 6px; color: var(--muted); white-space: nowrap; }
 .table-tabs > button.active { color: var(--ink); border-bottom-color: var(--accent); }
@@ -114,6 +115,11 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .settings h2:not(:first-child) { margin-top: 12px; }
 .settings-group label > span:first-child { width: 190px; }
 .settings-group input { width: 70px; }
+.settings-group input[type=checkbox] { width: auto; }
+.settings-group input.wide { width: 280px; }
+.settings-group select { border: 1px solid var(--line-strong); border-radius: 4px; padding: 2px 4px; background: var(--bg); }
+.settings .hint.err-text { color: var(--err); }
+.settings .hint.err-text:empty { display: none; }
 .settings .hint { color: var(--muted); max-width: 520px; margin-left: 0; }
 
 main { position: relative; overflow: hidden; }
@@ -338,6 +344,8 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 /* issues */
 .issue { display: flex; gap: 10px; align-items: baseline; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); margin-bottom: 6px; cursor: pointer; }
 .issue:hover { border-color: var(--accent); }
+.issue-group { font-size: 13px; margin: 10px 0 6px; color: var(--muted); }
+.issue-group:first-child { margin-top: 0; }
 .issue .lvl { font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 1px 6px; border-radius: 3px; }
 .issue .lvl.error { background: var(--err-bg); color: var(--err); }
 .issue .lvl.warning { background: var(--warn-bg); color: var(--warn); }

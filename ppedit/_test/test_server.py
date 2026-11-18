@@ -1,5 +1,7 @@
 """Tests for `ppedit.server` (fast, no network)"""
 
+import importlib.util
+
 def test_index_and_meta(client):
     assert client.get("/").status_code == 200
     assert client.get("/static/app.js").status_code == 200
@@ -7,6 +9,7 @@ def test_index_and_meta(client):
     assert "case14" in meta["builtin"] and meta["tables"][0] == "bus"
     assert meta["solvers"]["pf"][0] == {"algorithm":"NR","label":"Newton"}
     assert meta["solvers"]["opf"][0]["algorithm"] == "PIPS"
+    assert "cvxopf" in meta["solvers"]
 
 def test_static_files_not_cached(client):
     """The page and its files are revalidated on every load"""
@@ -196,3 +199,18 @@ def test_open_url(client,post,monkeypatch):
     monkeypatch.setattr(server,"DOWNLOAD_LIMIT",10)
     status,st = post("/api/open",{"url":"https://example.org/big.glm"})
     assert status == 400 and "larger than" in st["error"]
+
+def test_solve_messages_and_options(post):
+    """Solver messages come back in the result; cvxopf options reach Case.solve"""
+    _,st = post("/api/rows",{"table":"bus","values":{"Pd":10}})
+    _,st = post("/api/solve",{"kind":"pf"})
+    assert st["result"]["messages"][0]["level"] == "warning"
+    code,st = post("/api/solve",{"kind":"opf","algorithm":"PIPS","options":{"verbose":True}})
+    assert code == 200 and st["result"]["options"] is None # ignored by other solvers
+    if importlib.util.find_spec("cvxopf") is not None:
+        code,st = post("/api/solve",{"kind":"opf","algorithm":"CVXOPF-DC",
+            "options":{"preparation":"recommended"}})
+        assert code == 200 and st["result"]["options"]["preparation"] == "recommended"
+        code,st = post("/api/solve",{"kind":"opf","algorithm":"CVXOPF-DC",
+            "options":{"preparation":"nope"}})
+        assert code == 400 and "preparation" in st["error"]

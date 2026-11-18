@@ -85,7 +85,18 @@ API key to start sessions; tests use a fake client).
   multipliers; `lam_P`/`mu_*` are `None`). DC lines are built as
   `HVDCLink` with `p_in = -Pf` because `cvxopf.hvdc_from_dcline` runs
   PYPOWER DC lines backwards (as of cvxopf b6edcc7, 2026-11-12); switch
-  to it once that is fixed upstream.
+  to it once that is fixed upstream. cvxopf solve options (decision #36k)
+  come from the Settings tab (`ppedit.cvxopf` in `localStorage`,
+  `cvxopfOptions()` in `app.js`) as `options` of `/api/solve`;
+  `_cvxopf.RECOMMENDED` is the per-model preparation profile from the
+  cvxopf authors (issue #88) and may need revising as cvxopf changes.
+  `verbose` captures file descriptors 1 and 2 while solving, so other
+  threads' output in that window lands in the log too.
+- Solver messages (decision #36l): `Case.solve` returns `messages`; the
+  Issues tab lists them under *Last solve* and its dot counts them, but
+  `state.issues` stays `Case.validate()` only. Python warnings raised
+  while solving are recorded (no longer silenced): numpy warnings from a
+  failing PYPOWER solve now show up as solver warnings.
 - DC lines are solved by `ppedit/_dcline.py`, not `pypower.toggle_dcline`
   (which fails with current numpy and mishandles `dclinecost`,
   out-of-service lines and Q cost rows); results are checked against the

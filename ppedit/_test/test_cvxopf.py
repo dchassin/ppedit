@@ -6,7 +6,7 @@ import os
 import pytest
 
 from ppedit import Case
-from ppedit.case import OPF_SOLVERS, solvers
+from ppedit.case import CaseError, OPF_SOLVERS, solvers
 
 pytest.importorskip("cvxopf")
 
@@ -95,3 +95,60 @@ def test_dcline_direction():
     assert "loss0" in res["log"]
     res = case.solve("opf","CVXOPF-1NODE")
     assert res["success"] and not any(d["solved"] for d in res["dcline"])
+
+def test_options_preparation():
+    """Both numerical preparations reach the same case9 optimum (issue #88)"""
+    case = Case.builtin("case9")
+    for algorithm in CVXOPF:
+        default = case.solve("opf",algorithm)
+        prepared = case.solve("opf",algorithm,{"preparation":"recommended"})
+        assert prepared["success"] and prepared["options"]["preparation"] == "recommended"
+        assert prepared["objective"] == pytest.approx(default["objective"],rel=1e-4)
+        assert "recommended preparation" in prepared["log"]
+
+def test_options_solver_and_verbose():
+    """Another CVXPY solver, solver output and solver options reach cvxopf"""
+    import cvxpy # pylint: disable=import-outside-toplevel
+    case = Case.builtin("case9")
+    other = next((x for x in ("SCS","ECOS") if x in cvxpy.installed_solvers()),None)
+    if other:
+        res = case.solve("opf","CVXOPF-DC",{"solver":other.lower()})
+        assert res["success"] and res["options"]["solver"] == other
+        assert res["objective"] == pytest.approx(case.solve("opf","CVXOPF-DC")["objective"],rel=1e-3)
+    res = case.solve("opf","CVXOPF-AC",{"verbose":True})
+    assert res["success"] and "Solver output" in res["log"]
+    res = case.solve("opf","CVXOPF-AC",{"solver_options":{"max_iter":2}})
+    assert not res["success"] and "max_iter=2" in res["log"]
+    assert [m["level"] for m in res["messages"]][-1] == "error"
+
+@pytest.mark.parametrize("algorithm,options,match",[
+    ("CVXOPF-AC",{"preparation":"fast"},"preparation"),
+    ("CVXOPF-AC",{"solver":"SCS"},"only with IPOPT"),
+    ("CVXOPF-DC",{"solver":"NOSUCH"},"not installed"),
+    ("CVXOPF-AC",{"solver_options":{"verbose":True}},"cannot be set"),
+    ("CVXOPF-AC",{"tolerance":1},"unknown"),
+])
+def test_options_refused(algorithm,options,match):
+    """Invalid options are refused before solving"""
+    with pytest.raises(CaseError,match=match):
+        Case.builtin("case9").solve("opf",algorithm,options)
+
+def test_options_recommended_needs_native_solver():
+    """The recommended preparation solves the convex models only with CLARABEL"""
+    case = Case.builtin("case9")
+    with pytest.raises(CaseError,match="CLARABEL"):
+        case.solve("opf","CVXOPF-DC",{"preparation":"recommended","solver":"SCS"})
+    assert case.solve("opf","CVXOPF-DC",{"preparation":"recommended","solver":"clarabel"})["success"]
+
+def test_cvxopf_messages():
+    """Data cvxopf does not model and a non-exact SOCP relaxation are warnings (issue #89)"""
+    res = _pypower_case("case9Q").solve("opf","CVXOPF-AC")
+    assert {"level":"warning","message":"Reactive power cost rows are ignored: "
+        "cvxopf has no reactive power costs"} in res["messages"]
+    res = Case.builtin("case9").solve("opf","CVXOPF-SOCP")
+    assert res["success"] and all(m["level"] == "warning" for m in res["messages"])
+
+def test_solvers_lists_options():
+    """`solvers()` gives the cvxopf option choices"""
+    cvx = solvers()["cvxopf"]
+    assert cvx["preparation"] == ["default","recommended"] and "CLARABEL" in cvx["solvers"]
