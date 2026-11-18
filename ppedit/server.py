@@ -28,7 +28,8 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload),
     `{"path": ...}` (server file), or `{"url": ...}` (an `http`/`https` URL
     the server downloads, at most `DOWNLOAD_LIMIT` bytes; the extension of
-    the URL path selects the format); `.py`, `.json`, `.glm`, or PSS/E
+    the URL path selects the format, and GitHub file page URLs are changed to
+    raw file URLs); `.py`, `.json`, `.glm`, or PSS/E
     `.raw` (read only: Save needs a `.py`, `.json` or `.glm` path; uploads
     and downloads have no path until saved)
   - `POST /api/global`: `{"key": "baseMVA"|"version"|"name", "value": ...}`
@@ -107,26 +108,49 @@ def _shutdown():
         os._exit(0) # e.g. started in the background, where SIGINT is ignored
     signal.raise_signal(signal.SIGINT)
 
+def github_raw_url(url:str) -> str:
+    """Change a GitHub file page URL to the URL of the raw file
+
+    `https://github.com/OWNER/REPO/blob/REF/PATH` (or `/raw/`) becomes
+    `https://raw.githubusercontent.com/OWNER/REPO/REF/PATH`; the query and
+    fragment are dropped. Other URLs are returned unchanged.
+
+    >>> github_raw_url("https://github.com/o/r/blob/feature/x/d/case.py?plain=1#L9")
+    'https://raw.githubusercontent.com/o/r/feature/x/d/case.py'
+    >>> github_raw_url("https://example.org/case.glm")
+    'https://example.org/case.glm'
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.netloc.lower() in ("github.com","www.github.com"):
+        path = parts.path.split("/")
+        if len(path) > 5 and path[3] in ("blob","raw"):
+            return "https://raw.githubusercontent.com/" + "/".join(path[1:3]+path[4:])
+    return url
+
 def download_case(url:str) -> Case:
     """Download a case file from an `http` or `https` URL and read it
 
     Arguments
     ---------
 
-      - `url`: the file URL; the extension of its path selects the format
+      - `url`: the file URL; the extension of its path selects the format.
+        GitHub file page URLs are changed to raw file URLs
+        (`github_raw_url`).
 
     Returns
     -------
 
-      - `Case`: the case, with `Case.source["file"]` set to `url`
+      - `Case`: the case, with `Case.source["file"]` set to the URL
+        downloaded
 
     Exceptions
     ----------
 
       - `CaseError`: other scheme, unsupported extension, HTTP or network
-        error, file larger than `DOWNLOAD_LIMIT`, or unreadable content
+        error, an HTML page (`Content-Type` `text/html`), file larger than
+        `DOWNLOAD_LIMIT`, or unreadable content
     """
-    url = url.strip()
+    url = github_raw_url(url.strip())
     parts = urllib.parse.urlsplit(url)
     if parts.scheme.lower() not in ("http","https") or not parts.netloc:
         raise CaseError("only http and https URLs can be opened")
@@ -138,10 +162,14 @@ def download_case(url:str) -> Case:
     try:
         with urllib.request.urlopen(req,timeout=DOWNLOAD_TIMEOUT) as res:
             data = res.read(DOWNLOAD_LIMIT+1)
+            ctype = res.headers.get("Content-Type","")
     except urllib.error.HTTPError as err:
         raise CaseError(f"HTTP {err.code} from {url}") from err
     except (urllib.error.URLError,OSError) as err:
         raise CaseError(f"cannot download {url}: {getattr(err,'reason',err)}") from err
+    if ctype.split(";")[0].strip().lower() in ("text/html","application/xhtml+xml"):
+        raise CaseError(f"'{url}' is a web page, not a case file "
+            "(use the link to the raw file)")
     if len(data) > DOWNLOAD_LIMIT:
         raise CaseError(f"'{url}' is larger than {DOWNLOAD_LIMIT} bytes")
     try: # PSS/E names may be Latin-1, as in Case.load

@@ -95,7 +95,8 @@ key is configured.
 or downloaded from an `http`/`https` URL typed in the menu (*From URL*). The
 ppedit server downloads the URL (`ppedit.server.download_case`, at most
 `ppedit.server.DOWNLOAD_LIMIT` bytes), so the server machine needs network
-access to that host; the extension of the URL path selects the format, and
+access to that host. A GitHub file page link (`.../blob/...`) is changed
+to its raw file link, and other web pages are refused. The extension of the URL path selects the format, and
 `.py` cases are parsed, never executed. Neither kind has a file path until
 it is saved with *Save as*.
 

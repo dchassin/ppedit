@@ -43,8 +43,8 @@ coinor-libipopt-dev`; macOS: `brew install ipopt`):
 
 The editor opens at http://localhost:8050/. Start from **New ▸** to load
 any PYPOWER built-in case (`case9`, `case14`, ..., `case300`), or **Open ▾**
-to upload a **Local file…** or type a URL under **From URL** (e.g. a raw
-GitHub link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸** downloads `.py`, `.json` or `.glm`.
+to upload a **Local file…** or type a URL under **From URL** (e.g. a GitHub
+link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸** downloads `.py`, `.json` or `.glm`.
 **Exit** stops the server after asking for confirmation and closes the
 browser tab when the browser allows it.
 
