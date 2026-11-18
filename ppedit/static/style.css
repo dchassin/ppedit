@@ -110,6 +110,11 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .settings label > span:first-child { width: 80px; color: var(--muted); }
 .settings input { border: 1px solid var(--line-strong); border-radius: 4px; padding: 3px 6px; background: var(--bg); }
 .settings .unit { color: var(--muted); }
+.settings-group { display: flex; flex-direction: column; gap: 6px; }
+.settings h2:not(:first-child) { margin-top: 12px; }
+.settings-group label > span:first-child { width: 190px; }
+.settings-group input { width: 70px; }
+.settings .hint { color: var(--muted); max-width: 520px; margin-left: 0; }
 
 main { position: relative; overflow: hidden; }
 .view { display: none; height: 100%; }
