@@ -187,7 +187,11 @@ In the editor:
     one folder on the server machine. Every change Claude makes is one
     undoable edit and shows up in the other tabs as it happens. Needs an
     API key in `ANTHROPIC_API_KEY` or `~/.anthropic` (see `ppedit.claude`).
-  - **Settings**: the case `baseMVA` and `version`.
+  - **Settings**: the case `baseMVA` and `version`, and the display
+    precision (decimal places) of the case table values by unit (MW, MVAr,
+    per-unit impedance, deg, per-unit voltage, $, MW/MW, and others at full
+    precision by default). A value of exactly 0 shows as 0; editing a cell
+    shows its full value. Saved in the browser, not in the case.
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 
 DC lines follow the PYPOWER `dcline` format (`pypower.idx_dcline`) and are
