@@ -25,9 +25,13 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
     and the installed OPF solvers), version
   - `GET  /api/state`: current state
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
-  - `POST /api/open`: `{"filename": ..., "text": ...}` (upload) or
-    `{"path": ...}` (server file); `.py`, `.json`, `.glm`, or PSS/E `.raw`
-    (read only: Save needs a `.py`, `.json` or `.glm` path)
+  - `POST /api/open`: `{"filename": ..., "text": ...}` (upload),
+    `{"path": ...}` (server file), or `{"url": ...}` (an `http`/`https` URL
+    the server downloads, at most `DOWNLOAD_LIMIT` bytes; the extension of
+    the URL path selects the format, and GitHub file page URLs are changed to
+    raw file URLs); `.py`, `.json`, `.glm`, or PSS/E
+    `.raw` (read only: Save needs a `.py`, `.json` or `.glm` path; uploads
+    and downloads have no path until saved)
   - `POST /api/global`: `{"key": "baseMVA"|"version"|"name", "value": ...}`
   - `POST /api/cell`: `{"table", "row", "column", "value"}`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
@@ -72,6 +76,9 @@ import logging
 import os
 import signal
 import threading
+import urllib.error
+import urllib.parse
+import urllib.request
 
 from flask import Flask, jsonify, request, send_from_directory, Response
 
@@ -87,6 +94,12 @@ STATIC = os.path.join(os.path.dirname(__file__),"static")
 HISTORY = 200
 """Number of undo steps kept"""
 
+DOWNLOAD_LIMIT = 50000000
+"""Largest case file `POST /api/open` downloads from a URL, in bytes"""
+
+DOWNLOAD_TIMEOUT = 60
+"""Seconds to wait for a URL download to respond"""
+
 _LOOPBACK = {"localhost","127.0.0.1","::1","[::1]"}
 
 def _shutdown():
@@ -94,6 +107,79 @@ def _shutdown():
     if signal.getsignal(signal.SIGINT) in (signal.SIG_IGN,None):
         os._exit(0) # e.g. started in the background, where SIGINT is ignored
     signal.raise_signal(signal.SIGINT)
+
+def github_raw_url(url:str) -> str:
+    """Change a GitHub file page URL to the URL of the raw file
+
+    `https://github.com/OWNER/REPO/blob/REF/PATH` (or `/raw/`) becomes
+    `https://raw.githubusercontent.com/OWNER/REPO/REF/PATH`; the query and
+    fragment are dropped. Other URLs are returned unchanged.
+
+    >>> github_raw_url("https://github.com/o/r/blob/feature/x/d/case.py?plain=1#L9")
+    'https://raw.githubusercontent.com/o/r/feature/x/d/case.py'
+    >>> github_raw_url("https://example.org/case.glm")
+    'https://example.org/case.glm'
+    """
+    parts = urllib.parse.urlsplit(url)
+    if parts.netloc.lower() in ("github.com","www.github.com"):
+        path = parts.path.split("/")
+        if len(path) > 5 and path[3] in ("blob","raw"):
+            return "https://raw.githubusercontent.com/" + "/".join(path[1:3]+path[4:])
+    return url
+
+def download_case(url:str) -> Case:
+    """Download a case file from an `http` or `https` URL and read it
+
+    Arguments
+    ---------
+
+      - `url`: the file URL; the extension of its path selects the format.
+        GitHub file page URLs are changed to raw file URLs
+        (`github_raw_url`).
+
+    Returns
+    -------
+
+      - `Case`: the case, with `Case.source["file"]` set to the URL
+        downloaded
+
+    Exceptions
+    ----------
+
+      - `CaseError`: other scheme, unsupported extension, HTTP or network
+        error, an HTML page (`Content-Type` `text/html`), file larger than
+        `DOWNLOAD_LIMIT`, or unreadable content
+    """
+    url = github_raw_url(url.strip())
+    parts = urllib.parse.urlsplit(url)
+    if parts.scheme.lower() not in ("http","https") or not parts.netloc:
+        raise CaseError("only http and https URLs can be opened")
+    filename = os.path.basename(urllib.parse.unquote(parts.path))
+    ext = os.path.splitext(filename)[1].lower()
+    if ext not in INPUT_FORMATS:
+        raise CaseError(f"'{url}' does not name a {', '.join(INPUT_FORMATS)} file")
+    req = urllib.request.Request(url,headers={"User-Agent":"ppedit"})
+    try:
+        with urllib.request.urlopen(req,timeout=DOWNLOAD_TIMEOUT) as res:
+            data = res.read(DOWNLOAD_LIMIT+1)
+            ctype = res.headers.get("Content-Type","")
+    except urllib.error.HTTPError as err:
+        raise CaseError(f"HTTP {err.code} from {url}") from err
+    except (urllib.error.URLError,OSError) as err:
+        raise CaseError(f"cannot download {url}: {getattr(err,'reason',err)}") from err
+    if ctype.split(";")[0].strip().lower() in ("text/html","application/xhtml+xml"):
+        raise CaseError(f"'{url}' is a web page, not a case file "
+            "(use the link to the raw file)")
+    if len(data) > DOWNLOAD_LIMIT:
+        raise CaseError(f"'{url}' is larger than {DOWNLOAD_LIMIT} bytes")
+    try: # PSS/E names may be Latin-1, as in Case.load
+        text = data.decode("utf-8",errors="replace" if ext == ".raw" else "strict")
+    except UnicodeDecodeError as err:
+        raise CaseError(f"'{url}' is not UTF-8 text") from err
+    case = Case.load(filename,text)
+    case.source["file"] = url
+    _logger.info("downloaded %s (%d bytes)",url,len(data))
+    return case
 
 class Editor:
     """In-memory editing session: the case, its file, and undo history
@@ -283,6 +369,11 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     @app.post("/api/open")
     def open_case():
         data = body()
+        if "url" in data and "text" not in data: # download outside the lock
+            case = download_case(data["url"])
+            with editor.lock:
+                editor.replace(case,None)
+                return jsonify(editor.state())
         with editor.lock:
             if "text" in data:
                 case = Case.load(data["filename"],data["text"])

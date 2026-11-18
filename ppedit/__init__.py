@@ -91,6 +91,15 @@ read and edit the case through the same checked, undoable edits as the
 browser, optionally using web data or local files, when an Anthropic API
 key is configured.
 
+*Open ▾* opens a case file chosen on the browser's computer (*Local file…*)
+or downloaded from an `http`/`https` URL typed in the menu (*From URL*). The
+ppedit server downloads the URL (`ppedit.server.download_case`, at most
+`ppedit.server.DOWNLOAD_LIMIT` bytes), so the server machine needs network
+access to that host. A GitHub file page link (`.../blob/...`) is changed
+to its raw file link, and other web pages are refused. The extension of the URL path selects the format, and
+`.py` cases are parsed, never executed. Neither kind has a file path until
+it is saved with *Save as*.
+
 The page takes optional URL parameters, so another tool can open it ready to
 show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver
 when the page loads (`&algorithm=NAME` picks a PF algorithm or OPF solver as

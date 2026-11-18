@@ -24,7 +24,17 @@
         <div id="builtin-list"></div>
       </div>
     </div>
-    <button data-action="open" title="Open a .py, .json or .glm case, or a PSS/E .raw case (read only)">Open…</button>
+    <div class="menu">
+      <button data-menu="open-menu" title="Open a .py, .json or .glm case, or a PSS/E .raw case (read only)">Open ▾</button>
+      <div id="open-menu" class="dropdown">
+        <button data-action="open" title="Choose a case file on this computer">Local file…</button>
+        <div class="sep">From URL</div>
+        <form id="open-url-form" class="url-form" title="Download a .py, .json, .glm or .raw case (the ppedit server downloads it)">
+          <input type="url" id="open-url" placeholder="https://…/case.glm" required spellcheck="false">
+          <button type="submit">Open</button>
+        </form>
+      </div>
+    </div>
     <input type="file" id="file-input" accept=".py,.json,.glm,.raw" hidden>
     <button data-action="save" id="save-btn" title="Save to the open file (Ctrl+S)">Save</button>
     <div class="menu">

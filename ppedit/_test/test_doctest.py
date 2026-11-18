@@ -8,3 +8,9 @@ def test_case_examples():
     """`ppedit.case` docstring examples reproduce their shown output"""
     failed,tried = doctest.testmod(ppedit.case)
     assert tried > 0 and failed == 0
+
+def test_server_examples():
+    """`ppedit.server` docstring examples reproduce their shown output"""
+    import ppedit.server # pylint: disable=import-outside-toplevel
+    failed,tried = doctest.testmod(ppedit.server)
+    assert tried > 0 and failed == 0

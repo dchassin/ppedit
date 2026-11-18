@@ -78,6 +78,9 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 .dropdown.open { display: block; }
 .dropdown button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--ink); padding: 5px 10px; }
 .dropdown button:hover { background: var(--sel); }
+.dropdown .url-form { display: flex; gap: 4px; padding: 4px 6px 6px; }
+.dropdown .url-form input { width: 300px; min-width: 0; border: 1px solid var(--line-strong); border-radius: 5px; padding: 4px 8px; }
+.dropdown .url-form button { width: auto; flex: none; border: 1px solid var(--line-strong); border-radius: 4px; }
 .dropdown .sep { font-size: 11px; color: var(--muted); padding: 6px 10px 2px; text-transform: uppercase; letter-spacing: .5px; }
 
 /* tabs */
