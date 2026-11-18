@@ -195,7 +195,14 @@ What is not promised
     (the copper plate ignores DC lines and has no branch flows); and
     give the SOCP relaxation's voltages, which need not be AC feasible
     (the log says whether they are). The cvxopf DC network-flow model has no
-    voltage angles.
+    voltage angles. The cvxopf solve options (Settings tab, `options` of
+    `ppedit.Case.solve`) cover numerical preparation, solver choice,
+    solver output and solver options for one snapshot; cvxopf's
+    multi-period horizons and device models are not offered.
+
+  - Solver messages (`messages` of a solution, listed on the Issues tab)
+    report what the solver reports and what ppedit changed to solve the
+    case; they are not a diagnosis of why a solve failed.
 
 Data
 ----

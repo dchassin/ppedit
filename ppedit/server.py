@@ -21,8 +21,8 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
-    input formats (read), solvers (`ppedit.case.solvers`: the PF algorithms
-    and the installed OPF solvers), version
+    input formats (read), solvers (`ppedit.case.solvers`: the PF algorithms,
+    the installed OPF solvers and the cvxopf solve option choices), version
   - `GET  /api/state`: current state
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload),
@@ -37,10 +37,12 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
   - `POST /api/undo`, `POST /api/redo`
-  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?}`; `algorithm`
-    is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`) or an OPF
-    solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
-    `ppedit.case.OPF_SOLVERS`)
+  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?}`;
+    `algorithm` is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`)
+    or an OPF solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
+    `ppedit.case.OPF_SOLVERS`); `options` are the `CVXOPF-*` solve options
+    (see `ppedit.Case.solve`). The result's `messages` (solver errors and
+    warnings) are listed on the page's Issues tab
   - `POST /api/apply`: copy the last solution into the case
   - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
     `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the
@@ -438,7 +440,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         data = body()
         with editor.lock:
             editor.result = editor.case.solve(data.get("kind","pf"),
-                data.get("algorithm"))
+                data.get("algorithm"),data.get("options"))
             return jsonify(editor.state())
 
     @app.post("/api/apply")

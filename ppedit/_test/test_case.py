@@ -274,3 +274,40 @@ def test_solve_with_isolated_bus():
     result = case.solve("pf")
     assert result["success"] and "isolated" in result["log"]
     assert case.tables["bus"][-1][1] == 1 # case unchanged
+
+def test_solve_messages():
+    """Solver errors and warnings are returned in `messages` (issue #89)"""
+    case = Case.builtin("case9")
+    res = case.solve("pf")
+    assert res["messages"] == [] and res["options"] is None
+    case.add_row("bus",{"Pd":10})
+    res = case.solve("pf")
+    assert res["success"]
+    assert [m["level"] for m in res["messages"]] == ["warning"]
+    assert "isolated" in res["messages"][0]["message"]
+
+def test_solve_messages_not_converged():
+    """A power flow that does not converge has an error message"""
+    case = Case.builtin("case9")
+    case.tables["bus"][4][2] = 5000.0 # far beyond what the network can carry
+    res = case.solve("pf")
+    assert not res["success"]
+    errors = [m["message"] for m in res["messages"] if m["level"] == "error"]
+    assert len(errors) == 1 and "did not converge" in errors[0]
+
+def test_solve_messages_failure(monkeypatch):
+    """A solver exception is an error message; Python warnings are listed once each"""
+    import warnings # pylint: disable=import-outside-toplevel
+    import pypower.api # pylint: disable=import-outside-toplevel
+    def broken(*_):
+        for _ in range(3):
+            warnings.warn("divide by zero",RuntimeWarning)
+        warnings.warn("old API",DeprecationWarning)
+        raise RuntimeError("solver blew up")
+    monkeypatch.setattr(pypower.api,"runpf",broken)
+    res = Case.builtin("case9").solve("pf")
+    assert not res["success"]
+    assert res["messages"] == [
+        {"level":"warning","message":"Solver warning: RuntimeWarning: divide by zero (3 times)"},
+        {"level":"error","message":"PF (Newton) failed: solver blew up"}]
+    assert "solver blew up" in res["log"]

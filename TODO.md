@@ -20,6 +20,9 @@
 - [x] `areas` table (edit, validate, area colors in the diagram, per-area results)
 - [ ] Copy/paste of cell ranges to and from spreadsheets
 - [x] Claude tab: multiple Claude API sessions that edit the case, with web and local data sources
+- [x] cvxopf solve options on the Settings tab (issue #88; decision #36k)
+- [ ] cvxopf multi-period horizons, profiles and device models (issue #88; DESIGN.md open questions)
+- [x] Solver errors and warnings on the Issues tab (issue #89; decision #36l)
 - [ ] Claude sessions: stream responses, persist conversations, show a diff of each session's edits
 - [ ] Multiple open cases (tabs) and a recent-files list
 

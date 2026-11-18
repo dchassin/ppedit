@@ -64,6 +64,33 @@ function loadPrecision() {
   catch (_) { return { ...PRECISION_DEFAULTS }; }
 }
 S.precision = loadPrecision();
+
+// cvxopf solve options (issue #88; Settings tab, shown when cvxopf is
+// installed): sent with every CVXOPF-* solve. Kept in localStorage
+// (ppedit.cvxopf), not in the case. solverOptions is the text typed, as
+// "name=value, ..." (parsed by parseSolverOptions).
+const CVXOPF_DEFAULTS = { preparation: "default", solver: "", verbose: false, solverOptions: "" };
+function loadCvxopf() {
+  try { return { ...CVXOPF_DEFAULTS, ...JSON.parse(localStorage.getItem("ppedit.cvxopf") || "{}") }; }
+  catch (_) { return { ...CVXOPF_DEFAULTS }; }
+}
+S.cvxopf = loadCvxopf();
+// "max_iter=500, tol=1e-8, mu_strategy=adaptive" -> {max_iter: 500, tol: 1e-8, mu_strategy: "adaptive"};
+// numbers and true/false are converted, other values stay text; throws on a malformed item
+function parseSolverOptions(text) {
+  const out = {};
+  for (const item of text.split(/[,;\n]/).map(x => x.trim()).filter(Boolean)) {
+    const m = item.match(/^([A-Za-z_]\w*)\s*=\s*(.+)$/);
+    if (!m) throw new Error(`solver option "${item}" is not name=value`);
+    const v = m[2].trim();
+    out[m[1]] = /^(true|false)$/i.test(v) ? v.toLowerCase() === "true" : (v !== "" && Number.isFinite(Number(v)) ? Number(v) : v);
+  }
+  return out;
+}
+function cvxopfOptions() {
+  const o = S.cvxopf;
+  return { preparation: o.preparation, solver: o.solver || null, verbose: !!o.verbose, solver_options: parseSolverOptions(o.solverOptions || "") };
+}
 function precisionKey(spec) {
   if (spec.kind !== "float") return null;
   if (spec.unit === "pu") return PU_VOLTAGE.has(spec.name) ? "puV" : "puMVA";
@@ -182,12 +209,18 @@ function renderChrome() {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
   for (const t of S.meta.tables) $(`[data-count="${t}"]`).textContent = c.tables[t].length;
-  const errs = st.issues.filter(i => i.level === "error").length;
-  const warns = st.issues.length - errs;
+  // Issues tab: case issues plus the last solve's messages (issue #89); red
+  // dot for errors, yellow for warnings only
+  const msgs = solverMessages();
+  const all = [...st.issues, ...msgs];
+  const errs = all.filter(i => i.level === "error").length;
+  const warns = all.length - errs;
   const ic = $("#issue-count");
-  ic.textContent = st.issues.length || "";
+  ic.textContent = all.length || "";
   ic.className = "count issues" + (errs ? " has-err" : warns ? " has-warn" : "");
-  ic.title = `${errs} error(s), ${warns} warning(s)`;
+  const idot = $("#issue-dot");
+  idot.className = "status-dot" + (errs ? " fail" : warns ? " warn" : "");
+  idot.title = ic.title = `${errs} error(s), ${warns} warning(s)` + (msgs.length ? ` (${msgs.length} from the last solve)` : "");
   const dot = $("#result-dot");
   dot.className = "status-dot" + (st.result ? (st.result.success ? " ok" : " fail") : "");
   const busy = claudeBusy();
@@ -240,6 +273,46 @@ function renderSettings() {
   $("#precision-settings").replaceChildren(...rows,
     h("div", { class: "hint" }, "Decimal places shown in the case tables; blank shows full precision. A value of exactly 0 shows as 0. Editing a cell shows its full value."),
     h("div", {}, h("button", { onclick: () => { S.precision = { ...PRECISION_DEFAULTS }; save(); renderSettings(); } }, "Reset to defaults")));
+  renderCvxopfSettings();
+}
+
+// cvxopf solve options group (issue #88): only when cvxopf is installed
+function renderCvxopfSettings() {
+  const cvx = S.meta.solvers.cvxopf;
+  $("#cvxopf-title").hidden = $("#cvxopf-settings").hidden = !cvx;
+  if (!cvx) return;
+  const o = S.cvxopf;
+  const save = () => { try { localStorage.setItem("ppedit.cvxopf", JSON.stringify(S.cvxopf)); } catch (_) { /* storage unavailable */ } };
+  const err = h("div", { class: "hint err-text" });
+  const check = () => { try { parseSolverOptions(o.solverOptions || ""); err.textContent = ""; } catch (e) { err.textContent = e.message; } };
+  const set = (key, value) => { o[key] = value; save(); renderCvxopfSettings(); };
+  const recommended = o.preparation === "recommended";
+  const prep = h("select", { "aria-label": "Numerical preparation", onchange: e => set("preparation", e.target.value) },
+    h("option", { value: "default", selected: !recommended }, "CVXOPF default"),
+    h("option", { value: "recommended", selected: recommended }, "Recommended for this model"));
+  const solver = h("select", { "aria-label": "Solver for the convex models", disabled: recommended,
+      title: recommended ? "The recommended preparation solves the convex models with CLARABEL" : "",
+      onchange: e => set("solver", e.target.value) },
+    h("option", { value: "", selected: !o.solver }, "CLARABEL (default)"),
+    ...cvx.solvers.filter(x => x !== "CLARABEL").map(x => h("option", { value: x, selected: o.solver === x }, x)));
+  const verbose = h("input", { type: "checkbox", checked: !!o.verbose, "aria-label": "Solver output in the log",
+    onchange: e => set("verbose", e.target.checked) });
+  const extra = h("input", { class: "text wide", value: o.solverOptions || "", placeholder: "e.g. max_iter=500, tol=1e-8",
+    spellcheck: "false", "aria-label": "Solver options",
+    onchange: e => { o.solverOptions = e.target.value.trim(); save(); check(); } });
+  check();
+  $("#cvxopf-settings").replaceChildren(
+    h("label", {}, h("span", {}, "Numerical preparation"), prep),
+    h("label", {}, h("span", {}, "Solver (SOCP, DC, copper plate)"), solver),
+    h("label", {}, h("span", {}, "Solver output in the log"), verbose),
+    h("label", {}, h("span", {}, "Solver options"), extra), err,
+    h("div", { class: "hint" }, "Used by the CVXOPF solvers in Run OPF ▾; the network model is the solver chosen there. "
+      + "\u201cRecommended for this model\u201d builds with the numerical preparation (scaling and "
+      + "reformulation) the cvxopf authors recommend for each network model; it solves with CLARABEL, "
+      + "or IPOPT for full AC. Full AC always uses IPOPT. Solver options are name=value pairs passed "
+      + "to the solver (e.g. IPOPT max_iter and tol, CLARABEL tol_gap_rel); tolerances are otherwise "
+      + "the solver defaults."),
+    h("div", {}, h("button", { onclick: () => { S.cvxopf = { ...CVXOPF_DEFAULTS }; save(); renderCvxopfSettings(); } }, "Reset to defaults")));
 }
 
 // ---------------------------------------------------------------- tables
@@ -2271,11 +2344,26 @@ function block(title, head, rows, cls = [], extra = "") {
 
 // ---------------------------------------------------------------- issues
 
+// Errors and warnings of the last solve (result.messages, issue #89), errors
+// first; cleared with the result by any edit
+function solverMessages() {
+  const r = S.state && S.state.result;
+  return r && r.messages ? [...r.messages].sort((a, b) => (a.level === b.level ? 0 : a.level === "error" ? -1 : 1)) : [];
+}
+
 function renderIssues() {
   const box = $("#view-issues");
   const st = S.state;
   const kids = [];
   if (st.case.notes && st.case.notes.length) kids.push(h("div", { class: "notes" }, st.case.notes.map(n => h("div", {}, "Note: " + n))));
+  const msgs = solverMessages();
+  if (msgs.length) {
+    const r = st.result;
+    kids.push(h("h3", { class: "issue-group" }, `Last solve: ${r.dc ? "DC " : ""}${r.kind.toUpperCase()} (${r.solver.replace(/^(AC|DC): /, "")})`));
+    for (const m of msgs) kids.push(h("div", { class: "issue", title: "Show the solver log on the Results tab", onclick: () => show("results") },
+      h("span", { class: `lvl ${m.level}` }, m.level), h("span", { class: "where" }, "solver"), h("span", {}, m.message)));
+    kids.push(h("h3", { class: "issue-group" }, "Case"));
+  }
   if (!st.issues.length) kids.push(h("div", { class: "empty" }, h("div", { class: "big" }, "No issues found"), "The case passes all checks."));
   const sorted = [...st.issues].sort((a, b) => (a.level === b.level ? 0 : a.level === "error" ? -1 : 1));
   for (const is of sorted) {
@@ -2478,10 +2566,12 @@ async function onAction(btn) {
       trigger.title = SOLVING;
       renderChrome();
       try {
-        await act("/api/solve", { kind: btn.dataset.kind, algorithm: btn.dataset.algorithm });
+        await act("/api/solve", solveRequest(btn.dataset.kind, btn.dataset.algorithm));
         const r = S.state.result;
         const what = (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
-        toast(r.success ? `${what} converged` : `${what} did not converge — see Results`, !r.success);
+        const nwarn = (r.messages || []).filter(m => m.level === "warning").length;
+        toast(r.success ? `${what} converged` + (nwarn ? ` with ${nwarn} warning(s) — see Issues` : "")
+          : `${what} did not converge — see Issues and Results`, !r.success);
         if (S.view !== "network") show("results"); else renderNetwork();
       } finally {
         trigger.disabled = false;
@@ -2546,6 +2636,14 @@ async function exitServer() {
   document.title = "ppedit (stopped)";
   S.exited = true; // already confirmed: skip the unsaved-changes prompt on close
   window.close(); // browsers allow this only for some tabs (e.g. no back history); otherwise the page above stays
+}
+
+// /api/solve request; CVXOPF-* solvers get the solve options from the Settings tab
+function solveRequest(kind, algorithm) {
+  const req = { kind };
+  if (algorithm) req.algorithm = algorithm;
+  if (kind === "opf" && algorithm && algorithm.startsWith("CVXOPF-")) req.options = cvxopfOptions();
+  return req;
 }
 
 // Run PF ▾ and Run OPF ▾ list the solvers from /api/meta (OPF: only those
@@ -2647,9 +2745,7 @@ async function init() {
   // (with ?algorithm=NAME, else the default solver) and ?view=NAME opens that tab
   const qs = new URLSearchParams(location.search);
   if (["pf", "opf"].includes(qs.get("solve"))) {
-    const req = { kind: qs.get("solve") };
-    if (qs.get("algorithm")) req.algorithm = qs.get("algorithm");
-    await act("/api/solve", req).catch(() => {});
+    try { await act("/api/solve", solveRequest(qs.get("solve"), qs.get("algorithm"))); } catch (err) { toast(err.message, true); }
   }
   if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
 }

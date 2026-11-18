@@ -178,10 +178,16 @@ CASE_TOOLS = [
         +" (default NR); for opf one of "+", ".join(OPF_SOLVERS)+" (default PIPS; "
         "DC-* solve the DC OPF; IPOPT, CPLEX, MOSEK and Gurobi need their Python "
         "module installed; CVXOPF-* use cvxopf if installed: AC, SOCP relaxation, "
-        "lossy DC network flow, copper plate (1NODE), no prices). Returns a summary; the full result is shown "
-        "in the editor's Results tab.",
+        "lossy DC network flow, copper plate (1NODE), no prices; options for CVXOPF-* only: "
+        "preparation default|recommended, solver (CVXPY solver for the convex models), verbose, "
+        "solver_options {name: value}). Returns a summary with messages (solver errors and "
+        "warnings); the full result is shown in the editor's Results tab.",
         "input_schema":{"type":"object","properties":{"kind":{"type":"string","enum":["pf","opf"]},
-            "algorithm":{"type":"string","enum":[*PF_SOLVERS,*OPF_SOLVERS]}}}},
+            "algorithm":{"type":"string","enum":[*PF_SOLVERS,*OPF_SOLVERS]},
+            "options":{"type":"object","properties":{
+                "preparation":{"type":"string","enum":["default","recommended"]},
+                "solver":{"type":"string"},"verbose":{"type":"boolean"},
+                "solver_options":{"type":"object"}}}}}},
     {"name":"apply_result","description":"Copy the last solution (voltages, "
         "generator outputs) into the case.",
         "input_schema":{"type":"object","properties":{}}},
@@ -486,10 +492,11 @@ class Session:
             return {"issues":issues} if issues else "no issues found",False
         if name == "solve":
             with editor.lock:
-                result = editor.case.solve(args.get("kind","pf"),args.get("algorithm"))
+                result = editor.case.solve(args.get("kind","pf"),args.get("algorithm"),
+                    args.get("options"))
                 editor.result = result
             return {k:result.get(k) for k in ("success","kind","algorithm","iterations","objective",
-                "losses_MW","areas")} | {"log":(result.get("log") or "")[-6000:]},False
+                "losses_MW","areas","messages")} | {"log":(result.get("log") or "")[-6000:]},False
         if name == "apply_result":
             def apply_result():
                 if not editor.result:
