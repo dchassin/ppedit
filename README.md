@@ -188,9 +188,9 @@ In the editor:
     undoable edit and shows up in the other tabs as it happens. Needs an
     API key in `ANTHROPIC_API_KEY` or `~/.anthropic` (see `ppedit.claude`).
   - **Settings**: the case `baseMVA` and `version`, and the display
-    precision (decimal places) of the case table values by unit (MW, MVAr,
-    per-unit impedance, deg, per-unit voltage, $, MW/MW, and others at full
-    precision by default). A value of exactly 0 shows as 0; editing a cell
+    precision (decimal places) of the case table values by unit (defaults:
+    MW, MVAr, MVA, MW/min, MVAr/min, $ 2; per-unit impedance, per-unit
+    voltage, deg, kV, MW/MW 3; no unit 4; blank for full precision). A value of exactly 0 shows as 0; editing a cell
     shows its full value. Saved in the browser, not in the case.
   - Undo/redo (Ctrl+Z, Ctrl+Shift+Z) covers every edit; Ctrl+S saves.
 

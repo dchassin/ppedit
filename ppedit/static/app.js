@@ -57,7 +57,7 @@ const PRECISION_UNITS = [
   ["MVA", "MVA"], ["kV", "kV"], ["MW/min", "MW/min"], ["MVAr/min", "MVAr/min"], ["none", "no unit"],
 ];
 const PRECISION_DEFAULTS = { MW: 2, MVAr: 2, puMVA: 3, deg: 3, puV: 3, $: 2, "MW/MW": 3,
-  MVA: null, kV: null, "MW/min": null, "MVAr/min": null, none: null };
+  MVA: 2, kV: 3, "MW/min": 2, "MVAr/min": 2, none: 4 };
 const PU_VOLTAGE = new Set(["Vm", "Vmax", "Vmin", "Vg", "Vf", "Vt"]);
 function loadPrecision() {
   try { return { ...PRECISION_DEFAULTS, ...JSON.parse(localStorage.getItem("ppedit.precision") || "{}") }; }
