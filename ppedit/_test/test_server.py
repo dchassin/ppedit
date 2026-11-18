@@ -8,6 +8,11 @@ def test_index_and_meta(client):
     assert meta["solvers"]["pf"][0] == {"algorithm":"NR","label":"Newton"}
     assert meta["solvers"]["opf"][0]["algorithm"] == "PIPS"
 
+def test_static_files_not_cached(client):
+    """The page and its files are revalidated on every load"""
+    for url in ["/","/static/app.js","/static/style.css"]:
+        assert client.get(url).headers["Cache-Control"] == "no-cache"
+
 def test_index_has_network_search(client):
     """The network search box follows the Map menu and app.js handles it"""
     page = client.get("/").get_data(as_text=True)

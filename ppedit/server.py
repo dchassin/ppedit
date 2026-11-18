@@ -244,13 +244,19 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     def body():
         return request.get_json(silent=True) or {}
 
+    def no_cache(res):
+        # browsers revalidate (ETag/Last-Modified) on every load, so an
+        # upgraded package is picked up without a hard reload
+        res.headers["Cache-Control"] = "no-cache"
+        return res
+
     @app.get("/")
     def index():
-        return send_from_directory(STATIC,"index.html")
+        return no_cache(send_from_directory(STATIC,"index.html"))
 
     @app.get("/static/<path:name>")
     def static_file(name):
-        return send_from_directory(STATIC,name)
+        return no_cache(send_from_directory(STATIC,name))
 
     @app.get("/api/meta")
     def meta():
