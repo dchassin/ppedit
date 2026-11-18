@@ -133,20 +133,20 @@ def test_areas_api(client,post):
     meta = client.get("/api/meta").get_json()
     assert "areas" in meta["tables"]
     st = client.get("/api/state").get_json()
-    assert st["case"]["tables"]["areas"] == [[1,5]]
+    assert st["case"]["tables"]["areas"] == [[1,5,""]]
     status,st = post("/api/cell",{"table":"bus","row":8,"column":"area","value":"2"})
     assert status == 200
     assert any("area 2" in x["message"] for x in st["issues"])
     status,st = post("/api/rows",{"table":"areas"})
-    assert status == 200 and st["case"]["tables"]["areas"][1] == [2,9]
+    assert status == 200 and st["case"]["tables"]["areas"][1] == [2,9,""]
     _,st = post("/api/solve",{"kind":"pf"})
     assert [a["area"] for a in st["result"]["areas"]] == [1,2]
     status,st = post("/api/rows/delete",{"table":"bus","rows":[8]})
     assert status == 400 and "price reference bus" in st["error"]
     _,st = post("/api/rows/delete",{"table":"bus","rows":[8],"cascade":True})
-    assert st["removed"]["areas"] == 1 and st["case"]["tables"]["areas"] == [[1,5]]
+    assert st["removed"]["areas"] == 1 and st["case"]["tables"]["areas"] == [[1,5,""]]
     _,st = post("/api/undo")
-    assert st["case"]["tables"]["areas"] == [[1,5],[2,9]]
+    assert st["case"]["tables"]["areas"] == [[1,5,""],[2,9,""]]
 
 class _Response:
     """Stand-in for `urllib.request.urlopen` results"""

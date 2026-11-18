@@ -1845,6 +1845,9 @@ def wecc240_2020():
         [20, 1331]
     ])
 
+    ## area names (one per areas row)
+    ppc["areanames"] = ["AESO", "AZPS", "BANC", "BCHA", "BPAT", "CEN", "CISO", "IID", "IPCO", "LDWP", "NEVP", "NWMT", "PACE", "PACW", "PNM", "PSCO", "PSEI", "SRP", "SWPW", "WALC"]
+
     ## geodata (bus locations, decimal degrees)
     # BUS_I LAT LON GEOHASH NAME GEN LOAD BA COUNTY
     ppc["geodata"] = [

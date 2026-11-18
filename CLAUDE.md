@@ -37,7 +37,9 @@ GLM property names, units and keywords; `converters/py2glm.py` for the
   `dclinecost` rows are `[model, startup, shutdown, ncost, costs]` with
   `costs` a comma-separated string (as in the GLM `costs` property).
   `COST_TABLES` maps each cost table to the table it follows row by row.
-  `areas` rows are `[area, price_ref_bus]`.
+  `areas` rows are `[area, price_ref_bus, name]`; `name` is free text
+  kept in `ppc["areanames"]` outside PYPOWER's two-column `areas` array
+  (decision #14b).
 - Every edit goes through `Case.set_value`, `add_row`, `delete_rows`,
   `set_global`, or `apply_result`, which keep references valid (bus
   renumber cascades, bus delete needs `cascade`, gencost follows gen,
