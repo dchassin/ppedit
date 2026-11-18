@@ -20,6 +20,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Change area handling: `COLUMNS["areas"]`, `Case.validate` and `Case._area_summary` in `ppedit/case.py`; `areaRegions`, area grouping in `layout`/`onelineLayout` in `ppedit/static/app.js`; `ppedit/_test/test_areas.py`
 - Change the cvxopf solvers: `OPF_SOLVERS` and `Case.solve` in `ppedit/case.py`; `ppedit/_cvxopf.py`; `ppedit/_test/test_cvxopf.py`
 - Change DC line handling: `COLUMNS["dcline"]`, `COST_TABLES` and `Case.solve` in `ppedit/case.py`; solver callbacks in `ppedit/_dcline.py`; `ppedit/_test/test_dcline.py`
+- Change WECC 240 areas (EIA-930 balancing authorities): `examples/wecc240_ba.csv`, then `python3 examples/build_wecc240_2018.py`; see `examples/README.md`
 - Change WECC 240 generator costs: `examples/wecc240_gentypes.csv` (or rederive it with `examples/wecc240_gentypes.py`), then `python3 examples/build_wecc240_2018.py`; see `examples/README.md`
 - Change PSS/E `.raw` input: `ppedit/_psse.py` (conversion), `INPUT_FORMATS`/`Case.load` in `ppedit/case.py`; `ppedit/_test/test_psse.py` and `ppedit/_test/data/psse_v*.raw`
 - Add an API route: `ppedit/server.py` (and its docstring API list); `ppedit/_test/test_server.py`; call it from `ppedit/static/app.js`
@@ -80,8 +81,9 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/wecc240_gentypes.csv` | polynomial costs (`c2,c1,c0`) by generator type (the PSS/E generator ID) | written by `wecc240_gentypes.py` |
 | `examples/wecc240_gentypes.py` | derives `wecc240_gentypes.csv` from NREL's WECC 240 scheduling workbook | maintenance script; needs `openpyxl` |
 | `examples/wecc240_2011.py` | the 2011 WECC 240-bus case (`wecc240_case.raw` converted by ppedit) with geodata; the Pacific DC Intertie and Intermountain HVDC lines as `dcline` rows (3.5% losses, zero `dclinecost`) | written by ppedit, DC lines edited (see `examples/README.md`); ~90 kB, use `head` |
-| `examples/wecc240_2018.py` | `wecc240_2011.py` with generator costs by type from `wecc240_gentypes.csv`, branch `rateA` from `rateB`/`rateC`, voltage fixes (`Vg` 1.08 pu at five generator buses, shunt reactors at eight buses) and `rateA` raised to a 20% margin on the 13 most loaded branches | written by `build_wecc240_2018.py`; don't edit; ~95 kB, use `head` |
-| `examples/build_wecc240_2018.py` | builds `wecc240_2018.py` from `wecc240_2011.py`, `wecc240_gentypes.csv`, `wecc240_cost.csv` (generator types) and `wecc240_bus.csv` | maintenance script |
+| `examples/wecc240_2018.py` | `wecc240_2011.py` with generator costs by type from `wecc240_gentypes.csv`, branch `rateA` from `rateB`/`rateC`, voltage fixes (`Vg` 1.08 pu at five generator buses, shunt reactors at eight buses), `rateA` raised to a 20% margin on the 13 most loaded branches, and areas set to the EIA-930 balancing authorities from `wecc240_ba.csv` | written by `build_wecc240_2018.py`; don't edit; ~95 kB, use `head` |
+| `examples/build_wecc240_2018.py` | builds `wecc240_2018.py` from `wecc240_2011.py`, `wecc240_gentypes.csv`, `wecc240_cost.csv` (generator types), `wecc240_bus.csv` and `wecc240_ba.csv` | maintenance script |
+| `examples/wecc240_ba.csv` | EIA-930 balancing authority of each WECC 240 bus (`BUS_I,NAME,BA,NOTE`) | curated by hand (issue #90); used by `build_wecc240_2018.py` |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~70 kB, use `head` |
 | `examples/wecc240_geodata.csv` | bus locations for the WECC 240-bus case (`BUS_I,LAT,LON` plus `GEOHASH,NAME,GEN,LOAD,BA,COUNTY`) | for `--geodata` or **Map ▸ Load CSV…** |
 | `examples/wecc240_map.py` | WECC 240-bus case with its `geodata` and `geotags` | written by ppedit; ~105 kB, use `head` |

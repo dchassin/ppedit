@@ -23,6 +23,14 @@ a 20% margin) in that power flow gets `rateA` raised to its larger end flow
 divided by `MAX_LOADING` (rounded up to whole MVA), and its `rateB` and
 `rateC` raised to the new `rateA` where they are lower. Unrated branches stay
 unrated.
+
+Areas are the EIA Form 930 balancing authorities (issue #90): each bus is
+put in the area of its balancing authority code in `examples/wecc240_ba.csv`
+(one row per bus, `BUS_I,NAME,BA,NOTE`; the name is checked against the
+geodata), areas are numbered 1, 2, ... in alphabetical order of the codes
+present, the `areas` rows are rebuilt with their default price reference
+buses, and the geodata `BA` column is set to the code. Areas are not used by
+the solver, so the power flow and the `rateA` changes do not depend on them.
 """
 
 import csv
@@ -48,6 +56,31 @@ def read(name):
     """Rows of an examples CSV file"""
     with open(os.path.join(HERE,name),newline="",encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
+
+def balancing_authorities(case):
+    """Put each bus in the area of its EIA-930 balancing authority
+
+    Returns the area numbers by balancing authority code.
+    """
+    names = {row[0]:row[3+case.geotags.index("NAME")] for row in case.geodata}
+    bas = {}
+    for r in read("wecc240_ba.csv"):
+        bus = int(r["BUS_I"])
+        if names.get(bus) != r["NAME"]:
+            raise ValueError(f"wecc240_ba.csv bus {bus} is {r['NAME']}, "
+                f"not {names.get(bus)} as the geodata says")
+        bas[bus] = r["BA"]
+    missing = [r[0] for r in case.tables["bus"] if r[0] not in bas]
+    if missing:
+        raise ValueError(f"wecc240_ba.csv has no row for buses {missing}")
+    areas = {ba:n+1 for n,ba in enumerate(sorted(set(bas.values())))}
+    for bus in case.tables["bus"]:
+        bus[6] = areas[bas[bus[0]]]
+    case.tables["areas"] = case._default_areas() # pylint: disable=protected-access
+    col = 3 + case.geotags.index("BA")
+    for row in case.geodata:
+        row[col] = bas[row[0]]
+    return areas
 
 def main():
     """Write examples/wecc240_2018.py"""
@@ -92,13 +125,15 @@ def main():
             branch[6] = max(branch[6],rate)
             branch[7] = max(branch[7],rate)
             raised += 1
+    areas = balancing_authorities(case)
     errors = [x["message"] for x in case.validate() if x["level"] == "error"]
     if errors:
         raise ValueError("; ".join(errors))
     case.save(os.path.join(HERE,"wecc240_2018.py"))
     print(f"wrote examples/wecc240_2018.py: {case.size()}; rateA from rateB "
         f"{counts['rateB']}, from rateC {counts['rateC']}, unrated {counts['unrated']}; "
-        f"rateA raised on {raised} branches")
+        f"rateA raised on {raised} branches; {len(areas)} areas: "
+        f"{', '.join(f'{n} {ba}' for ba,n in areas.items())}")
 
 if __name__ == "__main__":
     main()
