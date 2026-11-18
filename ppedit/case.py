@@ -340,6 +340,20 @@ SOLVER_WARNINGS = 10
 """Most distinct Python warnings from a solver that `Case.solve` lists in
 `messages` (the rest are counted)"""
 
+ISOLATED_EXPLAIN = ("A bus with no in-service branch has no electrical connection to the rest "
+    "of the network, so no voltage can be solved for it and its load, shunts and generators "
+    "cannot be served. ppedit solves it as type NONE (left out) without changing the case. "
+    "Put a branch to it in service, or set the bus type to NONE (4) to make this explicit.")
+"""Physical meaning of the isolated-bus solver warning (`detail["explain"]`)"""
+
+DCLINE_CUT_EXPLAIN = ("A DC line with a terminal at an isolated or type NONE bus has nowhere "
+    "to deliver or draw power, so it is left out of the solve with zero flow.")
+"""Physical meaning of the unsolved-DC-line solver warning (`detail["explain"]`)"""
+
+def _message_detail(explain:str,constraints:list) -> dict:
+    """Return a solver message `detail` (see `Case.solve`), listing at most 20 constraints"""
+    return {"explain":explain,"constraints":constraints[:20],"more":max(0,len(constraints)-20)}
+
 GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
 latitude and longitude are decimal degrees (WGS84)"""
@@ -1347,8 +1361,9 @@ def {name}():
             in $/MWh). `losses_MW` includes the DC line losses, which are
             also given alone as `dcline_losses_MW`. `areas` has a row for
             each bus area (see below). `messages` lists the solver's errors
-            and warnings as `{"level": "error"|"warning", "message"}`
-            (see below); `options` gives the cvxopf solve options used
+            and warnings as `{"level": "error"|"warning", "message"}`,
+            with `detail` when ppedit can say what a warning means (see
+            below); `options` gives the cvxopf solve options used
             (`None` for other solvers).
 
         `messages` has an error when the solver fails or does not
@@ -1356,7 +1371,14 @@ def {name}():
         solved, data the solver does not model (cvxopf), cvxopf's warnings,
         an SOCP relaxation that is not exact, and the distinct Python
         warnings the solver raised (at most `SOLVER_WARNINGS`). Each is
-        also written to `log`.
+        also written to `log`. Warnings about isolated buses, unsolved DC
+        lines and cvxopf's notes and warnings have a `detail` (decision
+        #36m): `explain` (what the warning means physically), `constraints`
+        (rows of `constraint`, `element`, `table`, `row` and `value`: the
+        constraints involved and the case rows they belong to, at most 20)
+        and `more` (constraints not listed). cvxopf's per-element warnings
+        are grouped (one message for all `rateA` = 0 branches) and refer to
+        case rows and bus numbers, not cvxopf's internal indexes.
 
         Buses with no in-service branch are solved as isolated (type NONE)
         without changing the case; `log` names them. DC lines are modeled
@@ -1445,12 +1467,16 @@ def {name}():
             "options":cvx_options}
         log = io.StringIO()
         messages = []
-        def message(level,text):
-            messages.append({"level":level,"message":text})
+        def message(level,text,detail=None):
+            messages.append({"level":level,"message":text} | ({"detail":detail} if detail else {}))
             log.write(text + "\n")
+        busrow = {r[0]:n for n,r in enumerate(self.tables["bus"])}
         if isolated:
             message("warning",f"Solved bus(es) {', '.join(str(x) for x in isolated)} as isolated "
-                "(type NONE): no in-service branch")
+                "(type NONE): no in-service branch",_message_detail(ISOLATED_EXPLAIN,
+                [{"constraint":"bus left out of the solve (type NONE): no voltage, its load, "
+                "shunts and generators are not served","element":f"bus {x}","table":"bus",
+                "row":busrow[x],"value":None} for x in isolated]))
         if "dcline" in ppc:
             from ppedit._dcline import add_dclines # pylint: disable=import-outside-toplevel
             dead = {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated)
@@ -1460,7 +1486,9 @@ def {name}():
                 ppc["dcline"][n,2] = 0
             if cut:
                 message("warning",f"DC line(s) {', '.join(str(n+1) for n in cut)} not solved: "
-                    "terminal bus is isolated")
+                    "terminal bus is isolated",_message_detail(DCLINE_CUT_EXPLAIN,
+                    [{"constraint":"Pf = Pt = 0 (line taken out of the solve)",
+                    "element":f"dcline {n+1}","table":"dcline","row":n,"value":None} for n in cut]))
             if not cvx:
                 ppc = add_dclines(ppc)
         what = ("DC " if dc else "") + kind.upper() + f" ({re.sub(r'^(AC|DC): ','',algs[algorithm][0])})"
@@ -1485,8 +1513,9 @@ def {name}():
             message("error",f"{what} failed: {failed}")
             return {"success":False,**info,"log":log.getvalue(),"messages":messages,
                 "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
-        for text in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
-            messages.append({"level":"warning","message":text})
+        for w in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
+            messages.append({"level":"warning","message":w["message"]}
+                | ({"detail":w["detail"]} if w.get("detail") else {}))
         if not res["success"]:
             message("error",f"{what} did not converge"
                 + (f" (solver status {res['status']})" if "status" in res else "")

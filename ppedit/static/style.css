@@ -350,6 +350,18 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 .issue .lvl.error { background: var(--err-bg); color: var(--err); }
 .issue .lvl.warning { background: var(--warn-bg); color: var(--warn); }
 .issue .where { font-family: var(--mono); font-size: 12px; color: var(--muted); min-width: 120px; }
+.issue.has-detail > span:last-child::after { content: " ▸"; color: var(--muted); }
+.issue.has-detail.open { border-color: var(--accent); border-bottom-left-radius: 0; border-bottom-right-radius: 0; margin-bottom: 0; }
+.issue.has-detail.open > span:last-child::after { content: " ▾"; }
+.issue-detail { border: 1px solid var(--accent); border-top: none; border-radius: 0 0 6px 6px; background: var(--panel); padding: 8px 12px 10px; margin-bottom: 6px; font-size: 13px; }
+.issue-detail .explain { margin: 0 0 8px; line-height: 1.45; max-width: 90ch; }
+.issue-detail table.constraints { border-collapse: collapse; margin-bottom: 6px; }
+.issue-detail .constraints th, .issue-detail .constraints td { text-align: left; padding: 3px 10px 3px 0; border-bottom: 1px solid var(--line); vertical-align: top; }
+.issue-detail .constraints td:first-child { white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+.issue-detail .constraints td.num { white-space: nowrap; font-family: var(--mono); font-size: 12px; }
+.issue-detail .more { color: var(--muted); margin-bottom: 6px; }
+.issue-detail .log-link { font-size: 12px; }
+.issue-detail a { color: var(--accent); }
 .source-report { margin: 0 0 14px; padding-bottom: 10px; }
 .source-report:not(:first-child) { margin-top: 14px; }
 .source-report .hint { display: block; margin: 0; padding: 8px 12px 0; }

@@ -202,7 +202,10 @@ What is not promised
 
   - Solver messages (`messages` of a solution, listed on the Issues tab)
     report what the solver reports and what ppedit changed to solve the
-    case; they are not a diagnosis of why a solve failed.
+    case; they are not a diagnosis of why a solve failed. The `detail` of a
+    warning (its physical meaning and the constraints involved) covers the
+    warnings ppedit knows; other cvxopf and Python warnings have none, and
+    its text may need revising as cvxopf changes.
 
 Data
 ----
