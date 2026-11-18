@@ -98,7 +98,14 @@ ppedit server downloads the URL (`ppedit.server.download_case`, at most
 access to that host. A GitHub file page link (`.../blob/...`) is changed
 to its raw file link, and other web pages are refused. The extension of the URL path selects the format, and
 `.py` cases are parsed, never executed. Neither kind has a file path until
-it is saved with *Save as*.
+it is saved with *Save as* or the folder chooser.
+
+The top bar shows the folder of the open file (the full path is its
+tooltip). Clicking it opens a folder chooser that browses folders on the
+server machine (`POST /api/folders`, `ppedit.server.list_folder`) and saves
+the case into the chosen folder under the file name given in the menu
+(default: the open file's name, else the case name with `.glm`); replacing
+an existing file asks first.
 
 The page takes optional URL parameters, so another tool can open it ready to
 show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver

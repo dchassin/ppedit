@@ -214,3 +214,27 @@ def test_solve_messages_and_options(post):
         code,st = post("/api/solve",{"kind":"opf","algorithm":"CVXOPF-DC",
             "options":{"preparation":"nope"}})
         assert code == 400 and "preparation" in st["error"]
+
+def test_folders(tmp_path,post):
+    """The folder chooser lists subfolders and savable case files"""
+    (tmp_path/"sub").mkdir()
+    (tmp_path/".hidden").mkdir()
+    (tmp_path/"a.glm").write_text("")
+    (tmp_path/"notes.txt").write_text("")
+    status,ls = post("/api/folders",{"path":str(tmp_path)})
+    assert status == 200 and ls["path"] == str(tmp_path)
+    assert ls["folders"] == ["sub"] and ls["files"] == ["a.glm"]
+    assert ls["parent"] == str(tmp_path.parent)
+    path = str(tmp_path/"sub"/"out.json")
+    _,st = post("/api/save",{"path":path})
+    _,ls = post("/api/folders",{}) # default: the open file's folder
+    assert ls["path"] == str(tmp_path/"sub") and ls["files"] == ["out.json"]
+    status,ls = post("/api/folders",{"path":str(tmp_path/"missing")})
+    assert status == 400 and "not a folder" in ls["error"]
+
+def test_index_has_folder_chooser(client):
+    """The top bar path opens the folder chooser"""
+    page = client.get("/").get_data(as_text=True)
+    assert 'id="case-path"' in page and 'id="folder-menu"' in page
+    js = client.get("/static/app.js").get_data(as_text=True)
+    assert "function toggleFolderMenu(" in js and "/api/folders" in js

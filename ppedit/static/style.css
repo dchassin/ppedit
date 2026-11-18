@@ -60,12 +60,26 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 }
 .name-input:hover, .name-input:focus { border-color: #3a4642; outline: none; }
 .dirty { color: #e3a33b; font-size: 11px; }
-.path { margin-left: auto; min-width: 0; overflow: hidden; } /* ltr, carries the tooltip */
+.path-menu { margin-left: auto; min-width: 0; }
+.topbar button.path { /* the open file's folder; click to choose another (#folder-menu) */
+  display: block; max-width: 100%; min-width: 0; overflow: hidden;
+  background: none; border-color: transparent; padding: 2px 6px;
+}
+.topbar button.path:hover { border-color: #3a4642; }
 .path-text {
   display: block; color: #9aa6a1; font-family: var(--mono); font-size: 11px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: right;
-  direction: rtl; /* ellipsis on the left so the basename stays visible; app.js adds LRMs to keep the path in order */
+  direction: rtl; /* ellipsis on the left so the last folder stays visible; app.js adds LRMs to keep the path in order */
 }
+.dropdown.folders { min-width: 320px; max-width: min(560px, 90vw); }
+.dropdown.folders .cwd { font-family: var(--mono); font-size: 11px; padding: 2px 10px 6px; word-break: break-all; }
+.dropdown.folders .list { max-height: 45vh; overflow: auto; border-block: 1px solid var(--line); margin: 2px 0; }
+.dropdown.folders .list button { font-family: var(--mono); font-size: 12px; }
+.dropdown.folders .list .file { color: var(--muted); font-family: var(--mono); font-size: 12px; padding: 3px 10px; }
+.dropdown.folders .foot { display: flex; align-items: center; gap: 6px; padding: 6px; }
+.dropdown.folders .foot input { flex: 1; min-width: 0; border: 1px solid var(--line-strong); border-radius: 5px; padding: 4px 8px; font-family: var(--mono); font-size: 12px; }
+.dropdown.folders .foot button { width: auto; flex: none; border: 1px solid var(--accent); border-radius: 4px; }
+.dropdown.folders .foot button:hover { background: var(--accent); color: var(--accent-ink); }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 6px; margin-left: auto; }
 .divider { width: 1px; height: 20px; background: #3a4642; margin: 0 4px; }
 .menu { position: relative; }

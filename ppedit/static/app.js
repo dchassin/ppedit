@@ -196,8 +196,8 @@ function renderChrome() {
   const name = $("#case-name");
   if (document.activeElement !== name) name.value = c.name;
   $("#dirty").hidden = !st.dirty;
-  $("#case-path > .path-text").textContent = "\u200e" + (st.path || "not saved to a file") + "\u200e"; // LRMs: keep LTR order in the rtl span
-  $("#case-path").title = st.path || "";
+  $("#case-path > .path-text").textContent = "\u200e" + (st.path ? splitPath(st.path).dir : "not saved to a file") + "\u200e"; // LRMs: keep LTR order in the rtl span
+  $("#case-path").title = (st.path || "Not saved to a file") + "\nClick to choose the folder to save in";
   $("#save-btn").disabled = !st.path;
   $("#undo-btn").disabled = !st.can_undo;
   $("#redo-btn").disabled = !st.can_redo;
@@ -2637,6 +2637,64 @@ async function saveTo(path) {
   toast(`Saved ${S.state.path}`);
 }
 
+// Folder chooser (#folder-menu): the top bar shows the open file's folder;
+// clicking it browses folders on the server machine (POST /api/folders) and
+// saves the case there under the file name in the menu.
+function splitPath(path) {
+  const i = Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\"));
+  return { dir: path.slice(0, i + 1), base: path.slice(i + 1) };
+}
+
+function defaultFileName() {
+  const st = S.state;
+  return (st.path ? splitPath(st.path).base : `${st.case.name || "untitled"}.glm`).replace(/\.raw$/i, ".glm");
+}
+
+async function toggleFolderMenu() {
+  const menu = $("#folder-menu");
+  const open = menu.classList.contains("open");
+  closeMenus();
+  if (open) return;
+  menu.replaceChildren(h("div", { class: "note" }, "Reading folder…"));
+  menu.classList.add("open");
+  await showFolder(null, defaultFileName());
+}
+
+async function showFolder(path, name) {
+  const menu = $("#folder-menu");
+  let ls;
+  try { ls = await api("/api/folders", path ? { path } : {}); }
+  catch (err) { return toast(err.message, true); }
+  const sep = ls.path.includes("\\") && !ls.path.includes("/") ? "\\" : "/";
+  const join = (dir, n) => dir.endsWith(sep) ? dir + n : dir + sep + n;
+  const input = h("input", { value: name, spellcheck: "false", title: "File name (.py, .json or .glm)" });
+  const go = p => e => { e.stopPropagation(); showFolder(p, input.value.trim() || name); };
+  const save = async e => {
+    e.stopPropagation();
+    const file = input.value.trim();
+    if (!file) return toast("Enter a file name", true);
+    if (/[\\/]/.test(file)) return toast("Enter a file name without folders", true);
+    const target = join(ls.path, file);
+    if (target !== S.state.path && ls.files.includes(file)
+      && !confirm(`${target} already exists.\n\nReplace it?`)) return;
+    closeMenus();
+    await saveTo(target);
+  };
+  input.addEventListener("keydown", e => { if (e.key === "Enter") save(e); });
+  menu.replaceChildren(
+    h("div", { class: "sep" }, "Save in folder"),
+    h("div", { class: "cwd", title: ls.path }, ls.path),
+    h("div", { class: "list" },
+      ls.parent ? h("button", { onclick: go(ls.parent), title: ls.parent }, "↑ ..") : null,
+      ls.folders.map(f => h("button", { onclick: go(join(ls.path, f)) }, f + sep)),
+      ls.files.map(f => h("div", { class: "file", title: "Click to use this file name",
+        onclick: e => { e.stopPropagation(); input.value = f; input.focus(); } }, f)),
+      ls.folders.length || ls.files.length ? null : h("div", { class: "note" }, "No folders or case files")),
+    h("div", { class: "foot" }, input, h("button", { onclick: save }, "Save here")));
+  input.focus();
+  input.setSelectionRange(0, input.value.replace(/\.[^.]*$/, "").length);
+}
+
 async function exitServer() {
   const msg = S.state.dirty
     ? "The case has unsaved changes that will be lost.\n\nStop the ppedit server anyway?"
@@ -2685,6 +2743,7 @@ async function init() {
     if (b.disabled && !b.classList.contains("solving")) toast(OPF_NO_COST, true);
   });
   document.addEventListener("click", e => {
+    if (e.target.closest("#case-path")) return toggleFolderMenu();
     const m = e.target.closest("[data-menu]");
     if (m) {
       const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus();
