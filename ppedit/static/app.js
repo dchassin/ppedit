@@ -372,10 +372,10 @@ function flashRow(i) {
 // ---------------------------------------------------------------- network
 
 function vColor(vm) {
-  // diverging: low (red) .. 1.0 (neutral) .. high (blue)
+  // diverging: low (blue) .. 1.0 (neutral) .. high (red), in every style
   const t = Math.max(-1, Math.min(1, (vm - 1) / 0.06));
   const lerp = (a, b, u) => Math.round(a + (b - a) * u);
-  const mid = [222, 226, 221], lo = [193, 54, 38], hi = [36, 99, 170];
+  const mid = [222, 226, 221], lo = [36, 99, 170], hi = [193, 54, 38];
   const end = t < 0 ? lo : hi, u = Math.abs(t);
   return `rgb(${lerp(mid[0], end[0], u)},${lerp(mid[1], end[1], u)},${lerp(mid[2], end[2], u)})`;
 }
@@ -458,9 +458,8 @@ function fitView() {
 }
 
 let needFit = true;
-// classic style: blue = low, red = high (voltage and loading)
-function vColorClassic(vm) { return vColor(2 - vm); }
-function loadColor(L) { return vColor(1 - (Math.min(L, 150) - 50) / 50 * 0.06); }
+// line loading: blue = low, red = high
+function loadColor(L) { return vColor(1 + (Math.min(L, 150) - 50) / 50 * 0.06); }
 const NEUTRAL_LINE = "#8d9792";
 const DC_COLOR = "#7b4fa0"; // matches --dc in style.css
 const AREA_COLORS = ["#4e79a7", "#f28e2b", "#59a14f", "#e15759", "#76b7b2", "#edc948", "#b07aa1", "#9c755f", "#ff9da7", "#8cd17d"];
@@ -842,7 +841,7 @@ function renderNetwork() {
     if (classic) {
       const isolated = b[1] === 4 || (c.tables.bus.length > 1 && !sum.conn.has(b[0]));
       if (isolated) cls.push("isolated");
-      const fill = isolated ? "none" : vColorClassic(v.Vm);
+      const fill = isolated ? "none" : vColor(v.Vm);
       let shape;
       if (hasGen) { r = 8; shape = sv("circle", { r, class: "body", fill }); }
       else if (hasLoad) { r = 9; shape = sv("path", { d: `M0,${-r} L${r * 0.95},${r * 0.7} L${-r * 0.95},${r * 0.7} Z`, class: "body", fill }); }
@@ -1400,7 +1399,7 @@ function renderLegend(solved, classic, oneline = false) {
       h("div", { class: "row" }, shape(`<rect x="-5" y="-5" width="10" height="10" fill="none" ${st}/>`), "disconnected"),
       h("div", { class: "row" }, shape(`<circle r="3" fill="#dee2dd" ${st}/><circle r="6.5" fill="none" ${st}/>`), "reference bus"),
       h("div", {}, `Voltage magnitude (pu)${solved ? "" : " — case values; run PF for solution"}`),
-      h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColorClassic(.94)},${vColorClassic(1)},${vColorClassic(1.06)})` }), "1.06"),
+      h("div", { class: "row" }, "0.94", h("span", { class: "bar", style: `background:linear-gradient(90deg,${vColor(.94)},${vColor(1)},${vColor(1.06)})` }), "1.06"),
       h("div", {}, solved ? "Line loading (% of rateA), MW flow labels" : "Line loading and MW flows shown after a solve"),
       h("div", { class: "row" }, "0%", h("span", { class: "bar", style: `background:linear-gradient(90deg,${loadColor(0)},${loadColor(50)},${loadColor(100)})` }), "100%+"),
       h("div", { class: "row" }, h("span", { style: `color:${DC_COLOR}` }, "–·– DC"), "DC line"),
