@@ -16,8 +16,9 @@ Every successful call returns the editor state: `case` (see
 `ppedit.Case.to_dict`), `path`, `format`, `dirty`, `issues`, `can_undo`,
 `can_redo`, `result` (last solution or `null`), `cascade` (whether the
 last edit changed cells other than the one edited), and `revision` (a
-counter that changes whenever the case changes), and `source` (how the
-open case was read, see `ppedit.Case.source`, or `null`). Errors return
+counter that changes whenever the case changes), `source` (how the
+open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
+(loads switched off by `POST /api/load`, as `[bus, Pd, Qd]`). Errors return
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
@@ -34,6 +35,10 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
     and downloads have no path until saved)
   - `POST /api/global`: `{"key": "baseMVA"|"version"|"name", "value": ...}`
   - `POST /api/cell`: `{"table", "row", "column", "value"}`
+  - `POST /api/load`: `{"bus"}` switch the load at bus number `bus` off
+    (`Pd` and `Qd` set to 0, their values kept) or back on (the kept values
+    restored), as one undoable edit (see `Editor.toggle_load`); state
+    `loads_off` lists the loads switched off as `[bus, Pd, Qd]`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
   - `POST /api/undo`, `POST /api/redo`
@@ -257,24 +262,35 @@ class Editor:
         self.redo_stack = []
         self.revision = 0
         """Counter incremented whenever the case changes (edit, undo, redo, open)"""
+        self.loads_off = {}
+        """Loads switched off by `toggle_load`: bus number -> `[Pd, Qd]` to restore"""
         self.lock = threading.RLock()
 
     def _snapshot(self):
         return (copy.deepcopy(self.case.tables),self.case.baseMVA,
             self.case.version,self.case.name,
-            copy.deepcopy(self.case.geodata),list(self.case.geotags))
+            copy.deepcopy(self.case.geodata),list(self.case.geotags),
+            copy.deepcopy(self.loads_off))
 
     def _restore(self,snap):
-        tables,base,version,name,geodata,geotags = snap
+        tables,base,version,name,geodata,geotags,loads_off = snap
         self.case.tables = copy.deepcopy(tables)
         self.case.baseMVA,self.case.version,self.case.name = base,version,name
         self.case.geodata,self.case.geotags = copy.deepcopy(geodata),list(geotags)
+        self.loads_off = copy.deepcopy(loads_off)
+
+    def _prune_loads_off(self):
+        # a switched-off load stays off only while its bus exists with Pd = Qd = 0
+        zero = {b[0] for b in self.case.tables["bus"] if b[2] == 0 and b[3] == 0}
+        for bus in [b for b in self.loads_off if b not in zero]:
+            del self.loads_off[bus]
 
     def edit(self,func):
         """Run `func()` as one undoable edit; roll back if it raises"""
         snap = self._snapshot()
         try:
             out = func()
+            self._prune_loads_off()
         except Exception:
             self._restore(snap)
             raise
@@ -291,6 +307,7 @@ class Editor:
         """Open a different case (clears history)"""
         self.case,self.path = case,path
         self.dirty,self.result = False,None
+        self.loads_off = {}
         self.undo_stack.clear()
         self.redo_stack.clear()
         self.revision += 1
@@ -313,6 +330,48 @@ class Editor:
         self.dirty,self.result = True,None
         self.revision += 1
 
+    def toggle_load(self,bus:int) -> bool:
+        """Switch the load at a bus off or back on, as one undoable edit
+
+        A load with `Pd` or `Qd` not zero is switched off: both are set to 0
+        and their values are kept in `loads_off`. A load switched off this way
+        is switched back on by restoring those values. The values are kept
+        with the undo history but not in the case file, so a saved case has
+        `Pd = Qd = 0` there; editing `Pd` or `Qd`, or renumbering or deleting
+        the bus, forgets them.
+
+        Arguments
+        ---------
+
+          - `bus`: bus number (`bus_i`)
+
+        Returns
+        -------
+
+          - `bool`: `True` if the load is now on
+        """
+        rows = [i for i,b in enumerate(self.case.tables["bus"]) if b[0] == bus]
+        if not rows:
+            raise CaseError(f"bus {bus} not found")
+        row = rows[0]
+
+        def run():
+            record = self.case.tables["bus"][row]
+            if record[2] != 0 or record[3] != 0:
+                saved = [record[2],record[3]]
+                self.case.set_value("bus",row,"Pd",0)
+                self.case.set_value("bus",row,"Qd",0)
+                self.loads_off[bus] = saved
+                return False
+            if bus not in self.loads_off:
+                raise CaseError(f"bus {bus} has no switched-off load to restore")
+            pd,qd = self.loads_off.pop(bus)
+            self.case.set_value("bus",row,"Pd",pd)
+            self.case.set_value("bus",row,"Qd",qd)
+            return True
+
+        return self.edit(run)
+
     def state(self,cascade:bool=False) -> dict:
         """Return the editor state sent to the browser"""
         fmt = INPUT_FORMATS.get(os.path.splitext(self.path)[1].lower()) if self.path else None
@@ -328,6 +387,7 @@ class Editor:
             "cascade": cascade,
             "revision": self.revision,
             "source": self.case.source,
+            "loads_off": [[bus,pd,qd] for bus,(pd,qd) in sorted(self.loads_off.items())],
         }
 
 def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
@@ -451,6 +511,13 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             cascade = editor.edit(lambda: editor.case.set_value(
                 data["table"],int(data["row"]),data["column"],data["value"]))
             return jsonify(editor.state(cascade))
+
+    @app.post("/api/load")
+    def toggle_load():
+        data = body()
+        with editor.lock:
+            editor.toggle_load(int(data["bus"]))
+            return jsonify(editor.state())
 
     @app.post("/api/rows")
     def add_row():

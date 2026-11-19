@@ -1095,6 +1095,9 @@ function renderNetwork() {
 const OL = { dx: 34, gen: 112, load: 112, bare: 30, gap: 84, label: 80, pad: 12 };
 let olCache = null;
 
+// loads switched off with POST /api/load (state loads_off): bus number -> [Pd, Qd] to restore
+function loadsOff() { return new Map((S.state.loads_off || []).map(([bus, pd, qd]) => [bus, [pd, qd]])); }
+
 function onelineLayout() {
   const T = S.state.case.tables;
   const buses = T.bus.map(b => b[0]);
@@ -1102,7 +1105,8 @@ function onelineLayout() {
   const brs = T.branch.map((b, i) => [b, i]).filter(([b]) => ids.has(b[0]) && ids.has(b[1]) && b[0] !== b[1]);
   const dcs = T.dcline.map((d, i) => [d, i]).filter(([d]) => ids.has(d[0]) && ids.has(d[1]) && d[0] !== d[1]);
   const grouped = showAreas(), area = new Map(T.bus.map(b => [b[0], b[6]]));
-  const sig = JSON.stringify([buses, T.bus.map(b => b[2] !== 0 || b[3] !== 0), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0]), dcs.map(([d]) => [d[0], d[1]]),
+  const off = loadsOff(), hasLoad = b => b[2] !== 0 || b[3] !== 0 || off.has(b[0]);
+  const sig = JSON.stringify([buses, T.bus.map(hasLoad), brs.map(([b]) => [b[0], b[1]]), T.gen.map(g => g[0]), dcs.map(([d]) => [d[0], d[1]]),
     grouped ? T.bus.map(b => b[6]) : null]);
   if (olCache && olCache.sig === sig) return olCache;
   const adj = new Map(buses.map(b => [b, new Set()]));
@@ -1176,7 +1180,7 @@ function onelineLayout() {
     return s;
   };
   T.gen.forEach((g, i) => { if (ids.has(g[0])) add(u.get(g[0]) - 1e-9, "gen", i, g[0]); });
-  T.bus.forEach(b => { if (b[2] !== 0 || b[3] !== 0) add(u.get(b[0]) + 1e-9, "load", b[0], b[0]); });
+  T.bus.forEach(b => { if (hasLoad(b)) add(u.get(b[0]) + 1e-9, "load", b[0], b[0]); });
   // every line gets a column at each end, inside its own bus's bar on the side facing the
   // other bus (lines going farther sit farther out), and is drawn with one horizontal jog
   // between them, so bars span only their own equipment; with areas shown, a line between
@@ -1308,6 +1312,14 @@ function renderOneline() {
     el.addEventListener("click", e => { e.stopPropagation(); pick(kind, index); });
     return el;
   };
+  // switching devices (breakers, disconnect switches) toggle what they show on a click
+  const onToggle = (el, toggle) => {
+    el.classList.add("ol-toggle");
+    el.addEventListener("pointerdown", e => e.stopPropagation());
+    el.addEventListener("click", e => { e.stopPropagation(); toggle().catch(() => {}); });
+    return el;
+  };
+  const setStatus = (table, i, on) => () => act("/api/cell", { table, row: i, column: "status", value: on ? 0 : 1 });
   // MW to the left and MVAr to the right of a vertical line, centered at yc, reading upward
   const flowLabels = (xx, yc, p, q) => {
     if (!showText) return;
@@ -1328,17 +1340,21 @@ function renderOneline() {
     });
   };
   // disconnect switch between ya (pivot, bus side) and yb; open blades swing out 35 degrees
-  const discSwitch = (xx, ya, yb, closed) => {
+  const discSwitch = (xx, ya, yb, closed, toggle, title) => {
     const sgn = Math.sign(yb - ya), len = Math.abs(yb - ya);
     const ex = closed ? xx : xx + len * Math.sin(0.61), ey = closed ? yb : ya + sgn * len * Math.cos(0.61);
     const grp = sv("g", { class: "ol-switch" + (closed ? "" : " open") });
     grp.append(sv("line", { x1: xx, y1: ya, x2: ex, y2: ey }),
       sv("circle", { cx: xx, cy: ya, r: 1.8 }), sv("circle", { cx: xx, cy: yb, r: 1.8 }));
     if (!closed) grp.append(sv("line", { x1: xx - 4, y1: yb, x2: xx + 4, y2: yb }));
+    const hit = sv("rect", { x: xx - 6, y: Math.min(ya, yb) - 2, width: 6 + len * Math.sin(0.61), height: len + 4, class: "ol-switch-hit" });
+    grp.append(tip(onToggle(hit, toggle), title));
     wires.append(grp);
   };
-  const breaker = (xx, yc, closed) =>
-    lines.append(sv("rect", { x: xx - 5, y: yc - 5, width: 10, height: 10, class: "ol-breaker" + (closed ? "" : " open") }));
+  const breaker = (xx, yc, closed, toggle, title) => {
+    const r = sv("rect", { x: xx - 5, y: yc - 5, width: 10, height: 10, class: "ol-breaker" + (closed ? "" : " open") });
+    lines.append(tip(onToggle(r, toggle), title));
+  };
   const arrow = (xx, yc, downward) => {
     const s = downward ? 1 : -1;
     lines.append(sv("path", { d: `M${xx - 4},${yc - 4 * s} L${xx + 4},${yc - 4 * s} L${xx},${yc + 4 * s} Z`, class: "ol-arrow" }));
@@ -1351,8 +1367,10 @@ function renderOneline() {
     const p = on ? (res && res.gen[i] ? res.gen[i].Pg : gr[1]) : 0, q = on ? (res && res.gen[i] ? res.gen[i].Qg : gr[2]) : 0;
     wires.append(sv("line", { x1: xx, y1: yb, x2: xx, y2: yb - 12, class: "ol-pseudo" }),
       sv("line", { x1: xx, y1: yb - 28, x2: xx, y2: gc + 12, class: "ol-pseudo" + (on ? "" : " dead") }));
-    discSwitch(xx, yb - 12, yb - 28, on);
-    const sym = onPick(sv("g", { class: "ol-gen" + (on ? "" : " dead") }), "bus", busIndex.get(gr[0]));
+    discSwitch(xx, yb - 12, yb - 28, on, setStatus("gen", i, on),
+      `gen ${i + 1} switch (${on ? "closed" : "open"}): click to switch it ${on ? "out of" : "into"} service`);
+    const sel = S.pick && S.pick.kind === "gen" && S.pick.index === i;
+    const sym = onPick(sv("g", { class: "ol-gen" + (on ? "" : " dead") + (sel ? " sel" : "") }), "gen", i);
     sym.append(sv("circle", { cx: xx, cy: gc, r: 12 }),
       sv("path", { d: `M${xx - 7},${gc} c2,-6 5,-6 7,0 s5,6 7,0`, class: "wave" }));
     tip(sym, `gen ${i + 1} at bus ${gr[0]} (${on ? "in service" : "out of service"})\nPg ${num(p)} MW, Qg ${num(q)} MVAr`);
@@ -1365,16 +1383,19 @@ function renderOneline() {
     }
   });
   // loads: arrow below the bar, joined by a pseudo-line and pseudo-switch (open when the bus is NONE)
+  const off = loadsOff();
   T.bus.forEach((b, i) => {
     const xx = L.load.get(b[0]);
     if (xx === undefined) return;
-    const on = b[1] !== 4, yb = L.bar.get(b[0]).y, ya = yb + OL.load - 26;
+    const was = off.get(b[0]), on = b[1] !== 4 && !was, yb = L.bar.get(b[0]).y, ya = yb + OL.load - 26;
     const p = on ? b[2] : 0, q = on ? b[3] : 0;
     wires.append(sv("line", { x1: xx, y1: yb, x2: xx, y2: yb + 12, class: "ol-pseudo" }),
       sv("line", { x1: xx, y1: yb + 28, x2: xx, y2: ya, class: "ol-pseudo" + (on ? "" : " dead") }));
-    discSwitch(xx, yb + 12, yb + 28, on);
+    discSwitch(xx, yb + 12, yb + 28, on, () => act("/api/load", { bus: b[0] }),
+      was ? `load at bus ${b[0]} switched off: click to restore Pd ${num(was[0])} MW, Qd ${num(was[1])} MVAr`
+        : `load at bus ${b[0]}: click to switch it off (Pd and Qd to 0)`);
     const sym = onPick(sv("path", { d: `M${xx - 7},${ya} L${xx + 7},${ya} L${xx},${ya + 13} Z`, class: "ol-load" + (on ? "" : " dead") }), "bus", i);
-    tip(sym, `load at bus ${b[0]}${on ? "" : " (bus NONE: disconnected)"}\nPd ${num(p)} MW, Qd ${num(q)} MVAr`);
+    tip(sym, `load at bus ${b[0]}${was ? " (switched off)" : b[1] === 4 ? " (bus NONE: disconnected)" : ""}\nPd ${num(p)} MW, Qd ${num(q)} MVAr`);
     wires.append(sym);
     if (showLabel("bus", ":load")) flowLabels(xx, yb + 57, p, q);
   });
@@ -1405,8 +1426,6 @@ function renderOneline() {
     if (rb && rb.loading_pct !== null && !sel) line.style.stroke = loadColor(rb.loading_pct);
     lines.append(line,
       sv("circle", { cx: xx, cy: ya, r: 2.8, class: "ol-dot" }), sv("circle", { cx: R.x2, cy: yb, r: 2.8, class: "ol-dot" }));
-    breaker(xx, ya + 20, on);
-    breaker(R.x2, yb - 20, on);
     // symbols and labels go in the first gap below the upper bar, clear of any bar the line
     // crosses, and above the jog of a line that has one
     const seg = R.yj === null ? R.seg : Math.min(R.seg, (R.yj - ya) * 1.1);
@@ -1427,6 +1446,10 @@ function renderOneline() {
     tip(hit, `branch ${i + 1}: ${b[0]} → ${b[1]}${xfmr ? " (transformer)" : ""}${on ? "" : " OUT"}` +
       (rb ? `\nPF ${fmt(rb.PF, 1)} MW, QF ${fmt(rb.QF, 1)} MVAr, loading ${rb.loading_pct === null ? "unrated" : fmt(rb.loading_pct, 0) + "%"}` : ""));
     lines.append(hit);
+    // breakers go above the line's click target, so a click on one switches the branch
+    const btitle = `branch ${i + 1} breaker (${on ? "closed" : "open"}): click to switch the branch ${on ? "out of" : "into"} service`;
+    breaker(xx, ya + 20, on, setStatus("branch", i, on), btitle);
+    breaker(R.x2, yb - 20, on, setStatus("branch", i, on), btitle);
   });
   // DC lines: dash-dot vertical lines with a converter (box with a diagonal) at each end
   const converter = (xx, yc, on) => {
@@ -2091,7 +2114,7 @@ function renderInspector() {
     }
     const gens = c.tables.gen.map((g, i) => [g, i]).filter(([g]) => g[0] === num);
     kids.push(h("h4", {}, `Generators (${gens.length})`), h("ul", {}, gens.map(([g, i]) =>
-      h("li", {}, h("a", { onclick: () => goto("gen", i) }, `gen ${i + 1}`), `${fmt(g[1], 1)} MW · ${S.meta.columns.gen[7].options[g[7]]}`))));
+      h("li", {}, h("a", { onclick: () => pick("gen", i) }, `gen ${i + 1}`), `${fmt(g[1], 1)} MW · ${S.meta.columns.gen[7].options[g[7]]}`))));
     const brs = c.tables.branch.map((b, i) => [b, i]).filter(([b]) => b[0] === num || b[1] === num);
     kids.push(h("h4", {}, `Branches (${brs.length})`), h("ul", {}, brs.map(([b, i]) =>
       h("li", {}, h("a", { onclick: () => pick("branch", i) }, `${b[0]} → ${b[1]}`), `x ${b[3]}${b[10] ? "" : " · OUT"}`))));
@@ -2104,6 +2127,17 @@ function renderInspector() {
       h("button", { onclick: () => addConnected("dcline", num) }, "+ DC line from here"),
       h("button", { onclick: () => addConnected("bus", num) }, "+ New bus linked here"),
       h("button", { onclick: () => goto("bus", index) }, "Show in table")));
+  } else if (kind === "gen") {
+    const bi = c.tables.bus.findIndex(b => b[0] === row[0]);
+    kids.push(h("h3", {}, `Generator ${index + 1}`), h("div", { class: "sub" }, `row ${index + 1} · at `,
+      bi < 0 ? `bus ${row[0]} (not found)` : h("a", { onclick: () => pick("bus", bi) }, `bus ${row[0]}`),
+      ` · ${cols[7].options[row[7]] ?? row[7]}`));
+    const rg = res && res.gen && res.gen[index];
+    if (rg) kids.push(h("div", { class: "sub" }, `Solution: Pg ${fmt(rg.Pg, 2)} MW, Qg ${fmt(rg.Qg, 2)} MVAr`));
+    kids.push(h("dl", {}, cols.map((_, k) => k).flatMap(field)));
+    const cost = c.tables.gencost[index];
+    kids.push(h("div", { class: "btns" }, h("button", { onclick: () => goto("gen", index) }, "Show in table"),
+      cost ? h("button", { onclick: () => goto("gencost", index) }, "Show cost") : null));
   } else if (kind === "dcline") {
     kids.push(h("h3", {}, `DC line ${row[0]} → ${row[1]}`), h("div", { class: "sub" }, `row ${index + 1}` + (row[2] ? "" : " · out of service")));
     const rd = res && res.dcline && res.dcline[index];

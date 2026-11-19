@@ -255,3 +255,35 @@ def test_index_has_folder_chooser(client):
     assert 'id="case-path"' in page and 'id="folder-menu"' in page
     js = client.get("/static/app.js").get_data(as_text=True)
     assert "function toggleFolderMenu(" in js and "/api/folders" in js
+
+def test_toggle_load(post):
+    """A load switched off keeps its values to restore; undo and edits keep that consistent (issue #99)"""
+    status,st = post("/api/load",{"bus":5})
+    assert status == 200 and st["case"]["tables"]["bus"][4][2:4] == [0,0]
+    assert st["loads_off"] == [[5,90,30]] and st["dirty"]
+    _,st = post("/api/load",{"bus":5})
+    assert st["case"]["tables"]["bus"][4][2:4] == [90,30] and st["loads_off"] == []
+    _,st = post("/api/undo")
+    assert st["case"]["tables"]["bus"][4][2:4] == [0,0] and st["loads_off"] == [[5,90,30]]
+    _,st = post("/api/undo")
+    assert st["case"]["tables"]["bus"][4][2:4] == [90,30] and st["loads_off"] == []
+    _,st = post("/api/redo")
+    assert st["loads_off"] == [[5,90,30]]
+    _,st = post("/api/cell",{"table":"bus","row":4,"column":"Pd","value":"10"})
+    assert st["loads_off"] == [] # an edit of the load forgets the switched-off values
+    status,st = post("/api/load",{"bus":1}) # no load and none switched off
+    assert status == 400 and "no switched-off load" in st["error"]
+    status,st = post("/api/load",{"bus":99})
+    assert status == 400 and "not found" in st["error"]
+
+def test_open_forgets_loads_off(post):
+    post("/api/load",{"bus":5})
+    _,st = post("/api/new",{"builtin":"case9"})
+    assert st["loads_off"] == []
+
+def test_oneline_switches_in_page(client):
+    """One-line breakers and switches toggle status; generators open their own panel (issue #99)"""
+    js = client.get("/static/app.js").get_data(as_text=True)
+    assert 'setStatus("branch", i, on)' in js and 'setStatus("gen", i, on)' in js
+    assert 'act("/api/load", { bus: b[0] })' in js and '"gen", i);' in js
+    assert 'kind === "gen"' in js
