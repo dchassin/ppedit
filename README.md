@@ -317,4 +317,4 @@ outputs
 
 ## Funding Acknowledgment
 
-This material is based on work supported by the U.S. Department of Energy’s Office of Electricity through a grant from the Grid Controls and Communications Division.
+This application is based on work supported by the U.S. Department of Energy’s Office of Electricity through grants from the Grid Controls and Communications Division and the Advanced Grid Modeling program.
