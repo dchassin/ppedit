@@ -276,7 +276,7 @@ td.bad input { color: var(--err); }
 #net.oneline .ol-conv.dead { stroke: #cfc3da; }
 #net.oneline .ol-halo { stroke: #fff; stroke-width: 7; }
 #net.oneline .ol-dot { fill: #1d2321; }
-#net.oneline .ol-breaker { fill: #b42318; stroke: #7a1810; stroke-width: 1; pointer-events: none; }
+#net.oneline .ol-breaker { fill: #b42318; stroke: #7a1810; stroke-width: 1; }
 #net.oneline .ol-breaker.open { fill: #fff; stroke: #2e7d4f; stroke-width: 1.6; }
 #net.oneline .ol-xfmr-bg { fill: #fff; stroke: none; pointer-events: none; }
 #net.oneline .ol-xfmr { fill: none; stroke: #3d4744; stroke-width: 1.4; pointer-events: none; }
@@ -287,10 +287,14 @@ td.bad input { color: var(--err); }
 #net.oneline .ol-switch circle { fill: #3d4744; }
 #net.oneline .ol-switch.open line { stroke: #2e7d4f; }
 #net.oneline .ol-switch.open circle { fill: #2e7d4f; }
+#net.oneline .ol-switch-hit { fill: transparent; }
+#net.oneline .ol-toggle { cursor: pointer; }
+#net.oneline .ol-toggle:hover { stroke-width: 2.4; }
 #net.oneline .ol-gen { cursor: pointer; }
 #net.oneline .ol-gen circle { fill: #fff; stroke: #1f5f9e; stroke-width: 1.6; }
 #net.oneline .ol-gen .wave { fill: none; stroke: #1f5f9e; stroke-width: 1.4; }
 #net.oneline .ol-gen.dead circle, #net.oneline .ol-gen.dead .wave { stroke: #a7b0ac; }
+#net.oneline .ol-gen.sel circle { stroke: var(--accent); stroke-width: 3; }
 #net.oneline .ol-load { fill: #7a3b12; cursor: pointer; }
 #net.oneline .ol-load.dead { fill: #c3c9c5; }
 #net.oneline text { pointer-events: none; paint-order: stroke; stroke: #fff; }

@@ -54,7 +54,7 @@ browser tab when the browser allows it.
 In the editor:
 
   - **Network**: drag buses, scroll to zoom, click a bus, branch or DC line
-    to edit it in the side panel; add a generator, a branch, a DC line, or a
+    (or, in the one-line style, a generator) to edit it in the side panel; add a generator, a branch, a DC line, or a
     new linked bus from the panel. DC lines are drawn as purple dash-dot
     lines (with a "DC" tag in the simple and classic styles and a converter
     box at each end in the one-line style). The **View ▾** menu holds
@@ -79,9 +79,14 @@ In the editor:
       generator bus). Generators (circle with a sine wave) and loads
       (arrow) connect to their bus bar through dashed pseudo-lines with a
       disconnect switch showing their status (generator `status`; a load's
-      switch is open when its bus is type NONE). Branches have a circuit
-      breaker at each end (red filled closed, green hollow open) and
-      transformers show as interlocking circles. Branches, generators and
+      switch is open when its bus is type NONE or the load is switched
+      off). Branches have a circuit breaker at each end (red filled closed,
+      green hollow open) and transformers show as interlocking circles.
+      Click a breaker to switch its branch out of or into service, a
+      generator's switch to toggle its `status`, and a load's switch to set
+      the bus `Pd` and `Qd` to 0 or restore the values they had when it
+      was switched off (kept until another case is opened, not in the saved
+      file). Each click is one undoable edit. Branches, generators and
       loads are labeled with MW and MVAr, positive downward (from the upper
       bus to the lower one, into a bus from a generator, out of a bus to a
       load), with an arrow in the direction of real power; branch flows

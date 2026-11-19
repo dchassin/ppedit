@@ -169,6 +169,11 @@ API key to start sessions; tests use a fake client).
   separate. Style and layout are set per opened case by `defaultView()`
   (decision #26b: geodata layout when the case has geodata, else one-line
   under `ONELINE_MAX` = 20 buses, else classic) and are not persisted.
+- One-line switching devices (decision #36n): breakers and generator
+  switches toggle `status` through `POST /api/cell`; load switches use
+  `POST /api/load` (`Editor.toggle_load`), whose switched-off values live
+  in `Editor.loads_off` (server memory, in undo snapshots, state
+  `loads_off`), not in the case file. A generator symbol picks `"gen"`.
 - Areas check box (`S.areas`, `showAreas()` in `app.js`, in View ▾): draws each area
   as the union of per-site discs clipped to the half-planes nearer than any
   other area's site (`areaRegions`; sites are buses plus points along

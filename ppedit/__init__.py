@@ -176,6 +176,11 @@ What is not promised
     is not dragged); each line has a column at each of its buses joined by
     one horizontal segment, which keeps bus bars short but makes large
     meshed cases wide, and lines that skip rows still cross bus bars.
+    Clicking a one-line load switch sets that bus's `Pd` and `Qd` to 0 and
+    keeps their values in server memory (with the undo history) to restore
+    on the next click; they are not saved in the case file, and editing
+    `Pd` or `Qd`, renumbering or deleting the bus, or opening another case
+    forgets them.
     Label choices (**Labels ▾**) are kept in the browser, not in the case,
     and labels are not placed to avoid each other, so many data labels on a
     dense diagram overlap.
