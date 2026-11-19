@@ -37,10 +37,10 @@ classifiers = [
 dynamic = ["dependencies"]
 
 [project.urls]
-Homepage = "https://github.com/dchassin/ppedit"
-Documentation = "https://www.chassin.org/ppedit"
-Repository = "https://github.com/dchassin/ppedit.git"
-Issues = "https://github.com/dchassin/ppedit/issues"
+Homepage = "https://github.com/eudoxys/ppedit"
+Documentation = "https://www.eudoxys.org/ppedit"
+Repository = "https://github.com/eudoxys/ppedit.git"
+Issues = "https://github.com/eudoxys/ppedit/issues"
 
 [project.scripts]
 ppedit = "ppedit.cli:main"
