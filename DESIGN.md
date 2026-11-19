@@ -1,4 +1,4 @@
-# dchassin/ppedit — package design (draft 1)
+# eudoxys/ppedit — package design (draft 1)
 
 Status: design recorded as built, 2026-11-15 (version 0.2.0, after PR #50; issue #52); decision #36f added 2026-11-17 (issue #69); inherited conventions revised 2026-11-17; decision #36g added 2026-11-17 (page URL parameters); decision #36h added 2026-11-18 (open from URL, issue #83); decisions #36k (cvxopf solve options, issue #88) and #36l (solver messages on the Issues tab, issue #89) added 2026-11-18; decision #14b (area names, issue #93) added 2026-11-18; decision #36m (solver warning details, follow-up to PR #92) added 2026-11-18.
 Draft 1 documents the current state; it was written after the code, so
@@ -111,7 +111,7 @@ reversed decision in place and note the date.
 - Private folders start with `_` (`ppedit/_test/`) and carry a `README.md`;
   curated test data only, with provenance in `ppedit/_test/data/README.md`.
 - pdoc documentation from docstrings, published to
-  https://www.chassin.org/ppedit by `.github/workflows/deploy-pages.yaml`.
+  https://www.eudoxys.com/ppedit by `.github/workflows/deploy-pages.yaml`.
 - `MANIFEST.md` maps every tracked file (`python .github/check_manifest.py`).
 - Pull requests from new contributors must link an issue with the
   `approved` label (`.github/workflows/approved-issue.yaml`); every open
@@ -119,11 +119,6 @@ reversed decision in place and note the date.
 - `requires-python` matches the CI Python version (3.12).
 - House style: no spaces after commas in calls and signatures, 4-space
   indent.
-
-`ppedit` departs from the skill in one way: it lives at `dchassin/ppedit`
-and is documented at chassin.org rather than eudoxys.com. Since `epm`
-indexes only the eudoxys organization, `epm install ppedit` does not work;
-install with `pip install git+https://github.com/dchassin/ppedit`.
 
 ## Module layout
 

@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Guidance for Claude when working in the `dchassin/ppedit` repository.
+Guidance for Claude when working in the `eudoxys/ppedit` repository.
 General Eudoxys package conventions are in the `eudoxys-package` skill
 (https://github.com/eudoxys/claude); this file records only what is
 specific to this package.
@@ -12,8 +12,8 @@ GridLAB-D `module pypower` models: a Flask server (`ppedit/server.py`) holds
 one `Case` (`ppedit/case.py`) in memory and serves a plain HTML/CSS/JS editor
 (`ppedit/static/`, no build step, no JS dependencies). Python 3.12, alpha.
 
-- Docs site: https://www.chassin.org/ppedit (pdoc from docstrings)
-- Maintainer: David P. Chassin
+- Docs site: https://www.eudoxys.com/ppedit (pdoc from docstrings)
+- Maintainer: David P. Chassin, Eudoxys Sciences LLC
 - CLI entry point: `ppedit` -> `ppedit.cli:main`
 
 ## Where things are

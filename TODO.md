@@ -29,6 +29,6 @@
 
 # Release
 
-- [x] Create `dchassin/ppedit`
-- [ ] Enable Pages (source: GitHub Actions); add `approved` label
+- [x] Create `eudoxys/ppedit`
+- [x] Enable Pages (source: GitHub Actions); add `approved` label
 - [ ] First release `26.11.0`

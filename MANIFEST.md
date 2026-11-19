@@ -1,6 +1,6 @@
 # MANIFEST
 
-Map of the `dchassin/ppedit` repository. Every tracked file is covered by
+Map of the `eudoxys/ppedit` repository. Every tracked file is covered by
 one row or glob below; check with `python .github/check_manifest.py`.
 Update this file in the same PR that adds, moves, or deletes a file.
 

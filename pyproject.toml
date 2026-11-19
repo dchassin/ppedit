@@ -38,7 +38,7 @@ dynamic = ["dependencies"]
 
 [project.urls]
 Homepage = "https://github.com/eudoxys/ppedit"
-Documentation = "https://www.eudoxys.org/ppedit"
+Documentation = "https://www.eudoxys.com/ppedit"
 Repository = "https://github.com/eudoxys/ppedit.git"
 Issues = "https://github.com/eudoxys/ppedit/issues"
 

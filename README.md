@@ -1,5 +1,5 @@
-[![Validation](https://github.com/dchassin/ppedit/actions/workflows/validate.yaml/badge.svg)](https://github.com/dchassin/ppedit/actions/workflows/validate.yaml)
-[![Documentation](https://github.com/dchassin/ppedit/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/dchassin/ppedit/actions/workflows/deploy-pages.yaml)
+[![Validation](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml)
+[![Documentation](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml)
 
 Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 
@@ -17,13 +17,13 @@ sub-transmission models for Arras Energy.
 
 # Documentation
 
-See https://www.chassin.org/ppedit
+See https://www.eudoxys.com/ppedit
 
 # Installation
 
 Install using `pip`:
 
-    pip install git+https://github.com/dchassin/ppedit
+    pip install git+https://github.com/eudoxys/ppedit
 
 Optional: the cvxopf OPF solvers (Run OPF ▾, `CVXOPF-*`) appear when
 [cvxopf](https://github.com/cvxgrp/cvxopf) is installed. It needs Python
