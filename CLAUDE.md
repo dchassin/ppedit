@@ -99,6 +99,15 @@ API key to start sessions; tests use a fake client).
   `state.issues` stays `Case.validate()` only. Python warnings raised
   while solving are recorded (no longer silenced): numpy warnings from a
   failing PYPOWER solve now show up as solver warnings.
+- Solver warning details (decision #36m): `_cvxopf.EXPLAIN` and
+  `ISOLATED_EXPLAIN`/`DCLINE_CUT_EXPLAIN` in `case.py` hold the physical
+  explanations; `_cvxopf._cvxopf_warnings` recognizes cvxopf warnings by
+  their text (regexes on cvxopf b6edcc7 wording), maps cvxopf's zero-based
+  internal bus/branch/gen indexes to case rows (`_Elements`) and groups
+  per-element warnings. A changed cvxopf message falls back to the plain
+  `cvxopf warning: ...` with no detail. SOCP details come from
+  `recover_socp_voltage`/`audit_socp_relaxation`. Issues tab:
+  `issueDetail` in `app.js`, open message kept in `S.issueOpen`.
 - DC lines are solved by `ppedit/_dcline.py`, not `pypower.toggle_dcline`
   (which fails with current numpy and mishandles `dclinecost`,
   out-of-service lines and Q cost rows); results are checked against the

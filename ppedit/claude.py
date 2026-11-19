@@ -181,7 +181,8 @@ CASE_TOOLS = [
         "lossy DC network flow, copper plate (1NODE), no prices; options for CVXOPF-* only: "
         "preparation default|recommended, solver (CVXPY solver for the convex models), verbose, "
         "solver_options {name: value}). Returns a summary with messages (solver errors and "
-        "warnings); the full result is shown in the editor's Results tab.",
+        "warnings; a warning's detail gives its physical meaning and the constraints and case rows "
+        "involved); the full result is shown in the editor's Results tab.",
         "input_schema":{"type":"object","properties":{"kind":{"type":"string","enum":["pf","opf"]},
             "algorithm":{"type":"string","enum":[*PF_SOLVERS,*OPF_SOLVERS]},
             "options":{"type":"object","properties":{

@@ -12,6 +12,7 @@ const S = {
   resSort: {},         // Results table title -> {col, dir} (see block)
   tableSort: {},       // case table -> {col, dir} (see tableOrder)
   claude: null,        // Claude sessions from /api/claude
+  issueOpen: null,     // message of the solver warning whose detail is open (Issues tab)
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
   pick: null,          // {kind: "bus"|"branch"|"dcline", index}
@@ -2408,8 +2409,15 @@ function renderIssues() {
   if (msgs.length) {
     const r = st.result;
     kids.push(h("h3", { class: "issue-group" }, `Last solve: ${r.dc ? "DC " : ""}${r.kind.toUpperCase()} (${r.solver.replace(/^(AC|DC): /, "")})`));
-    for (const m of msgs) kids.push(h("div", { class: "issue", title: "Show the solver log on the Results tab", onclick: () => show("results") },
-      h("span", { class: `lvl ${m.level}` }, m.level), h("span", { class: "where" }, "solver"), h("span", {}, m.message)));
+    for (const m of msgs) {
+      // a message with a detail (decision #36m) opens it in place; others show the log
+      const open = !!m.detail && S.issueOpen === m.message;
+      kids.push(h("div", { class: "issue" + (m.detail ? " has-detail" : "") + (open ? " open" : ""),
+          title: m.detail ? "Show what this means and the constraints involved" : "Show the solver log on the Results tab",
+          onclick: () => { if (!m.detail) return show("results"); S.issueOpen = open ? null : m.message; renderIssues(); } },
+        h("span", { class: `lvl ${m.level}` }, m.level), h("span", { class: "where" }, "solver"), h("span", {}, m.message)));
+      if (open) kids.push(issueDetail(m.detail));
+    }
     kids.push(h("h3", { class: "issue-group" }, "Case"));
   }
   if (!st.issues.length) kids.push(h("div", { class: "empty" }, h("div", { class: "big" }, "No issues found"), "The case passes all checks."));
@@ -2420,6 +2428,25 @@ function renderIssues() {
       h("span", { class: `lvl ${is.level}` }, is.level), h("span", { class: "where" }, where), h("span", {}, is.message)));
   }
   box.replaceChildren(...kids);
+}
+
+// Detail of a solver warning (decision #36m): what it means physically and
+// the constraints involved; elements link to their table rows
+function issueDetail(d) {
+  const kids = [h("p", { class: "explain" }, d.explain)];
+  if (d.constraints.length) {
+    const rows = d.constraints.map(c => h("tr", {},
+      h("td", {}, c.table && c.row !== null
+        ? h("a", { href: "#", title: `Show ${c.element} in the ${c.table} table`, onclick: e => { e.preventDefault(); goto(c.table, c.row); } }, c.element)
+        : c.element || ""),
+      h("td", {}, c.constraint), h("td", { class: "num" }, c.value || "")));
+    kids.push(h("table", { class: "constraints" },
+      h("thead", {}, h("tr", {}, h("th", {}, "Element"), h("th", {}, "Constraint"), h("th", {}, "Value"))),
+      h("tbody", {}, rows)));
+    if (d.more) kids.push(h("div", { class: "more" }, `${d.more} more not listed`));
+  }
+  kids.push(h("a", { href: "#", class: "log-link", onclick: e => { e.preventDefault(); show("results"); } }, "Solver log on the Results tab"));
+  return h("div", { class: "issue-detail" }, kids);
 }
 
 // ---------------------------------------------------------------- claude
