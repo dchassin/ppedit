@@ -13,7 +13,10 @@
   <div class="docinfo">
     <input id="case-name" class="name-input" spellcheck="false" title="Case name">
     <span id="dirty" class="dirty" title="Unsaved changes" hidden>●</span>
-    <span id="case-path" class="path"><span class="path-text"></span></span>
+    <div class="menu path-menu">
+      <button id="case-path" class="path"><span class="path-text"></span></button>
+      <div id="folder-menu" class="dropdown folders" role="dialog" aria-label="Choose the folder to save in"></div>
+    </div>
   </div>
   <div class="actions">
     <div class="menu">
