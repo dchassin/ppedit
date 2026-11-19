@@ -23,7 +23,9 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
     input formats (read), solvers (`ppedit.case.solvers`: the PF algorithms,
-    the installed OPF solvers and the cvxopf solve option choices), version
+    the installed OPF solvers and the cvxopf solve option choices), version,
+    and `about` (package metadata shown when the page's "ppedit" title is
+    clicked; see `about`)
   - `GET  /api/state`: current state
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload),
@@ -88,8 +90,10 @@ Caveats
 """
 
 import copy
+import importlib.metadata
 import logging
 import os
+import re
 import signal
 import threading
 import urllib.error
@@ -117,6 +121,108 @@ DOWNLOAD_TIMEOUT = 60
 """Seconds to wait for a URL download to respond"""
 
 _LOOPBACK = {"localhost","127.0.0.1","::1","[::1]"}
+
+_SOURCE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+_FUNDING_HEADING = re.compile(r"fund|acknowledg|sponsor",re.IGNORECASE)
+
+def _readme_funding(readme:str) -> str|None:
+    """Funding acknowledgment section of a README
+
+    Arguments:
+
+      - `readme`: README text (Markdown)
+
+    Returns:
+
+      - `str|None`: text of the first section whose heading mentions
+        funding, an acknowledgment or a sponsor, up to the next heading of
+        the same or a higher level, or `None` when there is none
+
+    Example:
+
+        >>> _readme_funding("# Usage\\nrun it\\n# Funding\\nPaid by X.\\n# Other\\n")
+        'Paid by X.'
+    """
+    lines = readme.splitlines()
+    for n,line in enumerate(lines):
+        head = re.match(r"(#+)\s+(.*)",line)
+        if head and _FUNDING_HEADING.search(head.group(2)):
+            level = len(head.group(1))
+            body = []
+            for text in lines[n+1:]:
+                more = re.match(r"(#+)\s",text)
+                if more and len(more.group(1)) <= level:
+                    break
+                body.append(text)
+            return "\n".join(body).strip() or None
+    return None
+
+def _source_text(dist,*names) -> str:
+    # a file of the installed distribution, else of the source tree
+    for name in names:
+        try:
+            text = dist.read_text(name) if dist else None
+        except (OSError,ValueError):
+            text = None
+        if text:
+            return text
+    for name in names:
+        path = os.path.join(_SOURCE,os.path.basename(name))
+        if os.path.isfile(path):
+            with open(path,encoding="utf-8") as fh:
+                return fh.read()
+    return ""
+
+def about() -> dict:
+    """Package metadata shown by the editor's "ppedit" title
+
+    Read from the installed `ppedit` distribution metadata (`pyproject.toml`
+    `[project]`), its `LICENSE` file and its README (the long description),
+    or from the source tree when the package is not installed.
+
+    Returns:
+
+      - `dict`: `name`, `version`, `summary`, `copyright` (the `Copyright`
+        lines of `LICENSE`), `license` (the first line of `LICENSE`, e.g.
+        `MIT License`), `repository`, `documentation`, `issues` and
+        `license_url` (URLs, or `None` when not known), and `funding` (the
+        funding acknowledgment section of the README, Markdown, or `None`)
+    """
+    try:
+        dist = importlib.metadata.distribution("ppedit")
+        meta = dist.metadata
+    except importlib.metadata.PackageNotFoundError:
+        dist,meta = None,{}
+    urls = {}
+    for entry in (meta.get_all("Project-URL") or []) if meta else []:
+        label,_,url = entry.partition(",")
+        urls[label.strip().lower()] = url.strip()
+    repository = urls.get("repository") or urls.get("homepage")
+    if repository and repository.endswith(".git"):
+        repository = repository[:-4]
+    license_text = _source_text(dist,"licenses/LICENSE","LICENSE")
+    readme = None
+    if meta:
+        readme = meta.get("Description") or getattr(meta,"get_payload",lambda:None)()
+    readme = readme or _source_text(None,"README.md")
+    try:
+        from ppedit import __version__ as version # pylint: disable=import-outside-toplevel
+    except ImportError:
+        version = "dev"
+    return {
+        "name": meta.get("Name","ppedit") if meta else "ppedit",
+        "version": version,
+        "summary": meta.get("Summary") if meta else None,
+        "copyright": [x.strip() for x in license_text.splitlines()
+            if x.strip().lower().startswith("copyright")],
+        "license": license_text.strip().splitlines()[0].strip() if license_text.strip() else None,
+        "repository": repository,
+        "documentation": urls.get("documentation"),
+        "issues": urls.get("issues") or (repository and repository+"/issues"),
+        "license_url": repository and repository+"/blob/main/LICENSE",
+        "funding": _readme_funding(readme or ""),
+        }
 
 def _shutdown():
     """Stop the server process as Ctrl-C would, or exit if `SIGINT` is ignored"""
@@ -462,7 +568,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         from ppedit import __version__ # pylint: disable=import-outside-toplevel
         return jsonify(columns=COLUMNS,tables=TABLES,builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            solvers=solvers(),version=__version__)
+            solvers=solvers(),version=__version__,about=about())
 
     @app.get("/api/state")
     def state():

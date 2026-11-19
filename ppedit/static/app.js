@@ -2778,10 +2778,52 @@ function buildSolverMenus() {
   }));
 }
 
+// About dialog: package metadata from /api/meta `about` (ppedit.server.about),
+// opened by clicking the "ppedit" title in the top bar.
+function linkify(text) {
+  // plain text with http(s) URLs and Markdown [label](url) links as anchors
+  const out = [], re = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s)<>]+)/g;
+  let at = 0, m;
+  while ((m = re.exec(text))) {
+    out.push(text.slice(at, m.index));
+    const url = m[2] || m[3];
+    out.push(h("a", { href: url, target: "_blank", rel: "noopener" }, m[1] || url));
+    at = re.lastIndex;
+  }
+  out.push(text.slice(at));
+  return out;
+}
+function showAbout() {
+  const a = S.meta.about || {}, d = $("#about");
+  const link = url => url ? h("a", { href: url, target: "_blank", rel: "noopener" }, url) : "—";
+  const row = (label, value) => [h("dt", {}, label), h("dd", {}, value)];
+  const paras = (a.funding || "").split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
+  const close = h("button", { onclick: () => d.close() }, "Close");
+  d.replaceChildren(
+    h("h2", { id: "about-title" }, a.name || "ppedit", h("span", { class: "ver" }, a.version || S.meta.version || "")),
+    a.summary ? h("p", { class: "summary" }, a.summary) : null,
+    h("dl", {},
+      row("Copyright", (a.copyright && a.copyright.length) ? a.copyright.join("\n") : "—"),
+      row("License", a.license_url ? h("a", { href: a.license_url, target: "_blank", rel: "noopener" }, a.license || a.license_url) : (a.license || "—")),
+      row("Source code", link(a.repository)),
+      row("Documentation", link(a.documentation)),
+      row("Issues", link(a.issues))),
+    h("div", { class: "funding" }, h("h3", {}, "Funding acknowledgment"),
+      paras.length ? paras.map(p => h("p", {}, linkify(p.replace(/\s*\n\s*/g, " "))))
+                   : h("p", { class: "none" }, "None given in the README.")),
+    h("div", { class: "close-row" }, close));
+  d.showModal();
+  close.focus();
+}
+
 function closeMenus() { $$(".dropdown.open").forEach(d => d.classList.remove("open")); }
 
 async function init() {
   S.meta = await api("/api/meta");
+  $("#about").addEventListener("click", e => {  // a click on the backdrop closes it
+    const r = e.currentTarget.getBoundingClientRect();
+    if (e.target === e.currentTarget && (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom)) e.currentTarget.close();
+  });
   loadLabels();
   buildLabelMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
@@ -2792,6 +2834,7 @@ async function init() {
   });
   document.addEventListener("click", e => {
     if (e.target.closest("#case-path")) return toggleFolderMenu();
+    if (e.target.closest("#brand")) { closeMenus(); return showAbout(); }
     const m = e.target.closest("[data-menu]");
     if (m) {
       const d = $("#" + m.dataset.menu); const open = d.classList.contains("open"); closeMenus();

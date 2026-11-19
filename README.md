@@ -48,6 +48,9 @@ link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸**
 The top bar shows the folder of the open file; click it to browse folders
 on the server machine and choose the folder that **Save** writes to (the
 choice writes nothing by itself).
+Click **ppedit** at the left of the top bar to see the package name and
+version, copyright, license, and links to the source code, documentation,
+issue tracker and license, with the funding acknowledgment from this README.
 **Exit** stops the server after asking for confirmation and closes the
 browser tab when the browser allows it.
 

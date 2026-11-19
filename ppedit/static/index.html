@@ -9,7 +9,7 @@
 </head>
 <body>
 <header class="topbar">
-  <div class="brand"><span class="mark">pp</span>edit</div>
+  <button id="brand" class="brand" title="About ppedit" aria-haspopup="dialog"><span class="mark">pp</span>edit</button>
   <div class="docinfo">
     <input id="case-name" class="name-input" spellcheck="false" title="Case name">
     <span id="dirty" class="dirty" title="Unsaved changes" hidden>●</span>
@@ -180,6 +180,7 @@
 </main>
 
 <div id="toast" class="toast" hidden></div>
+<dialog id="about" class="about" aria-labelledby="about-title"></dialog>
 <script src="/static/app.js"></script>
 </body>
 </html>
