@@ -45,6 +45,9 @@ The editor opens at http://localhost:8050/. Start from **New ▸** to load
 any PYPOWER built-in case (`case9`, `case14`, ..., `case300`), or **Open ▾**
 to upload a **Local file…** or type a URL under **From URL** (e.g. a GitHub
 link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸** downloads `.py`, `.json` or `.glm`.
+The top bar shows the folder of the open file; click it to browse folders
+on the server machine and choose the folder that **Save** writes to (the
+choice writes nothing by itself).
 **Exit** stops the server after asking for confirmation and closes the
 browser tab when the browser allows it.
 

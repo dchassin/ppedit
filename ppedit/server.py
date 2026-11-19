@@ -51,6 +51,14 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
     `path`; when the case was read from a GLM file with content ppedit does
     not edit (`case.notes`), overwriting an existing file returns status 409
     with `"confirm": true` unless `force` is true
+  - `POST /api/folders`: `{"path"?}` list a folder on the server machine
+    (default: the open file's folder, else the server's working directory)
+    for the page's folder chooser; returns `{"path", "parent", "folders",
+    "files"}` (see `list_folder`), not the editor state
+  - `POST /api/folder`: `{"path"}` move the open file's path into that
+    folder on the server machine without writing anything (the file name
+    is kept, or is the case name with `.glm` when there is no path; `.raw`
+    becomes `.glm`); the case is marked unsaved until Save writes it there
   - `GET  /api/export?format=py|json|glm|csv`: download the case (`csv`:
     its geodata)
   - `POST /api/exit`: `{}` stop the server (unsaved changes are lost);
@@ -182,6 +190,48 @@ def download_case(url:str) -> Case:
     case.source["file"] = url
     _logger.info("downloaded %s (%d bytes)",url,len(data))
     return case
+
+def list_folder(path:str) -> dict:
+    """List a folder on the server machine for the page's folder chooser
+
+    Arguments
+    ---------
+
+      - `path`: the folder; `~` is expanded and relative paths are taken
+        from the server's working directory
+
+    Returns
+    -------
+
+      - `dict`: `path` (absolute), `parent` (absolute, or `None` at the
+        root), `folders` (names of the subfolders not starting with `.`),
+        and `files` (names of the files ppedit can save, by `FORMATS`
+        extension), each sorted case-insensitively
+
+    Exceptions
+    ----------
+
+      - `CaseError`: not a folder, or it cannot be read
+    """
+    path = os.path.abspath(os.path.expanduser(path))
+    if not os.path.isdir(path):
+        raise CaseError(f"'{path}' is not a folder")
+    try:
+        entries = list(os.scandir(path))
+    except OSError as err:
+        raise CaseError(f"cannot read '{path}': {err.strerror or err}") from err
+    def is_dir(entry):
+        try:
+            return entry.is_dir()
+        except OSError:
+            return False
+    key = str.lower
+    folders = sorted((e.name for e in entries if is_dir(e) and not e.name.startswith(".")),key=key)
+    files = sorted((e.name for e in entries if not is_dir(e)
+        and os.path.splitext(e.name)[1].lower() in FORMATS),key=key)
+    parent = os.path.dirname(path)
+    return {"path":path,"parent":parent if parent != path else None,
+        "folders":folders,"files":files}
 
 class Editor:
     """In-memory editing session: the case, its file, and undo history
@@ -482,6 +532,28 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             editor.case.save(path)
             editor.case.notes = []
             editor.path,editor.dirty = path,False
+            return jsonify(editor.state())
+
+    @app.post("/api/folders")
+    def folders():
+        data = body()
+        with editor.lock:
+            default = os.path.dirname(editor.path) if editor.path else os.getcwd()
+        return jsonify(list_folder(data.get("path") or default))
+
+    @app.post("/api/folder")
+    def folder():
+        data = body()
+        path = os.path.abspath(os.path.expanduser(data["path"]))
+        if not os.path.isdir(path):
+            raise CaseError(f"'{path}' is not a folder")
+        with editor.lock:
+            name = os.path.basename(editor.path) if editor.path else f"{editor.case.name or 'untitled'}.glm"
+            if name.lower().endswith(".raw"):
+                name = name[:-4] + ".glm"
+            new = os.path.join(path,name)
+            if new != editor.path:
+                editor.path,editor.dirty = new,True
             return jsonify(editor.state())
 
     @app.get("/api/export")
