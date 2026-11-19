@@ -23,7 +23,8 @@ See https://www.eudoxys.com/ppedit
 
 Install using `pip`:
 
-    pip install git+https://github.com/eudoxys/ppedit
+    pip install eudoxys
+    epm install ppedit
 
 Optional: the cvxopf OPF solvers (Run OPF ▾, `CVXOPF-*`) appear when
 [cvxopf](https://github.com/cvxgrp/cvxopf) is installed. It needs Python
