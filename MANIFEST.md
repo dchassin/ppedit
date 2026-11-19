@@ -1,6 +1,6 @@
 # MANIFEST
 
-Map of the `dchassin/ppedit` repository. Every tracked file is covered by
+Map of the `eudoxys/ppedit` repository. Every tracked file is covered by
 one row or glob below; check with `python .github/check_manifest.py`.
 Update this file in the same PR that adds, moves, or deletes a file.
 
@@ -43,7 +43,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/_cvxopf.py` | cvxopf OPF backend for `Case.solve` (`CVXOPF-*` solvers): case in, `runopf`-layout results out | private; optional dependency; tested by `_test/test_cvxopf.py` (skipped without cvxopf) |
 | `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
 | `ppedit/claude.py` | `Sessions`: Claude API conversations with tools that edit the case, web and local data sources | tested by `_test/test_claude.py` with a fake client |
-| `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API | tested by `_test/test_server.py` |
+| `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API, `about()` package metadata | tested by `_test/test_server.py` |
 | `ppedit/static/index.html` | editor page layout | |
 | `ppedit/static/style.css` | editor styles | |
 | `ppedit/static/app.js` | editor logic: tables, network diagram (simple, classic and one-line styles; force and geodata layouts with map layers; labels menu), results, issues, Claude sessions | checked by hand (see `CLAUDE.md`) |

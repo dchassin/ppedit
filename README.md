@@ -1,5 +1,5 @@
-[![Validation](https://github.com/dchassin/ppedit/actions/workflows/validate.yaml/badge.svg)](https://github.com/dchassin/ppedit/actions/workflows/validate.yaml)
-[![Documentation](https://github.com/dchassin/ppedit/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/dchassin/ppedit/actions/workflows/deploy-pages.yaml)
+[![Validation](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml)
+[![Documentation](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml)
 
 Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 
@@ -17,13 +17,14 @@ sub-transmission models for Arras Energy.
 
 # Documentation
 
-See https://www.chassin.org/ppedit
+See https://www.eudoxys.com/ppedit
 
 # Installation
 
 Install using `pip`:
 
-    pip install git+https://github.com/dchassin/ppedit
+    pip install eudoxys
+    epm install ppedit
 
 Optional: the cvxopf OPF solvers (Run OPF ▾, `CVXOPF-*`) appear when
 [cvxopf](https://github.com/cvxgrp/cvxopf) is installed. It needs Python
@@ -48,6 +49,9 @@ link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸**
 The top bar shows the folder of the open file; click it to browse folders
 on the server machine and choose the folder that **Save** writes to (the
 choice writes nothing by itself).
+Click **ppedit** at the left of the top bar to see the package name and
+version, copyright, license, and links to the source code, documentation,
+issue tracker and license, with the funding acknowledgment from this README.
 **Exit** stops the server after asking for confirmation and closes the
 browser tab when the browser allows it.
 
@@ -311,3 +315,7 @@ outputs
 outputs
 
     True 5422.68
+
+## Funding Acknowledgment
+
+This application is based on work supported by the U.S. Department of Energy’s Office of Electricity through grants from the Grid Controls and Communications Division and the Advanced Grid Modeling program.

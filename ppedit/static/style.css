@@ -51,7 +51,11 @@ button.danger:hover:not(:disabled) { border-color: var(--err); color: var(--err)
 }
 .topbar button.primary { background: var(--accent); border-color: #2e8a73; }
 .topbar button.primary.alt { background: var(--accent-2); border-color: #a87022; }
-.brand { font-weight: 700; font-size: 15px; letter-spacing: .3px; }
+.topbar button.brand { /* click for the About dialog (#about) */
+  font-weight: 700; font-size: 15px; letter-spacing: .3px; color: var(--bar-ink);
+  background: none; border-color: transparent; padding: 1px 4px;
+}
+.topbar button.brand:hover { border-color: #3a4642; }
 .brand .mark { background: var(--bar-ink); color: var(--bar); padding: 1px 4px; border-radius: 3px; margin-right: 1px; }
 .docinfo { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
 .name-input {
@@ -442,3 +446,22 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 #net.oneline .ol-flow.ol-data { fill: #6b5a8e; }
 .dropdown.labels .head { grid-column: 1 / -1; font-size: 12px; font-weight: 600; padding: 4px 10px 0; }
 .dropdown.labels .note { grid-column: 1 / -1; max-width: none; color: #8a5a00; }
+
+/* About dialog (click the "ppedit" title) */
+dialog.about {
+  border: 1px solid var(--line-strong); border-radius: 8px; padding: 18px 22px 14px;
+  max-width: min(560px, 92vw); color: var(--ink); background: var(--panel);
+  box-shadow: 0 10px 40px rgba(0,0,0,.25);
+}
+dialog.about::backdrop { background: rgba(20,26,24,.35); }
+dialog.about h2 { margin: 0 0 2px; font-size: 18px; }
+dialog.about h2 .ver { font-weight: 400; color: var(--muted); font-size: 14px; margin-left: 6px; }
+dialog.about .summary { margin: 0 0 12px; color: var(--muted); }
+dialog.about dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 0 0 12px; }
+dialog.about dt { color: var(--muted); }
+dialog.about dd { margin: 0; word-break: break-all; white-space: pre-line; }
+dialog.about .funding { border-top: 1px solid var(--line); padding-top: 10px; }
+dialog.about .funding h3 { margin: 0 0 4px; font-size: 13px; }
+dialog.about .funding p { margin: 0 0 6px; white-space: pre-wrap; }
+dialog.about .funding .none { color: var(--muted); font-style: italic; }
+dialog.about .close-row { display: flex; justify-content: flex-end; margin-top: 10px; }

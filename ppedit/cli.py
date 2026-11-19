@@ -49,7 +49,7 @@ def main(argv:list[str]|None=None) -> int:
     """
     parser = argparse.ArgumentParser(prog="ppedit",
         description="Browser-based editor for PYPOWER and module pypower models",
-        epilog="See https://www.chassin.org/ppedit for full documentation.")
+        epilog="See https://www.eudoxys.com/ppedit for full documentation.")
     parser.add_argument("command",choices=["serve","convert","check"])
     parser.add_argument("files",nargs="*",help="case file(s): .py, .json, .glm, or (input only) PSS/E .raw")
     parser.add_argument("-g","--geodata",help="CSV of bus locations (BUS_I,LAT,LON,...) to add to the case (serve, convert)")

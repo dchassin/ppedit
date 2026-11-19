@@ -11,6 +11,30 @@ def test_index_and_meta(client):
     assert meta["solvers"]["opf"][0]["algorithm"] == "PIPS"
     assert "cvxopf" in meta["solvers"]
 
+def test_meta_about(client):
+    """`/api/meta` carries the package metadata the "ppedit" title shows"""
+    about = client.get("/api/meta").get_json()["about"]
+    assert about["name"] == "ppedit" and about["version"]
+    assert about["copyright"] and about["copyright"][0].startswith("Copyright")
+    assert about["license"] == "MIT License"
+    assert about["repository"].startswith("https://github.com/") and not about["repository"].endswith(".git")
+    assert about["issues"].endswith("/issues") and about["license_url"].endswith("/LICENSE")
+    assert about["documentation"].startswith("https://")
+    assert "funding" in about
+
+def test_readme_funding():
+    """The funding section is the README section whose heading mentions it"""
+    from ppedit.server import _readme_funding # pylint: disable=import-outside-toplevel
+    text = "# Usage\nrun\n# Acknowledgments\nFunded by X.\n\n## Detail\nmore\n# Next\nother\n"
+    assert _readme_funding(text) == "Funded by X.\n\n## Detail\nmore"
+    assert _readme_funding("# Usage\nrun\n") is None
+
+def test_index_has_about_dialog(client):
+    """The "ppedit" title is a button that opens the About dialog"""
+    page = client.get("/").get_data(as_text=True)
+    assert 'id="brand"' in page and 'id="about"' in page
+    assert "showAbout" in client.get("/static/app.js").get_data(as_text=True)
+
 def test_static_files_not_cached(client):
     """The page and its files are revalidated on every load"""
     for url in ["/","/static/app.js","/static/style.css"]:
