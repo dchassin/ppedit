@@ -23,6 +23,7 @@
 - [x] cvxopf solve options on the Settings tab (issue #88; decision #36k)
 - [ ] cvxopf multi-period horizons, profiles and device models (issue #88; DESIGN.md open questions)
 - [x] Solver errors and warnings on the Issues tab (issue #89; decision #36l)
+- [x] Physical meaning and constraints of solver warnings on the Issues tab (follow-up to PR #92; decision #36m)
 - [ ] Claude sessions: stream responses, persist conversations, show a diff of each session's edits
 - [ ] Multiple open cases (tabs) and a recent-files list
 

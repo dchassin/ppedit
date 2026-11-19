@@ -143,10 +143,63 @@ def test_options_recommended_needs_native_solver():
 def test_cvxopf_messages():
     """Data cvxopf does not model and a non-exact SOCP relaxation are warnings (issue #89)"""
     res = _pypower_case("case9Q").solve("opf","CVXOPF-AC")
-    assert {"level":"warning","message":"Reactive power cost rows are ignored: "
-        "cvxopf has no reactive power costs"} in res["messages"]
+    msg = next(m for m in res["messages"] if m["message"] == "Reactive power cost rows "
+        "are ignored: cvxopf has no reactive power costs")
+    assert msg["level"] == "warning"
+    assert [(c["table"],c["row"]) for c in msg["detail"]["constraints"]] == [("gencost",n) for n in (3,4,5)]
     res = Case.builtin("case9").solve("opf","CVXOPF-SOCP")
     assert res["success"] and all(m["level"] == "warning" for m in res["messages"])
+
+def test_socp_detail():
+    """A non-exact SOCP relaxation lists the relaxed constraints that fail and the
+    AC constraints its recovered voltages violate, on case rows (decision #36m)"""
+    res = Case.builtin("case9").solve("opf","CVXOPF-SOCP")
+    msg = next(m for m in res["messages"] if m["message"].startswith("SOCP relaxation"))
+    detail = msg["detail"]
+    assert "lower bound" in detail["explain"]
+    rows = detail["constraints"]
+    assert rows and all(set(c) == {"constraint","element","table","row","value"} for c in rows)
+    case = Case.builtin("case9")
+    for c in rows:
+        assert c["table"] in ("bus","branch","gen") and 0 <= c["row"] < len(case.tables[c["table"]])
+        if c["table"] == "branch":
+            f,t = case.tables["branch"][c["row"]][:2]
+            assert c["element"] == f"branch {c['row']+1} ({f}-{t})"
+    assert any("cone" in c["constraint"] for c in rows)
+    assert any("power balance" in c["constraint"] for c in rows)
+
+def test_rate_a_warnings_grouped():
+    """cvxopf's rateA = 0 warnings become one message naming case branches and buses"""
+    case = Case.builtin("case9")
+    for n in (0,3):
+        case.set_value("branch",n,"rateA",0)
+    res = case.solve("opf","CVXOPF-DC")
+    msgs = [m for m in res["messages"] if "rateA = 0" in m["message"]]
+    assert len(msgs) == 1 and msgs[0]["message"].startswith("cvxopf warning: 2 branch(es)")
+    rows = msgs[0]["detail"]["constraints"]
+    assert [(c["table"],c["row"],c["element"]) for c in rows] == \
+        [("branch",0,"branch 1 (1-4)"),("branch",3,"branch 4 (3-6)")]
+    assert "unlimited" in msgs[0]["detail"]["explain"]
+
+def test_dcline_note_detail():
+    """Notes on DC line data cvxopf does not model refer to the DC line rows"""
+    case = _pypower_case("t/t_case9_dcline")
+    res = case.solve("opf","CVXOPF-DC")
+    loss0 = next(m for m in res["messages"] if "loss0" in m["message"])
+    assert [(c["table"],c["row"]) for c in loss0["detail"]["constraints"]] == [("dcline",0)]
+    res = case.solve("opf","CVXOPF-1NODE")
+    msg = next(m for m in res["messages"] if "copper-plate" in m["message"])
+    live = [n for n,d in enumerate(case.tables["dcline"]) if d[2] == 1]
+    assert [c["row"] for c in msg["detail"]["constraints"]] == live
+
+def test_describe_constraint():
+    """CVXPY constraint numbers are described by the quantities they relate"""
+    from cvxopf import build_opf # pylint: disable=import-outside-toplevel
+    from ppedit._cvxopf import _describe_constraint # pylint: disable=import-outside-toplevel
+    build = build_opf(Case.builtin("case9").to_ppc(arrays=True),formulation="ac")
+    text = _describe_constraint(build,5)
+    assert "branch flow equations" in text and "voltage angles" in text
+    assert "not identified" in _describe_constraint(build,10**6)
 
 def test_solvers_lists_options():
     """`solvers()` gives the cvxopf option choices"""

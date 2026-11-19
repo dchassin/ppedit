@@ -186,7 +186,10 @@ In the editor:
     the cell), and under *Last solve* the errors and warnings of the last
     PF/OPF (solver failures and non-convergence, isolated buses, DC lines
     not solved, data cvxopf does not model, solver warnings); they clear
-    with the solution on the next edit. The tab's dot is red when there is
+    with the solution on the next edit. Click a warning marked ▸ to see
+    what it means physically and the constraints involved (for example
+    the SOCP cones and loops the relaxation leaves unmet, or the
+    `rateA` = 0 branches cvxopf limits), each linked to its table row. The tab's dot is red when there is
     an error and yellow when there are only warnings.
   - **Claude**: any number of conversations with Claude, each in its own tab (the
     Anthropic Messages API) that read and edit the open case, check it and

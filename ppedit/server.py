@@ -42,7 +42,8 @@ open case was read, see `ppedit.Case.source`, or `null`). Errors return
     or an OPF solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
     `ppedit.case.OPF_SOLVERS`); `options` are the `CVXOPF-*` solve options
     (see `ppedit.Case.solve`). The result's `messages` (solver errors and
-    warnings) are listed on the page's Issues tab
+    warnings, with an optional `detail`: physical meaning and constraints
+    involved) are listed on the page's Issues tab
   - `POST /api/apply`: copy the last solution into the case
   - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
     `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the

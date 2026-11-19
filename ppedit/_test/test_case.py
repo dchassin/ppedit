@@ -285,6 +285,10 @@ def test_solve_messages():
     assert res["success"]
     assert [m["level"] for m in res["messages"]] == ["warning"]
     assert "isolated" in res["messages"][0]["message"]
+    detail = res["messages"][0]["detail"] # decision #36m
+    assert "no electrical connection" in detail["explain"] and detail["more"] == 0
+    row = len(case.tables["bus"]) - 1
+    assert [(c["table"],c["row"]) for c in detail["constraints"]] == [("bus",row)]
 
 def test_solve_messages_not_converged():
     """A power flow that does not converge has an error message"""
