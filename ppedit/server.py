@@ -158,15 +158,18 @@ def _readme_funding(readme:str) -> str|None:
             return "\n".join(body).strip() or None
     return None
 
-def _source_text(dist,*names) -> str:
-    # a file of the installed distribution, else of the source tree
-    for name in names:
-        try:
-            text = dist.read_text(name) if dist else None
-        except (OSError,ValueError):
-            text = None
-        if text:
-            return text
+def _source_text(dists,*names) -> str:
+    # a file of an installed distribution, else of the source tree; every
+    # distribution found is tried, since a stale in-tree `ppedit.egg-info`
+    # (left by `pip install .`) can be found first and has no license file
+    for dist in dists:
+        for name in names:
+            try:
+                text = dist.read_text(name)
+            except (OSError,ValueError):
+                text = None
+            if text:
+                return text
     for name in names:
         path = os.path.join(_SOURCE,os.path.basename(name))
         if os.path.isfile(path):
@@ -189,11 +192,8 @@ def about() -> dict:
         `license_url` (URLs, or `None` when not known), and `funding` (the
         funding acknowledgment section of the README, Markdown, or `None`)
     """
-    try:
-        dist = importlib.metadata.distribution("ppedit")
-        meta = dist.metadata
-    except importlib.metadata.PackageNotFoundError:
-        dist,meta = None,{}
+    dists = list(importlib.metadata.distributions(name="ppedit"))
+    meta = dists[0].metadata if dists else {}
     urls = {}
     for entry in (meta.get_all("Project-URL") or []) if meta else []:
         label,_,url = entry.partition(",")
@@ -201,11 +201,11 @@ def about() -> dict:
     repository = urls.get("repository") or urls.get("homepage")
     if repository and repository.endswith(".git"):
         repository = repository[:-4]
-    license_text = _source_text(dist,"licenses/LICENSE","LICENSE")
+    license_text = _source_text(dists,"licenses/LICENSE","LICENSE")
     readme = None
     if meta:
         readme = meta.get("Description") or getattr(meta,"get_payload",lambda:None)()
-    readme = readme or _source_text(None,"README.md")
+    readme = readme or _source_text([],"README.md")
     try:
         from ppedit import __version__ as version # pylint: disable=import-outside-toplevel
     except ImportError:
