@@ -232,6 +232,23 @@ def test_folders(tmp_path,post):
     status,ls = post("/api/folders",{"path":str(tmp_path/"missing")})
     assert status == 400 and "not a folder" in ls["error"]
 
+def test_folder_moves_path_without_saving(tmp_path,post):
+    """Choosing a folder changes where Save writes, but writes nothing"""
+    _,st = post("/api/new",{"builtin":"case9"})
+    assert st["path"] is None
+    _,st = post("/api/folder",{"path":str(tmp_path)})
+    assert st["path"] == str(tmp_path/"case9.glm") and st["dirty"]
+    assert not list(tmp_path.iterdir())
+    (tmp_path/"sub").mkdir()
+    _,st = post("/api/folder",{"path":str(tmp_path/"sub")})
+    assert st["path"] == str(tmp_path/"sub"/"case9.glm") # file name kept
+    _,st = post("/api/save")
+    assert (tmp_path/"sub"/"case9.glm").exists() and not st["dirty"]
+    _,st = post("/api/folder",{"path":str(tmp_path/"sub")}) # same folder
+    assert not st["dirty"]
+    status,st = post("/api/folder",{"path":str(tmp_path/"missing")})
+    assert status == 400 and "not a folder" in st["error"]
+
 def test_index_has_folder_chooser(client):
     """The top bar path opens the folder chooser"""
     page = client.get("/").get_data(as_text=True)
