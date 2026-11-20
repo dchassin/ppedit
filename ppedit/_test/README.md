@@ -7,6 +7,18 @@ Run from the repository root:
 
 All tests are fast (a few seconds) and need no network or credentials.
 
+Coverage (settings in `pyproject.toml` under `[tool.coverage.*]`):
+
+    pip install pytest-cov
+    pytest --cov --cov-report=term --cov-report=html   # report in htmlcov/
+
+The Validation workflow runs the tests with coverage on every push and pull
+request to `main`, writes the per-module table to the run's job summary,
+and uploads `coverage.xml` and `htmlcov/` as the `coverage-report`
+artifact. The Documentation workflow republishes the latest report from
+`main` at https://www.eudoxys.com/ppedit/coverage/, with `badge.json` for
+the README badge. Coverage is informational: no minimum is enforced.
+
 | File | Checks |
 |---|---|
 | `conftest.py` | `client` (Flask test client on `case9`) and `post` fixtures |

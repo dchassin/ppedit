@@ -10,10 +10,16 @@ on:
       - "requirements.txt"
       - "pyproject.toml"
       - ".github/workflows/deploy-pages.yaml"
+  # republish when Validation on main produces a new coverage report
+  workflow_run:
+    workflows: ["Validation"]
+    types: [completed]
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read # download the coverage report artifact
   pages: write
   id-token: write
 
@@ -27,6 +33,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +43,16 @@ jobs:
           python-version: "3.12" # must satisfy requires-python
       - name: Create docs
         run: make docs
+      - name: Add coverage report
+        # latest coverage-report artifact of a successful Validation run on main,
+        # served at /coverage/ (badge.json feeds the README badge)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run=$(gh run list -R "$GITHUB_REPOSITORY" -w validate.yaml -b main -s success -L 1 --json databaseId -q '.[0].databaseId')
+          gh run download "$run" -R "$GITHUB_REPOSITORY" -n coverage-report -D coverage-report
+          mv coverage-report/htmlcov docs/coverage
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

@@ -47,3 +47,19 @@ ppedit = "ppedit.cli:main"
 
 [tool.pytest.ini_options]
 testpaths = ["ppedit/_test"]
+
+# Test coverage (CI runs `pytest --cov`; needs pytest-cov)
+[tool.coverage.run]
+source_pkgs = ["ppedit"]
+omit = ["*/ppedit/_test/*"]
+branch = true
+relative_files = true
+
+[tool.coverage.paths]
+# CI installs non-editable: report site-packages files as the source tree
+source = ["ppedit/","*/site-packages/ppedit/"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
+precision = 1

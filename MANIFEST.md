@@ -111,7 +111,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `LICENSE` | MIT | |
 | `.gitignore` | | |
 | `.gitattributes` | | |
-| `.github/workflows/*.yaml` | CI: tests, docs, approved-issue check, issue assignment | |
+| `.github/workflows/*.yaml` | CI: tests with coverage report, docs and coverage site, approved-issue check, issue assignment | |
 | `.github/check_manifest.py` | checks this file | |
 
 ## Don't read
