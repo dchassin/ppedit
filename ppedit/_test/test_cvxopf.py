@@ -207,3 +207,30 @@ def test_solvers_lists_options():
     """`solvers()` gives the cvxopf option choices"""
     cvx = solvers()["cvxopf"]
     assert cvx["preparation"] == ["default","recommended"] and "CLARABEL" in cvx["solvers"]
+
+@pytest.mark.parametrize("preparation",["default","recommended"])
+def test_ac_sparse_dispatch(monkeypatch,preparation):
+    """CVXOPF-AC keeps CVXPY's sparse derivative dispatch (issue #122): the
+    build asks for it, the density threshold stays in effect while
+    solving, and the result is unchanged"""
+    import cvxopf # pylint: disable=import-outside-toplevel
+    import cvxpy # pylint: disable=import-outside-toplevel
+    seen = {}
+    build_opf = cvxopf.build_opf
+    def spy(*args,**kwargs):
+        seen["kwargs"] = kwargs
+        build = build_opf(*args,**kwargs)
+        solve = build.solve
+        def solve_spy(**kw):
+            seen["threshold"] = cvxpy.settings.SPARSE_DENSITY_THRESHOLD
+            return solve(**kw)
+        build.solve = solve_spy
+        return build
+    monkeypatch.setattr(cvxopf,"build_opf",spy)
+    before = cvxpy.settings.SPARSE_DENSITY_THRESHOLD
+    case = Case.builtin("case9")
+    res = case.solve("opf","CVXOPF-AC",{"preparation":preparation})
+    assert res["success"] and seen["kwargs"]["automatic_sparse_dispatch"] is True
+    assert seen["threshold"] == before > 0
+    assert cvxpy.settings.SPARSE_DENSITY_THRESHOLD == before
+    assert res["objective"] == pytest.approx(case.solve("opf","PIPS")["objective"],rel=1e-5)
