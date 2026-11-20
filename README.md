@@ -167,6 +167,15 @@ In the editor:
     table moves its buses with it. Click a column header to sort the rows
     by it (again to reverse, a third time to restore the case order); the
     sort changes only the display, not the row order saved in the case.
+    **Import…** reads rows from a data file and **Export ▾** downloads
+    rows as one; the format comes from the file extension: `.csv`,
+    `.tsv`, `.json` (each optionally compressed as `.gz`, `.bz2`, `.xz`,
+    `.zip`), `.parquet` and `.feather` (need `pyarrow`), `.xlsx` (needs
+    `openpyxl`). Columns are named as in the table header. With no rows
+    selected, import appends the file's rows (missing columns take their
+    defaults) and export writes every row; with rows selected, import
+    replaces them with the file's rows (same columns and number of rows)
+    and export writes only the selected rows. An import is one undo step.
   - **Run PF ▾** and **Run OPF ▾** (toolbar) each open a menu of solvers;
     choosing one runs it; while it runs, the button's ▾ turns into ● and
     the button is disabled until the solver returns. Run PF lists the PYPOWER power flow algorithms

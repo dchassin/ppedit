@@ -221,6 +221,13 @@ API key to start sessions; tests use a fake client).
   that is slow without a request (force layout of a large case) does not
   show it.
 
+- Table import/export (decision #36q, issue #73): pandas is used only in
+  `ppedit/_tableio.py`; `Case.import_rows` takes plain lists. Replacing
+  rows with changed bus/area numbers renumbers references (two passes via
+  temporary numbers so swaps work), like cell edits do; `ncost` is never
+  taken from the file. Parquet/Feather/Excel depend on optional engines
+  (CI installs `pyarrow` and `openpyxl`).
+
 - Claude tab (`ppedit/claude.py`, `renderClaude` in `app.js`): sessions
   call the Messages API with `urllib` (no SDK dependency) in background
   threads; each tool call that changes the case is one `Editor.edit()`

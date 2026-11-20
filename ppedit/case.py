@@ -1080,6 +1080,134 @@ def {name}():
             removed[table] += 1
         return removed
 
+    def import_rows(self,table:str,columns:list[str],rows:list[list],
+            replace:list[int]|None=None) -> dict:
+        """Append imported rows to a table, or replace rows with them
+
+        Arguments
+        ---------
+
+          - `table`: table name
+
+          - `columns`: column names of the imported data, in `COLUMNS[table]`
+            (any order)
+
+          - `rows`: imported rows, values in `columns` order (`None` for a
+            missing value)
+
+          - `replace`: row indexes to replace, in case order, with the
+            imported rows in file order (default: append)
+
+        Appending accepts any subset of the columns and uses the defaults of
+        `default_row` for missing columns and values, as `add_row` does
+        (adding generators or DC lines adds their cost rows). Replacing
+        needs every column and value, and as many imported rows as rows to
+        replace; each changed value is set as by `set_value`, so a changed
+        bus or area number renumbers what refers to it (numbers may be
+        exchanged among the replaced rows). In `gencost` and `dclinecost`,
+        `ncost` follows `model` and `costs`; its imported value is not used.
+
+        On an error some rows may already be changed: callers roll back
+        (the server runs it in one `Editor.edit()`).
+
+        Returns
+        -------
+
+          - `dict`: `added` or `replaced` (number of rows), and `cascade`
+            (`True` if other cells or tables changed as a result)
+
+        Exceptions
+        ----------
+
+          - `CaseError`: unknown, duplicate or (replacing) missing columns,
+            a row count that does not match, or an invalid value (the
+            message gives its data row, counting from 1)
+
+        Example
+        -------
+
+            >>> case = Case.builtin("case9")
+            >>> case.import_rows("bus",["bus_i","type","Pd"],[[10,1,25.0]])
+            {'added': 1, 'cascade': False}
+            >>> case.tables["bus"][-1][:3]
+            [10, 1, 25.0]
+        """
+        self._check(table)
+        names = [c["name"] for c in COLUMNS[table]]
+        columns = [str(c).strip() for c in columns]
+        unknown = [c for c in columns if c not in names]
+        if unknown:
+            raise CaseError(f"{table} has no column(s) " + ", ".join(f"'{c}'" for c in unknown)
+                + " (columns are " + ", ".join(names) + ")")
+        if len(set(columns)) != len(columns):
+            raise CaseError("column(s) " + ", ".join(sorted({c for c in columns
+                if columns.count(c) > 1})) + " appear more than once")
+        if not rows:
+            raise CaseError("the file has no rows")
+        if any(len(r) != len(columns) for r in rows):
+            raise CaseError(f"every row must have {len(columns)} values")
+        order = [columns.index(n) for n in names if n in columns] # COLUMNS order
+        text = {c["name"] for c in COLUMNS[table] if c["kind"] == "name"}
+        def values(n):
+            # an empty cell is a missing value, except in a free-text column
+            return {columns[k]:"" if rows[n][k] is None else rows[n][k] for k in order
+                if rows[n][k] is not None or columns[k] in text}
+        if replace is None:
+            for n in range(len(rows)):
+                try:
+                    self.add_row(table,values(n))
+                except CaseError as err:
+                    raise CaseError(f"row {n+1}: {err}") from err
+            cost = {v:k for k,v in COST_TABLES.items()}.get(table)
+            return {"added":len(rows),"cascade":bool(cost and self.tables[cost])}
+        for row in replace:
+            self._check(table,row)
+        targets = sorted(set(replace))
+        if len(rows) != len(targets):
+            raise CaseError(f"{len(rows)} row(s) imported for {len(targets)} selected row(s)")
+        missing = [n for n in names if n not in columns]
+        if missing:
+            raise CaseError("replacing rows needs every column; missing " + ", ".join(missing))
+        new = [values(n) for n in range(len(rows))]
+        for n,vals in enumerate(new):
+            empty = [c for c in names if c not in vals]
+            if empty:
+                raise CaseError(f"row {n+1}: no value for " + ", ".join(empty))
+        cascade = False
+        if table in ("bus","areas"):
+            # move changed bus (area) numbers out of the way first, so that
+            # numbers may be exchanged among the replaced rows
+            key = names[0]
+            try:
+                wanted = [_number(v[key],"int") for v in new]
+            except CaseError as err:
+                raise CaseError(f"{key}: {err}") from err
+            temp = max([r[0] for r in self.tables[table]] + wanted) + 1
+            for row,number in zip(targets,wanted):
+                if self.tables[table][row][0] != number:
+                    cascade |= self._set_value(table,row,key,temp)
+                    temp += 1
+        def same(spec,old,value):
+            # unchanged values are not set, so they cascade nothing
+            try:
+                if spec["kind"] == "name":
+                    return _name(value) == old
+                if spec["kind"] == "text":
+                    return _costs_text(_costs_list(value)) == old
+                return _number(value,spec["kind"]) == old
+            except (CaseError,ValueError,TypeError):
+                return False # _set_value reports it
+        for n,(row,vals) in enumerate(zip(targets,new)):
+            try:
+                for k,column in enumerate(names):
+                    if table in COST_TABLES and column == "ncost":
+                        continue # follows model and costs
+                    if not same(COLUMNS[table][k],self.tables[table][row][k],vals[column]):
+                        cascade |= self._set_value(table,row,column,vals[column])
+            except CaseError as err:
+                raise CaseError(f"row {n+1}: {err}") from err
+        return {"replaced":len(rows),"cascade":cascade}
+
     # ----- geodata -----
 
     def set_geodata(self,rows:list,tags:list|None=None):

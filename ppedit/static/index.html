@@ -146,6 +146,12 @@
       <button data-action="add-row">+ Add row</button>
       <button data-action="dup-row" title="Duplicate selected rows">Duplicate</button>
       <button data-action="del-rows" class="danger">Delete selected</button>
+      <button data-action="import-rows" id="import-btn">Import…</button>
+      <div class="menu">
+        <button data-menu="export-menu" id="export-btn">Export ▾</button>
+        <div id="export-menu" class="dropdown left" role="menu"></div>
+      </div>
+      <input type="file" id="table-input" hidden>
       <input id="filter" type="search" placeholder="Filter rows…">
       <span class="hint" id="table-hint"></span>
     </div>
