@@ -207,6 +207,12 @@ API key to start sessions; tests use a fake client).
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
   written" comment only when the rows differ from those defaults.
 
+- Work-in-progress indicator (decision #36p, `#busy`, `busyStart`/`busyEnd` in
+  `app.js`): every `api()` call counts unless it passes `{ background: true }`;
+  pass it for any new polling so the indicator does not stay up. Rendering
+  that is slow without a request (force layout of a large case) does not
+  show it.
+
 - Claude tab (`ppedit/claude.py`, `renderClaude` in `app.js`): sessions
   call the Messages API with `urllib` (no SDK dependency) in background
   threads; each tool call that changes the case is one `Editor.edit()`

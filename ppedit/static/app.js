@@ -117,14 +117,57 @@ function numInput(attrs, value, spec) {
 
 // ---------------------------------------------------------------- server
 
-async function api(path, body) {
+// Work-in-progress indicator (#busy, decision #36p): every api() request
+// counts as pending work unless `background` (polling); the indicator shows
+// once work has been pending for BUSY_DELAY ms (so quick edits don't flash
+// it), names the slowest kind of request, and counts seconds after
+// BUSY_ELAPSED ms. The page load counts as one pending item until init()
+// ends, so the indicator in index.html is visible from the start.
+const BUSY_DELAY = 300, BUSY_ELAPSED = 2000;
+const BUSY_LABELS = [  // [path prefix, label], first match wins
+  ["/api/solve", "Solving"], ["/api/open", "Opening case"], ["/api/new", "Loading case"],
+  ["/api/save", "Saving"], ["/api/geodata", "Loading geodata"], ["/api/folders", "Listing folders"], ["/api/state", "Loading"],
+  ["/api/meta", "Loading"],
+];
+const busy = { items: new Map([[0, { label: "Loading", t0: performance.now() }]]), next: 1, timer: null, tick: null };
+function busyLabel(path) { return (BUSY_LABELS.find(([p]) => path.startsWith(p)) || [null, "Working"])[1]; }
+function busyStart(path) {
+  const id = busy.next++;
+  busy.items.set(id, { label: busyLabel(path), t0: performance.now() });
+  if (!busy.timer && $("#busy").hidden) busy.timer = setTimeout(busyShow, BUSY_DELAY);
+  return id;
+}
+// Ended after the caller's continuation has run (setTimeout, not a microtask),
+// so the indicator stays up while the page re-renders from the response.
+function busyEnd(id) { setTimeout(() => { busy.items.delete(id); busyRefresh(); }, 0); }
+function busyShow() { busy.timer = null; busyRefresh(); }
+function busyRefresh() {
+  const el = $("#busy");
+  if (!busy.items.size) {
+    clearTimeout(busy.timer); clearInterval(busy.tick); busy.timer = busy.tick = null;
+    el.hidden = true; document.body.classList.remove("busy");
+    return;
+  }
+  if (busy.timer) return;  // still within BUSY_DELAY
+  const oldest = [...busy.items.values()].reduce((a, b) => (a.t0 <= b.t0 ? a : b));
+  const ms = performance.now() - oldest.t0;
+  el.querySelector(".busy-text").textContent = oldest.label + "…" + (ms >= BUSY_ELAPSED ? ` ${Math.floor(ms / 1000)} s` : "");
+  el.hidden = false; document.body.classList.add("busy");
+  if (!busy.tick) busy.tick = setInterval(busyRefresh, 1000);
+}
+
+async function api(path, body, { background = false } = {}) {
   const opts = body === undefined ? {} : {
     method: "POST",
     headers: { "Content-Type": "application/json", "X-PPEdit": "1" },
     body: JSON.stringify(body),
   };
-  const res = await fetch(path, opts);
-  const data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  const id = background ? null : busyStart(path);
+  let res, data;
+  try {
+    res = await fetch(path, opts);
+    data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
+  } finally { if (id !== null) busyEnd(id); }
   if (!res.ok || data.error) {
     const err = new Error(data.error || `HTTP ${res.status}`);
     err.confirm = !!data.confirm;
@@ -2472,13 +2515,13 @@ async function claudeAct(path, body) {
 async function pollClaude() {
   if (S.exited || !S.state || (S.view !== "claude" && !claudeBusy())) return;
   let data;
-  try { data = await api("/api/claude"); } catch (_) { return; }
+  try { data = await api("/api/claude", undefined, { background: true }); } catch (_) { return; }
   const was = claudeBusy();
   S.claude = data.claude;
   const items = S.claude.sessions.flatMap(s => s.transcript);
   const solved = items.slice(claudeSeen).some(t => t.kind === "tool" && t.name === "solve");
   claudeSeen = items.length;
-  if (S.claude.revision !== S.state.revision || solved) setState(await api("/api/state"));
+  if (S.claude.revision !== S.state.revision || solved) setState(await api("/api/state", undefined, { background: true }));
   else { if (was !== claudeBusy()) renderChrome(); if (S.view === "claude") renderClaude(); }
 }
 
@@ -2914,4 +2957,5 @@ async function init() {
   if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
 }
 
-init().catch(err => toast(err.message, true));
+busyRefresh();  // page load counts as pending work from the start
+init().catch(err => toast(err.message, true)).finally(() => busyEnd(0));  // page load done (#busy)
