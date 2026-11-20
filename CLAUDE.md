@@ -223,8 +223,9 @@ API key to start sessions; tests use a fake client).
   `serverBack` in `app.js`): `GET /api/ping` is polled every 5 s outside
   `api()` and must stay free of `editor.lock`; a different `instance`
   (from `/api/meta`) means the server restarted and the page reloads.
-  "Restart server" can only show the `ppedit serve` command: a page cannot
-  start a process. `window.close()` is refused for tabs with back history
+  While down, the dialog polls every 2 s and closes by itself when the
+  server answers (no wait button). "Restart server" can only show the
+  `ppedit serve ... --no-browser` command: a page cannot start a process. `window.close()` is refused for tabs with back history
   (e.g. headless test browsers), which then show the stopped page.
 
 - Work-in-progress indicator (decision #36p, `#busy`, `busyStart`/`busyEnd` in

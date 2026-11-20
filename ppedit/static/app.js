@@ -3142,6 +3142,7 @@ function closeWindow(title) {
   S.exited = true; // already confirmed: skip the unsaved-changes prompt on close
   conn.down = false;
   clearInterval(conn.timer);
+  clearInterval(conn.poll);
   const d = $("#server-down");
   if (d && d.open) d.close();
   document.body.replaceChildren(h("div", { class: "stopped" },
@@ -3153,15 +3154,14 @@ function closeWindow(title) {
 
 // Server watch (decision #36t, issue #51): the page polls GET /api/ping every
 // PING_INTERVAL ms (outside api(), so #busy does not count it) and api() reports
-// requests that get no response at all. Either opens the #server-down dialog:
-// wait and retry (RETRY_WAITS seconds, longer each time, with the #server-banner
-// countdown), restart (the command to run; the page polls every RESTART_POLL ms
-// and reconnects when the server answers), or exit (close the tab). A server
-// answering with another `instance` than /api/meta gave was restarted: the page
-// reloads from it, since the case it shows is no longer the one the server holds.
-const PING_INTERVAL = 5000, PING_TIMEOUT = 10000, RESTART_POLL = 2000;
-const RETRY_WAITS = [15, 30, 60, 120];
-const conn = { down: false, timer: null, checking: false, retries: 0, countdown: null, restart: null };
+// requests that get no response at all. Either opens the #server-down dialog,
+// which checks again every DOWN_POLL ms by itself and closes when the server
+// answers. It offers to restart (the `ppedit serve --no-browser` command to run,
+// so no second tab opens: this one reconnects) or to exit (close the tab). A
+// server answering with another `instance` than /api/meta gave was restarted:
+// the page reloads from it, since the case it shows is no longer the server's.
+const PING_INTERVAL = 5000, PING_TIMEOUT = 10000, DOWN_POLL = 2000;
+const conn = { down: false, timer: null, checking: false, poll: null, since: 0 };
 
 async function ping() {
   const ctl = new AbortController();
@@ -3186,13 +3186,24 @@ async function watchServer() {
 function serverDown() {
   if (conn.down || S.exited || !S.meta) return;
   conn.down = true;
+  conn.since = Date.now();
   document.title = "ppedit (not responding)";
   showServerDialog();
+  let busy = false;
+  conn.poll = setInterval(async () => {  // wait for the server to come back
+    const status = $("#server-down .status");
+    if (status) status.textContent = waitingText();
+    if (busy || S.exited) return;
+    busy = true;
+    const p = await ping();
+    busy = false;
+    if (p && conn.down && !S.exited) serverBack(p);
+  }, DOWN_POLL);
 }
 
 // The server answers again: the same one (it was busy or unreachable) or a new one
 function serverBack(p) {
-  stopRetrying();
+  clearInterval(conn.poll); conn.poll = null;
   const d = $("#server-down");
   if (d.open) d.close();
   if (p.instance !== S.meta.instance) {
@@ -3202,72 +3213,44 @@ function serverBack(p) {
     return;
   }
   conn.down = false;
-  conn.retries = 0;
   document.title = S.state ? `${S.state.dirty ? "• " : ""}${S.state.case.name} — ppedit` : "ppedit";
   api("/api/state", undefined, { background: true }).then(setState).catch(() => {});
   toast("Connected to the ppedit server again");
 }
 
-function stopRetrying() {
-  clearInterval(conn.countdown); conn.countdown = null;
-  clearInterval(conn.restart); conn.restart = null;
-  $("#server-banner").hidden = true;
-}
-
+// The command that starts the server again for this page: same file, port and
+// host, and --no-browser because this page reconnects by itself
 function serverCommand() {
   const q = a => /^[\w@%+=:,./\\-]+$/.test(a) ? a : `"${a.replace(/"/g, '\\"')}"`;
   const args = ["ppedit", "serve"];
   if (S.state && S.state.path) args.push(q(S.state.path));
   if (location.port && location.port !== "8050") args.push("--port", location.port);
   if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) args.push("--host", location.hostname);
+  args.push("--no-browser");
   return args.join(" ");
 }
+
+const waitingText = () => `Waiting for the server to answer… (${Math.round((Date.now() - conn.since) / 1000)} s)`;
+const exitButton = () => h("button", { onclick: () => closeWindow("ppedit server not responding") }, "Exit browser window");
 
 function showServerDialog() {
   const d = $("#server-down");
   const dirty = S.state && S.state.dirty;
-  const wait = RETRY_WAITS[Math.min(conn.retries, RETRY_WAITS.length - 1)];
   d.replaceChildren(...[
     h("h2", { id: "server-down-title" }, "ppedit server not responding"),
-    h("p", {}, `This page cannot reach the ppedit server at ${location.host}. The server may have stopped (Ctrl-C, Exit, a closed terminal, or an error), or it may be too busy to answer.`),
+    h("p", {}, `This page cannot reach the ppedit server at ${location.host}. The server may have stopped (Ctrl-C, Exit, a closed terminal, or an error), or it may be too busy to answer. The editor continues when it answers again.`),
     dirty ? h("p", { class: "warn" }, "The case has unsaved changes. The server holds them: if it stopped, they are lost.") : null,
+    h("p", { class: "status" }, waitingText()),
     h("div", { class: "actions" },
-      h("button", { onclick: waitAndRetry, title: `Close this message and check again in ${wait} s` }, "Wait before retrying"),
-      h("button", { onclick: showRestart, title: "Show how to start the server again; this page reconnects when it answers" }, "Restart server"),
-      h("button", { onclick: () => closeWindow("ppedit server not responding") }, "Exit browser window"))].filter(Boolean));
+      h("button", { onclick: showRestart, title: "Show how to start the server again" }, "Restart server"),
+      exitButton())].filter(Boolean));
   if (!d.open) d.showModal();
   d.querySelector("button").focus();
-}
-
-function waitAndRetry() {
-  const d = $("#server-down");
-  if (d.open) d.close();
-  stopRetrying();
-  let left = RETRY_WAITS[Math.min(conn.retries, RETRY_WAITS.length - 1)];
-  conn.retries++;
-  const banner = $("#server-banner");
-  const tick = async () => {
-    if (left > 0) {
-      banner.replaceChildren(h("span", {}, `ppedit server not responding: retrying in ${left--} s`),
-        h("button", { onclick: () => { left = 0; tick(); } }, "Retry now"));
-      return;
-    }
-    clearInterval(conn.countdown); conn.countdown = null;
-    banner.replaceChildren(h("span", {}, "Checking the ppedit server…"));
-    const p = await ping();
-    if (S.exited) return;
-    if (p) serverBack(p);
-    else { banner.hidden = true; showServerDialog(); }
-  };
-  banner.hidden = false;
-  tick();
-  conn.countdown = setInterval(tick, 1000);
 }
 
 function showRestart() {
   const d = $("#server-down");
   const cmd = serverCommand();
-  const status = h("p", { class: "status" }, "Waiting for the server…");
   const copy = h("button", { onclick: () => {
     navigator.clipboard.writeText(cmd).then(() => { copy.textContent = "Copied"; }, () => toast("Copy the command by hand", true));
   } }, "Copy");
@@ -3275,21 +3258,12 @@ function showRestart() {
     h("h2", { id: "server-down-title" }, "Restart the ppedit server"),
     h("p", {}, "A web page cannot start programs on your computer, so run this command in a terminal on the server machine:"),
     h("div", { class: "command" }, h("code", {}, cmd), navigator.clipboard ? copy : null),
-    h("p", {}, "This page reconnects as soon as the server answers, and reloads the case the new server opens."),
-    status,
+    h("p", {}, "No new browser window opens: this page reconnects as soon as the server answers, and reloads the case the new server opens."),
+    h("p", { class: "status" }, waitingText()),
     h("div", { class: "actions" },
-      h("button", { onclick: () => { clearInterval(conn.restart); conn.restart = null; showServerDialog(); } }, "Back"),
-      h("button", { onclick: () => closeWindow("ppedit server not responding") }, "Exit browser window")));
+      h("button", { onclick: showServerDialog }, "Back"),
+      exitButton()));
   if (!d.open) d.showModal();
-  stopRetrying();
-  let busy = false;
-  conn.restart = setInterval(async () => {
-    if (busy || S.exited) return;
-    busy = true;
-    const p = await ping();
-    busy = false;
-    if (p && conn.restart) serverBack(p);
-  }, RESTART_POLL);
 }
 
 // /api/solve request; CVXOPF-* solvers get the solve options from the Settings tab
@@ -3439,10 +3413,7 @@ async function init() {
   setupSearch();
   setupBusMenu();
   setInterval(pollClaude, 1000);
-  $("#server-down").addEventListener("cancel", e => {  // Escape waits, as "Wait before retrying" does
-    e.preventDefault();
-    if (!conn.restart) waitAndRetry();
-  });
+  $("#server-down").addEventListener("cancel", e => e.preventDefault());  // stays until the server answers or the tab closes
   conn.timer = setInterval(watchServer, PING_INTERVAL);
   try {
     if (sessionStorage.getItem("ppedit.restarted")) {
