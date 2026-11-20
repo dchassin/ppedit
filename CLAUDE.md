@@ -186,6 +186,10 @@ API key to start sessions; tests use a fake client).
   In the geodata layout (`convex` argument) each area also grows, breadth
   first, into the empty grid points of its convex hull (`convexHull`),
   so shapes are as convex as their neighbors allow.
+  Area names are clickable (decision #36s, issue #112, `areaNameClick`,
+  `pickArea`, `areaTotals`): they open the area's `areas` row in the
+  inspector (`S.pick.kind === "areas"`) with its totals; one-line text
+  has `pointer-events: none` except `text.area-name`.
   Turning it on re-runs the force layout with area cohesion and gives each
   area its own column strip (box) in the one-line layout (part of the
   `olCache` signature), where ties always keep a column in each box and
