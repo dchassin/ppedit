@@ -468,7 +468,59 @@ def _pad(a,ncol):
     out[:,:a.shape[1]] = a
     return out
 
-def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
+def _step(res,t):
+    """Return the results of time step `t` of a multistep `res` (time first),
+    or `res` itself when `t` is `None`"""
+    if t is None:
+        return res
+    return {k:(v[t] if isinstance(v,np.ndarray) and v.ndim >= 1 and v.shape[0] > t else v)
+        for k,v in res.items()}
+
+def _step_cost(ppc,g,d,gkeep):
+    """Generator and DC line cost ($/h) of one step's dispatch: `g` and `d`,
+    the `runopf`-layout `gen` and `dcline` arrays"""
+    from pypower.totcost import totcost # pylint: disable=import-outside-toplevel
+    gen = ppc["gen"]
+    on = gkeep & (gen[:,7] == 1)
+    cost = float(np.sum(totcost(ppc["gencost"][:len(gen)][on],g[on,1]))) if on.any() else 0.0
+    costs = ppc.get("dclinecost")
+    if d is not None and costs is not None and len(costs):
+        on = d[:,2] != 0
+        if on.any():
+            cost += float(np.sum(totcost(np.asarray(costs)[:len(d)][on],np.abs(d[on,3]))))
+    return cost
+
+def _series_frames(series,ppc,live,rows,formulation):
+    """Return the `build_opf_multistep` keyword arguments for the per-step
+    case values in `series` (see `runopf`)"""
+    import pandas as pd # pylint: disable=import-outside-toplevel
+    out = {"T":int(series["T"]),"delta":float(series["delta"]),
+        "df_P":pd.DataFrame(np.asarray(series["Pd"],dtype=float)[:,live]),
+        "df_Q":pd.DataFrame(np.asarray(series["Qd"],dtype=float)[:,live])
+            if formulation in ("ac","socp") else None}
+    if rows:
+        pmin,pmax = np.asarray(series["dcline_Pmin"],dtype=float),np.asarray(series["dcline_Pmax"],dtype=float)
+        out["df_hvdc_min"] = pd.DataFrame({f"dcline-{n+1}":-pmax[:,n] for n in rows})
+        out["df_hvdc_max"] = pd.DataFrame({f"dcline-{n+1}":-pmin[:,n] for n in rows})
+    return out
+
+def _gen_limits(build,series,gen,gkeep,base):
+    """Add the per-step generator limits of `series["gen_limited"]` rows to `build`"""
+    import cvxpy as cp # pylint: disable=import-outside-toplevel
+    pg = build.variables["Pg"]
+    T = int(series["T"])
+    kept = np.cumsum(gkeep) - 1
+    pmin,pmax = np.asarray(series["gen_Pmin"],dtype=float),np.asarray(series["gen_Pmax"],dtype=float)
+    extra = []
+    for n in series["gen_limited"]:
+        if not gkeep[n] or gen[n,7] == 0:
+            continue
+        x = pg[int(kept[n]),:] if pg.shape == (int(gkeep.sum()),T) else pg[:,int(kept[n])]
+        extra += [x <= pmax[:,n]/base,x >= pmin[:,n]/base]
+    if extra:
+        build.prob = cp.Problem(build.prob.objective,list(build.prob.constraints) + extra)
+
+def runopf(ppc:dict,formulation:str,log,options:dict|None=None,series:dict|None=None) -> dict:
     """Solve `ppc` with the cvxopf `formulation` (see the module docstring)
 
     Arguments
@@ -482,22 +534,41 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
 
       - `options`: solve options (see the module docstring and `solve_options`)
 
+      - `series`: `None` for one OPF, or a multistep horizon (issue #124):
+        `T` (steps), `delta` (hours per step), `Pd` and `Qd` (`T` rows of
+        one value per `bus` row), `gen_Pmin`, `gen_Pmax` (one per `gen`
+        row), `dcline_Pmin`, `dcline_Pmax` (one per `dcline` row), and
+        `gen_limited` (the `gen` rows whose limits change by step). The
+        horizon is built with `build_opf_multistep`: loads by step (`df_P`;
+        `df_Q` for `ac` and `socp`), DC line limits by step (`df_hvdc_min`,
+        `df_hvdc_max`, signs reversed as above). cvxopf has no per-step
+        generator limits, so the case `Pmin`/`Pmax` of a `gen_limited` row
+        are set to the smallest `Pmin` and largest `Pmax` of the horizon and
+        `Pmin(t) <= Pg(t) <= Pmax(t)` is added to the CVXPY problem; this
+        needs the `default` preparation.
+
     Returns
     -------
 
       - `dict`: PYPOWER-style OPF results (see the module docstring), plus
         `status` (the solver status) and `warnings` (notes on data cvxopf
         does not model, cvxopf's warnings and relaxation checks that failed,
-        as `{"message", "detail"}`)
+        as `{"message", "detail"}`). With `series`, `f` is cvxopf's horizon
+        objective ($, rates times `delta`) and `steps` lists one result per
+        step (`bus`, `gen`, `branch`, `dcline`, `success`, `flows`,
+        `baseMVA`, and `f`: that step's generator and DC line cost in $/h)
 
     Exceptions
     ----------
 
       - `ValueError`: data or options cvxopf cannot use; cvxopf's own errors pass through
     """
-    from cvxopf import build_opf, extract_results, ACCEPTED_SOLVER_STATUSES, \
+    from cvxopf import build_opf, build_opf_multistep, extract_results, ACCEPTED_SOLVER_STATUSES, \
         OPFOptions, NumericalPreparation # pylint: disable=import-outside-toplevel
     opts = solve_options(options,formulation)
+    if series and series.get("gen_limited") and opts["preparation"] != "default":
+        raise ValueError("per-step generator limits (gen Pmin, Pmax series) need the default "
+            "cvxopf preparation")
     notes = []
     def note(text,detail=None):
         notes.append({"message":text,"detail":detail})
@@ -515,8 +586,15 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
             f"gencost for Q of gen {n+1} @{int(gen[n,0])}","gencost",len(gen)+n)
             for n in np.flatnonzero(gkeep)]))
         gencost = gencost[:len(gen)]
+    cgen = gen[gkeep].copy()
+    if series and series.get("gen_limited"):
+        kept = np.cumsum(gkeep) - 1
+        for n in series["gen_limited"]:
+            if gkeep[n]:
+                cgen[kept[n],9] = float(np.min(np.asarray(series["gen_Pmin"])[:,n]))
+                cgen[kept[n],8] = float(np.max(np.asarray(series["gen_Pmax"])[:,n]))
     case = {"version":"2","baseMVA":float(ppc["baseMVA"]),"bus":bus[live],
-        "gen":gen[gkeep],"branch":branch[bkeep],"gencost":gencost[gkeep]}
+        "gen":cgen,"branch":branch[bkeep],"gencost":gencost[gkeep]}
     links,rows = [],[]
     if "dcline" in ppc:
         if formulation == "singlenode_dc":
@@ -524,7 +602,12 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
                 _detail("dcline_copper",[_row("not modeled (no network)",f"dcline {n+1}",
                 "dcline",n) for n,d in enumerate(ppc["dcline"]) if d[2] != 0]))
         else:
-            links,rows = _hvdc_links(ppc,note)
+            dppc = ppc
+            if series:  # static boxes enclose every step's box
+                dppc = dict(ppc,dcline=ppc["dcline"].copy())
+                dppc["dcline"][:,9] = np.min(np.asarray(series["dcline_Pmin"],dtype=float),axis=0)
+                dppc["dcline"][:,10] = np.max(np.asarray(series["dcline_Pmax"],dtype=float),axis=0)
+            links,rows = _hvdc_links(dppc,note)
     build_options = None
     if opts["preparation"] == "recommended":
         build_options = OPFOptions(numerical_preparation=NumericalPreparation(**RECOMMENDED[formulation]))
@@ -538,10 +621,19 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
             if opts["preparation"] == "recommended" else ()))
         + f"; solver {opts['solver'] or ('IPOPT' if formulation == 'ac' else 'CLARABEL')}"
         + "".join(f", {k}={v!r}" for k,v in opts["solver_options"].items()) + "\n")
+    if series:
+        log.write(f"cvxopf multistep horizon: {int(series['T'])} step(s) of {float(series['delta']):g} h\n")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        build = build_opf(case,formulation=formulation,hvdc=links or None,options=build_options,
-            automatic_sparse_dispatch=True) # issue #122: keep CVXPY's sparse derivatives
+        if series:
+            build = build_opf_multistep(case,formulation=formulation,hvdc=links or None,
+                options=build_options,automatic_sparse_dispatch=True, # issue #122
+                **_series_frames(series,ppc,live,rows,formulation))
+            if series.get("gen_limited"):
+                _gen_limits(build,series,gen,gkeep,float(ppc["baseMVA"]))
+        else:
+            build = build_opf(case,formulation=formulation,hvdc=links or None,options=build_options,
+                automatic_sparse_dispatch=True) # issue #122: keep CVXPY's sparse derivatives
         with _capture_output(log,opts["verbose"]):
             build.solve(**kwargs)
         res = extract_results(build)
@@ -555,31 +647,13 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
     success = res["status"] in ACCEPTED_SOLVER_STATUSES
     log.write(f"cvxopf {formulation}: solver status {res['status']}\n")
     out = {"baseMVA":ppc["baseMVA"],"success":success,"et":time.time()-start,
-        "bus":_pad(bus,17),"gen":_pad(gen,25),"branch":_pad(branch,21),
         "flows":formulation != "singlenode_dc","status":str(res["status"]),"warnings":notes}
-    out["gen"][:,1:3] = 0.0
-    out["branch"][:,13:21] = 0.0
-    if "dcline" in ppc:
-        out["dcline"] = _pad(ppc["dcline"],19)
-        out["dcline"][:,3:9] = 0.0
-        out["dcline"][:,17:19] = 0.0
-        if formulation == "singlenode_dc":
-            out["dcline"][:,2] = 0
-    if not success:
-        return out
-    out["f"] = float(res["objective"])
-    b,g,br = out["bus"],out["gen"],out["branch"]
-    if formulation == "ac":
-        b[live,7],b[live,8] = res["Vm"],res["Va_deg"]
-    elif formulation == "socp":
-        b[live,7],b[live,8] = res["Vm_relaxed"],0.0
-        cand = recovered and recovered.get("candidate")
-        if cand and cand.get("Va_deg") is not None:
-            b[live,8] = np.ravel(cand["Va_deg"])
+    if formulation == "socp" and success:
         exact = recovered and recovered.get("exact_product_recovery")
         feasible = recovered and recovered.get("ac_feasible")
         log.write("SOCP relaxation: Vm is sqrt(w); Va is "
-            + ("from cvxopf's spanning-forest voltage recovery" if cand else "not available (0)")
+            + ("from cvxopf's spanning-forest voltage recovery"
+               if recovered and recovered.get("candidate") else "not available (0)")
             + "; exact relaxation: " + {True:"yes",False:"no",None:"unknown"}[exact]
             + ", recovered voltages AC feasible: " + {True:"yes",False:"no",None:"unknown"}[feasible] + "\n")
         text = "SOCP relaxation is not exact: Vm and Va are not an AC power flow solution" \
@@ -591,12 +665,56 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
             except Exception as err: # pylint: disable=broad-exception-caught
                 detail = _detail("socp",
                     explain=EXPLAIN["socp"] + f" (constraint check unavailable: {err})")
-            notes.append({"message":text,"detail":detail})
-    else:
-        b[live,7],b[live,8] = 1.0,0.0
+            notes.append({"message":text + (" (details for the first step)" if series else ""),
+                "detail":detail})
+    elif formulation in ("lossy_dc","singlenode_dc") and success:
         log.write("DC formulation: flat voltages (1 pu) and no angles "
             + ("(lossy_dc is a network-flow model, not a phase-angle DC power flow)\n"
                if formulation == "lossy_dc" else "(copper plate: no network, no branch flows)\n"))
+    fill = lambda t: _fill(ppc,formulation,_step(res,t),recovered,t,success,live,gkeep,bkeep,rows)
+    if not series:
+        out.update(fill(None))
+        if success:
+            out["f"] = float(res["objective"])
+        return out
+    out["steps"] = []
+    for t in range(int(series["T"])):
+        step = fill(t)
+        step.update({"baseMVA":ppc["baseMVA"],"success":success,"flows":out["flows"]})
+        if success:
+            step["f"] = _step_cost(ppc,step["gen"],step.get("dcline"),gkeep)
+        out["steps"].append(step)
+    out.update({k:out["steps"][0][k] for k in ("bus","gen","branch","dcline") if k in out["steps"][0]})
+    if success:
+        out["f"] = float(res["objective"])
+    return out
+
+def _fill(ppc,formulation,res,recovered,t,success,live,gkeep,bkeep,rows) -> dict:
+    """Return `bus`, `gen`, `branch` (and `dcline`) arrays in the `runopf`
+    layout for one solution `res` (step `t` of a horizon, or `None`)"""
+    bus,gen,branch = ppc["bus"],ppc["gen"],ppc["branch"]
+    out = {"bus":_pad(bus,17),"gen":_pad(gen,25),"branch":_pad(branch,21)}
+    out["gen"][:,1:3] = 0.0
+    out["branch"][:,13:21] = 0.0
+    if "dcline" in ppc:
+        out["dcline"] = _pad(ppc["dcline"],19)
+        out["dcline"][:,3:9] = 0.0
+        out["dcline"][:,17:19] = 0.0
+        if formulation == "singlenode_dc":
+            out["dcline"][:,2] = 0
+    if not success:
+        return out
+    b,g,br = out["bus"],out["gen"],out["branch"]
+    if formulation == "ac":
+        b[live,7],b[live,8] = res["Vm"],res["Va_deg"]
+    elif formulation == "socp":
+        b[live,7],b[live,8] = res["Vm_relaxed"],0.0
+        cand = recovered and recovered.get("candidate")
+        if cand and cand.get("Va_deg") is not None:
+            va = np.asarray(cand["Va_deg"],dtype=float)
+            b[live,8] = np.ravel(va if t is None or va.ndim < 2 else va[t])
+    else:
+        b[live,7],b[live,8] = 1.0,0.0
     g[gkeep,1] = res["Pg"]
     if res.get("Qg") is not None:
         g[gkeep,2] = res["Qg"]
@@ -609,9 +727,9 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
     br[br[:,10] == 0,13:17] = 0.0
     if rows:
         d = out["dcline"]
+        vm = {int(x[0]):x[7] for x in b}
         for k,n in enumerate(rows):
-            d[n,3] = -float(res["p_hvdc_in"][k])
-            d[n,4] = float(res["p_hvdc_out"][k])
-            vm = {int(x[0]):x[7] for x in b}
+            d[n,3] = -float(np.ravel(res["p_hvdc_in"])[k])
+            d[n,4] = float(np.ravel(res["p_hvdc_out"])[k])
             d[n,7],d[n,8] = vm[int(d[n,0])],vm[int(d[n,1])]
     return out

@@ -216,6 +216,22 @@ In the editor:
     `Case.solve(kind,algorithm,options)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
+  - **Series**: a time series of case values for multistep OPF (issue
+    #124), read with **Import…** from a data file (same formats as the
+    tables) with one row per time step: an optional label column (`time`,
+    `timestamp`, `date`, `step` or `index`) and one column per value,
+    named `bus.Pd.N` or `bus.Qd.N` (bus number `N`), `gen.Pmin.N` or
+    `gen.Pmax.N` (generator row `N`, from 1), `dcline.Pmin.N` or
+    `dcline.Pmax.N` (DC line row `N`). Values not in the file keep their
+    case values. The step length (hours) is set beside it; **Export ▾**
+    and **Remove series** are undoable like other edits. The series is
+    saved in `.py` and `.json` cases (not `.glm`). With cvxopf installed,
+    **Run OPF ▾ › Multistep** solves every step as one cvxopf problem with
+    the chosen network model; the Results tab then has a step picker, the
+    horizon cost, a table of steps, and **Apply step N to case**, and the
+    diagram and solution columns show the chosen step (the diagram draws
+    the case loads). Steps are not coupled (no ramp limits or storage).
+    Generator limits by step need the default CVXOPF preparation.
   - **Results**: PF/OPF summary (with the solver used), bus voltages (and LMPs for OPF), dispatch,
     branch flows and loading, DC line flows and losses, area totals, the
     PYPOWER report, and **Apply solution to case** to copy the solved

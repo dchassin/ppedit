@@ -20,6 +20,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
 - Change area handling: `COLUMNS["areas"]`, `Case.validate` and `Case._area_summary` in `ppedit/case.py`; `areaRegions`/`convexHull`/`traceOutline`, area grouping in `layout`/`onelineLayout` in `ppedit/static/app.js`; `ppedit/_test/test_areas.py`
 - Change the cvxopf solvers: `OPF_SOLVERS` and `Case.solve` in `ppedit/case.py`; `ppedit/_cvxopf.py`; `ppedit/_test/test_cvxopf.py`
+- Change time series or multistep OPF: `Case.set_series`/`series_values`/`at_step`/`_series_input` and `Case.solve` in `ppedit/case.py`; `runopf(series=...)` in `ppedit/_cvxopf.py`; `read_series`/`dump_series` in `ppedit/_tableio.py`; `/api/series*` in `ppedit/server.py`; `renderSeries`, `stepView` in `ppedit/static/app.js`; `ppedit/_test/test_series.py`
 - Change DC line handling: `COLUMNS["dcline"]`, `COST_TABLES` and `Case.solve` in `ppedit/case.py`; solver callbacks in `ppedit/_dcline.py`; `ppedit/_test/test_dcline.py`
 - Change WECC 240 2020 areas (EIA-930 balancing authorities): `examples/wecc240_ba.csv`, then `python3 examples/wecc240_areas.py`; see `examples/README.md`
 - Change WECC 240 generator costs: `examples/wecc240_gentypes.csv` (or rederive it with `examples/wecc240_gentypes.py`), then `python3 examples/build_wecc240_2018.py`; see `examples/README.md`
@@ -43,7 +44,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O (and `.raw` input), edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
 | `ppedit/_psse.py` | PSS/E RAW reader (revisions 23–35), after MATPOWER `psse2mpc` | private; read only; tested by `_test/test_psse.py` |
 | `ppedit/_cvxopf.py` | cvxopf OPF backend for `Case.solve` (`CVXOPF-*` solvers): case in, `runopf`-layout results out | private; optional dependency; tested by `_test/test_cvxopf.py` (skipped without cvxopf) |
-| `ppedit/_tableio.py` | table data import/export with pandas (`read_rows`, `dump_rows`, `table_formats`) | private; tested by `_test/test_tableio.py` |
+| `ppedit/_tableio.py` | table and time series data import/export with pandas (`read_rows`, `dump_rows`, `read_series`, `dump_series`, `table_formats`) | private; tested by `_test/test_tableio.py` |
 | `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
 | `ppedit/claude.py` | `Sessions`: Claude API conversations with tools that edit the case, web and local data sources | tested by `_test/test_claude.py` with a fake client |
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API, `about()` package metadata | tested by `_test/test_server.py` |

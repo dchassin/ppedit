@@ -9,6 +9,12 @@ file name extension (`table_format`), for example `bus.csv`, `bus.csv.gz`,
 
 Files have one column per table column, headed by its name in
 `ppedit.case.COLUMNS` (no index column); `Case.import_rows` checks the names.
+
+Time series files (`read_series`, `dump_series`; issue #124) have one row
+per time step: an optional label column (named `time`, `timestamp`,
+`datetime`, `date`, `step` or `index`, any case, or an unnamed first column
+as pandas writes an index) and one column per case value named
+`table.column.key` (see `ppedit.Case.set_series`), e.g. `bus.Pd.5`.
 """
 
 import importlib.util
@@ -216,4 +222,54 @@ def dump_rows(table:str,rows:list[list],filename:str,
         frame.to_feather(buffer)
     else:
         frame.to_excel(buffer,index=False,sheet_name=table)
+    return buffer.getvalue()
+
+SERIES_LABELS = ("time","timestamp","datetime","date","step","index")
+"""Names of the step label column of a time series file (any case)"""
+
+def read_series(filename:str,data:bytes) -> tuple[list[str]|None,list[str],list[list]]:
+    """Read a time series from file contents (see the module docstring)
+
+    Returns
+    -------
+
+      - `tuple`: step labels (text, or `None` when the file has no label
+        column), value column names, and one row of values per step
+
+    Exceptions
+    ----------
+
+      - `CaseError`: unsupported format, the file cannot be read, or more
+        than one label column
+    """
+    columns,rows = read_rows(filename,data)
+    label = [j for j,c in enumerate(columns) if c.lower() in SERIES_LABELS
+        or (j == 0 and (c == "" or c.startswith("Unnamed:")))]
+    if len(label) > 1:
+        raise CaseError(f"'{filename}' has {len(label)} step label columns "
+            f"({', '.join(columns[j] for j in label)}); keep one")
+    if not label:
+        return None,columns,rows
+    j = label[0]
+    index = ["" if row[j] is None else str(row[j]) for row in rows]
+    return index,columns[:j]+columns[j+1:],[row[:j]+row[j+1:] for row in rows]
+
+def dump_series(series:dict,filename:str) -> bytes:
+    """Write a time series (`Case.series`) to file contents: a `time` column
+    of step labels, then one column per series column"""
+    import pandas as pd # pylint: disable=import-outside-toplevel
+    fmt,compression = table_format(filename)
+    frame = pd.DataFrame(series["values"],columns=series["columns"],dtype="float64")
+    frame.insert(0,"time",list(series["index"]))
+    buffer = io.BytesIO()
+    if fmt in ("csv","tsv"):
+        frame.to_csv(buffer,sep="," if fmt == "csv" else "\t",index=False,compression=compression)
+    elif fmt == "json":
+        frame.to_json(buffer,orient="records",compression=compression,double_precision=15)
+    elif fmt == "parquet":
+        frame.to_parquet(buffer,index=False)
+    elif fmt == "feather":
+        frame.to_feather(buffer)
+    else:
+        frame.to_excel(buffer,index=False,sheet_name="series")
     return buffer.getvalue()

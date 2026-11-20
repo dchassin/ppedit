@@ -45,6 +45,13 @@ auxiliary data named by `Case.geotags`. Geodata is read from the case's
 `BUS_I`, `LAT` and `LON` (`Case.load_geodata`); any other CSV columns are
 kept as auxiliary data. The editor draws the network on a map from it.
 
+A case may carry a time series of case values (`Case.series`, issue #124):
+bus `Pd` and `Qd`, generator and DC line `Pmin` and `Pmax` by time step,
+in columns named `table.column.key` (`bus.Pd.5` for bus 5, `gen.Pmax.2`
+for the second generator; `Case.set_series`). It is read from and written
+to the `series` key of `.py` and `.json` cases (not GLM), and `Case.solve`
+with `multistep=True` solves all steps as one cvxopf OPF.
+
 Examples
 --------
 
@@ -137,6 +144,7 @@ References
 """
 
 import ast
+import copy
 import csv
 import io
 import json
@@ -402,6 +410,14 @@ GEODATA_COLUMNS = ["BUS_I","LAT","LON"]
 """Required geodata columns (CSV header names are matched ignoring case);
 latitude and longitude are decimal degrees (WGS84)"""
 
+SERIES_COLUMNS = {"bus":("Pd","Qd"),"gen":("Pmin","Pmax"),"dcline":("Pmin","Pmax")}
+"""Case values a time series (`Case.series`) may give by step: `table: columns`"""
+
+SERIES_STEPS = 8784
+"""Most time steps in a series (one leap year of hours)"""
+
+_SERIES_NAME = re.compile(r"^\s*(bus|gen|dcline)\.(\w+)\.(\d+)\s*$",re.I)
+
 class CaseError(ValueError):
     """Raised for invalid case data or an unreadable case file"""
 
@@ -519,6 +535,11 @@ class Case:
         """Bus locations: rows of `[BUS_I, LAT, LON, aux...]` (decimal degrees)"""
         self.geotags = []
         """Names of the auxiliary geodata values (columns after `LON`)"""
+        self.series = None
+        """Time series of case values for multistep OPF (issue #124), or
+        `None`: `index` (one label per step), `delta` (hours per step),
+        `columns` (names `table.column.key`, see `Case.set_series`) and
+        `values` (one row per step, one value per column)"""
         self.source = None
         """How `Case.load` read the case (`None` otherwise): `file` (base
         name), `format` (`py`, `json`, `glm` or `raw`), `revision` (PSS/E
@@ -563,6 +584,15 @@ class Case:
         if not self.tables["areas"]:
             self.tables["areas"] = self._default_areas()
         self.geodata,self.geotags = _geo_from_ppc(data)
+        series = data.get("series")
+        if series:
+            if not isinstance(series,dict):
+                raise CaseError("series must be a dict with columns and values")
+            try:
+                self.set_series(series.get("columns"),series.get("values"),
+                    series.get("index"),series.get("delta",1.0))
+            except CaseError as err:
+                raise CaseError(f"series: {err}") from err
 
     def _default_areas(self):
         """Areas rows rebuilt from the bus areas (see `_price_ref`)"""
@@ -691,9 +721,12 @@ class Case:
                 if key in data:
                     width = len(data[key][0]) if key in COST_TABLES else len(COLUMNS[key])
                     data[key] = np.array(data[key],dtype=float).reshape(-1,width)
-        elif self.geodata:
-            data["geodata"] = [list(row) for row in self.geodata]
-            data["geotags"] = list(self.geotags)
+        else:
+            if self.geodata:
+                data["geodata"] = [list(row) for row in self.geodata]
+                data["geotags"] = list(self.geotags)
+            if self.series:
+                data["series"] = copy.deepcopy(self.series)
         return data
 
     def to_dict(self) -> dict:
@@ -707,6 +740,7 @@ class Case:
             "notes": self.notes,
             "geodata": _jsonsafe(self.geodata),
             "geotags": list(self.geotags),
+            "series": _jsonsafe(self.series),
         }
 
     def dumps(self,fmt:str) -> str:
@@ -768,6 +802,15 @@ def {name}():
             rows = [", ".join(_geo_literal(v) for v in row) for row in self.geodata]
             out.write(",\n".join(f"        [{r}]" for r in rows))
             out.write(f"\n    ]\n    ppc[\"geotags\"] = {json.dumps(self.geotags)}\n")
+        if self.series:
+            ser = self.series
+            out.write("\n    ## time series of case values (multistep OPF; ppedit)\n"
+                f"    ppc[\"series\"] = {{\n        \"delta\": {_fmt(ser['delta'])},\n"
+                f"        \"index\": {json.dumps(ser['index'])},\n"
+                f"        \"columns\": {json.dumps(ser['columns'])},\n        \"values\": [\n")
+            out.write(",\n".join("            [" + ", ".join(_fmt(v) for v in row) + "]"
+                for row in ser["values"]))
+            out.write("\n        ],\n    }\n")
         out.write("\n    return ppc\n")
         return out.getvalue()
 
@@ -831,6 +874,10 @@ def {name}():
                 "module pypower has no area objects (bus area numbers are kept; "
                 "reading this file rebuilds the rows with default price reference buses "
                 "and no names)\n")
+        if self.series:
+            out.write(f"\n// time series ({len(self.series['values'])} steps, "
+                f"{len(self.series['columns'])} columns) not written: save as .py or .json "
+                "to keep it\n")
         return out.getvalue()
 
     def _dump_glm_dclinecost(self,out):
@@ -968,6 +1015,8 @@ def {name}():
                 if geo[0] == old and value != old:
                     geo[0] = value
                     cascade = True
+            if value != old and self._series_rekey("bus",lambda key: value if key == old else key):
+                cascade = True
         if table == "areas" and column == "area":
             old = record[0]
             if value != old and any(r[0] == value for r in self.tables["areas"]):
@@ -1056,6 +1105,8 @@ def {name}():
         except CaseError:
             del rows[index]
             raise
+        if table in ("gen","dcline") and index < len(rows) - 1:
+            self._series_rekey(table,lambda key: key + 1 if key > index else key)
         cost = {v:k for k,v in COST_TABLES.items()}.get(table)
         if cost and self.tables[cost]:
             costs = self.tables[cost]
@@ -1110,6 +1161,7 @@ def {name}():
                 for k,v in self.delete_rows(sub,index).items():
                     removed[k] += v
             self.geodata = [g for g in self.geodata if g[0] not in numbers]
+            self._series_rekey("bus",lambda key: None if key in numbers else key)
         cost = {v:k for k,v in COST_TABLES.items()}.get(table)
         if cost and self.tables[cost]:
             ngen = len(self.tables[table])
@@ -1122,6 +1174,10 @@ def {name}():
         for r in rows:
             del self.tables[table][r]
             removed[table] += 1
+        if table in ("gen","dcline"):
+            gone = {r+1 for r in rows}
+            self._series_rekey(table,lambda key: None if key in gone
+                else key - sum(1 for g in gone if g < key))
         return removed
 
     def import_rows(self,table:str,columns:list[str],rows:list[list],
@@ -1332,6 +1388,200 @@ def {name}():
             where.setdefault(row[0],row)
         return where
 
+    # ----- time series (issue #124) -----
+
+    def set_series(self,columns:list[str]|None,values:list[list]|None=None,
+            index:list|None=None,delta:float=1.0) -> dict|None:
+        """Set the time series of case values used by multistep OPF
+
+        Arguments
+        ---------
+
+          - `columns`: column names `table.column.key` (`None` or empty
+            clears the series): `table` and `column` as in `SERIES_COLUMNS`
+            (`bus.Pd`, `bus.Qd`, `gen.Pmin`, `gen.Pmax`, `dcline.Pmin`,
+            `dcline.Pmax`; case is ignored) and `key` the bus number
+            (`bus_i`) for `bus`, else the row number counted from 1, as in
+            `gen.Pmax.2` for the second generator
+
+          - `values`: one row per time step, one finite number per column
+            (MW, MVAr)
+
+          - `index`: one label per step (e.g. a time stamp; default `1`,
+            `2`, ...), kept as text
+
+          - `delta`: hours per step (positive)
+
+        Values not in the series keep their case values at every step. The
+        series moves with the case: renumbering a bus renames its columns,
+        deleting a bus, generator or DC line drops its columns, and adding
+        or deleting generator or DC line rows renumbers the columns of the
+        rows after them.
+
+        Returns
+        -------
+
+          - `dict`: the series as stored (`Case.series`), or `None`
+
+        Exceptions
+        ----------
+
+          - `CaseError`: an unknown or repeated column, a bus or row that
+            does not exist, a missing or non-finite value, rows of
+            different lengths, more than `SERIES_STEPS` steps, labels that
+            do not match the steps, or `delta` not positive
+        """
+        if not columns:
+            self.series = None
+            return None
+        names = []
+        for name in columns:
+            table,column,key = self._series_part(name)
+            names.append(f"{table}.{column}.{key}")
+        dup = sorted({x for x in names if names.count(x) > 1})
+        if dup:
+            raise CaseError(f"repeated series column(s): {', '.join(dup)}")
+        if not values:
+            raise CaseError("the series has no time steps")
+        if len(values) > SERIES_STEPS:
+            raise CaseError(f"the series has {len(values)} steps; at most {SERIES_STEPS} are allowed")
+        rows = []
+        for t,row in enumerate(values):
+            if not isinstance(row,(list,tuple)) or len(row) != len(names):
+                raise CaseError(f"series step {t+1} has "
+                    f"{len(row) if isinstance(row,(list,tuple)) else 'no'} values, expected {len(names)}")
+            out = []
+            for name,v in zip(names,row):
+                try:
+                    x = float(v)
+                except (TypeError,ValueError):
+                    x = math.nan
+                if not math.isfinite(x):
+                    raise CaseError(f"series step {t+1}, {name}: {v!r} is not a finite number")
+                out.append(x)
+            rows.append(out)
+        if index is None:
+            index = [str(t+1) for t in range(len(rows))]
+        if len(index) != len(rows):
+            raise CaseError(f"the series has {len(index)} step labels for {len(rows)} steps")
+        self.series = {"index":[str(x) for x in index],"delta":self._series_delta(delta),
+            "columns":names,"values":rows}
+        return self.series
+
+    def set_series_delta(self,delta:float):
+        """Set the hours per step of the series (`CaseError` if there is none)"""
+        if not self.series:
+            raise CaseError("the case has no time series")
+        self.series["delta"] = self._series_delta(delta)
+
+    @staticmethod
+    def _series_delta(delta):
+        try:
+            x = float(delta)
+        except (TypeError,ValueError):
+            x = math.nan
+        if not math.isfinite(x) or x <= 0:
+            raise CaseError(f"series step length must be a positive number of hours, not {delta!r}")
+        return x
+
+    def _series_part(self,name):
+        """Return `(table, column, key)` of a series column name (see `set_series`)"""
+        m = _SERIES_NAME.match(str(name))
+        if not m:
+            raise CaseError(f"series column '{name}' is not table.column.key "
+                "(e.g. bus.Pd.5, gen.Pmax.1, dcline.Pmax.1)")
+        table,column,key = m[1].lower(),m[2],int(m[3])
+        known = {c.lower():c for c in SERIES_COLUMNS[table]}
+        if column.lower() not in known:
+            raise CaseError(f"series column '{name}': {table} values by step can be "
+                f"{', '.join(SERIES_COLUMNS[table])}")
+        column = known[column.lower()]
+        if table == "bus":
+            if not any(r[0] == key for r in self.tables["bus"]):
+                raise CaseError(f"series column '{name}': bus {key} does not exist")
+        elif not 1 <= key <= len(self.tables[table]):
+            raise CaseError(f"series column '{name}': {table} row {key} does not exist "
+                f"({len(self.tables[table])} rows)")
+        return table,column,key
+
+    def _series_rekey(self,table,func) -> bool:
+        """Change the keys of the `table` series columns by `func(key)`
+        (`None` drops the column); return whether any changed"""
+        if not self.series:
+            return False
+        keep,names,changed = [],[],False
+        for j,name in enumerate(self.series["columns"]):
+            t,column,key = name.split(".")
+            new = func(int(key)) if t == table else int(key)
+            if new is None:
+                changed = True
+                continue
+            changed |= new != int(key)
+            keep.append(j)
+            names.append(f"{t}.{column}.{new}")
+        if changed:
+            if not names:
+                self.series = None
+            else:
+                self.series["columns"] = names
+                self.series["values"] = [[row[j] for j in keep] for row in self.series["values"]]
+        return changed
+
+    def series_values(self,table:str,column:str) -> list[list[float]]:
+        """Return the values of `table.column` at every step of the series:
+        one row per step, one value per row of `table` (case values where
+        the series has none)"""
+        names = [c["name"] for c in COLUMNS[table]]
+        k = names.index(column)
+        base = [r[k] for r in self.tables[table]]
+        if not self.series:
+            return [base]
+        rows = [list(base) for _ in self.series["values"]]
+        where = {r[0]:n for n,r in enumerate(self.tables["bus"])}
+        for j,name in enumerate(self.series["columns"]):
+            t,c,key = name.split(".")
+            if t != table or c != column:
+                continue
+            n = where[int(key)] if t == "bus" else int(key) - 1
+            for row,values in zip(rows,self.series["values"]):
+                row[n] = values[j]
+        return rows
+
+    def at_step(self,step:int) -> "Case":
+        """Return a copy of the case with the series values of `step`
+        (counted from 0); the copy has no series"""
+        if not self.series or not 0 <= step < len(self.series["values"]):
+            raise CaseError(f"the case has no series step {step+1}")
+        case = Case(name=self.name)
+        case.version,case.baseMVA = self.version,self.baseMVA
+        case.tables = copy.deepcopy(self.tables)
+        case.geodata,case.geotags = copy.deepcopy(self.geodata),list(self.geotags)
+        where = {r[0]:n for n,r in enumerate(self.tables["bus"])}
+        for name,value in zip(self.series["columns"],self.series["values"][step]):
+            table,column,key = name.split(".")
+            n = where[int(key)] if table == "bus" else int(key) - 1
+            k = [c["name"] for c in COLUMNS[table]].index(column)
+            case.tables[table][n][k] = value
+        return case
+
+    def _series_input(self) -> dict:
+        """Per-step case values for `ppedit._cvxopf.runopf` (`series` argument);
+        `CaseError` when a step has `Pmin > Pmax`"""
+        out = {"T":len(self.series["values"]),"delta":self.series["delta"]}
+        for table,column in (("bus","Pd"),("bus","Qd"),("gen","Pmin"),("gen","Pmax"),
+                ("dcline","Pmin"),("dcline","Pmax")):
+            key = column if table == "bus" else f"{table}_{column}"
+            out[key] = self.series_values(table,column)
+        for table in ("gen","dcline"):
+            for n in range(len(self.tables[table])):
+                for t,(lo,hi) in enumerate(zip(out[f"{table}_Pmin"],out[f"{table}_Pmax"])):
+                    if lo[n] > hi[n]:
+                        raise CaseError(f"series step {t+1} ({self.series['index'][t]}): "
+                            f"{table} {n+1} has Pmin {lo[n]:g} > Pmax {hi[n]:g}")
+        out["gen_limited"] = sorted({int(x.split(".")[2]) - 1 for x in self.series["columns"]
+            if x.startswith("gen.")})
+        return out
+
     def apply_result(self,result:dict):
         """Copy a solution's bus voltages, generator outputs and DC line flows into the case
 
@@ -1505,7 +1755,8 @@ def {name}():
                     + ", ".join(missing[:10]) + (", ..." if len(missing) > 10 else ""))
         return issues
 
-    def solve(self,kind:str="pf",algorithm:str|None=None,options:dict|None=None) -> dict:
+    def solve(self,kind:str="pf",algorithm:str|None=None,options:dict|None=None,
+            multistep:bool=False) -> dict:
         """Run a PYPOWER power flow (`pf`) or optimal power flow (`opf`)
 
         Arguments
@@ -1527,6 +1778,10 @@ def {name}():
             solver for the convex models; default CLARABEL), `verbose`
             (solver output in `log`), and `solver_options` (a dict of other
             solver keyword arguments, e.g. `{"max_iter": 500}`)
+
+          - `multistep`: solve the time series (`Case.series`) as one
+            multistep OPF (issue #124); needs `opf`, a `CVXOPF-*` solver and
+            a series (see below)
 
         Returns
         -------
@@ -1567,6 +1822,21 @@ def {name}():
         are grouped (one message for all `rateA` = 0 branches) and refer to
         case rows and bus numbers, not cvxopf's internal indexes.
 
+        A multistep OPF builds every step of the series in one cvxopf
+        problem (`build_opf_multistep`, steps `delta` hours long) and
+        returns the first step in the layout above, plus `multistep`
+        (`steps`, `delta`, `index`: the step labels), `horizon_objective`
+        (cvxopf's objective over the horizon, $: each step's cost rate
+        times `delta`) and `steps`: one result per step with `label`,
+        `success`, `objective` (that step's generator and DC line cost,
+        $/h), `losses_MW`, `dcline_losses_MW`, `bus`, `gen`, `branch`,
+        `dcline`, `areas` (computed with that step's loads), `extended`
+        and `log` (that step's report; the top-level `log` holds the notes
+        and solver output common to all steps). The steps are coupled only
+        by the shared problem: there are no ramp limits, storage or other
+        constraints between steps. `messages` cover the whole horizon.
+        Other results have `multistep` `None`.
+
         Buses with no in-service branch are solved as isolated (type NONE)
         without changing the case; `log` names them. DC lines are modeled
         as in `pypower.toggle_dcline`: each in-service line is a pair of
@@ -1604,8 +1874,10 @@ def {name}():
         ----------
 
           - `CaseError`: the case has validation errors, OPF without costs,
-            an unknown algorithm, a solver whose module is not installed, or
-            invalid cvxopf `options`
+            an unknown algorithm, a solver whose module is not installed,
+            invalid cvxopf `options`, or a multistep OPF with another solver,
+            without a series, with a step where `Pmin > Pmax`, or with
+            generator limits in the series and the `recommended` preparation
         """
         errors = [x for x in self.validate() if x["level"] == "error"]
         if errors:
@@ -1627,6 +1899,13 @@ def {name}():
                 and importlib.util.find_spec(OPF_SOLVERS[algorithm][3]) is None:
             raise CaseError(f"OPF solver {algorithm} needs the Python module "
                 f"'{OPF_SOLVERS[algorithm][3]}', which is not installed")
+        series = None
+        if multistep:
+            if not cvx:
+                raise CaseError("multistep OPF needs a CVXOPF-* solver")
+            if not self.series:
+                raise CaseError("multistep OPF needs a time series (import one on the Series tab)")
+            series = self._series_input()
         cvx_options = None
         if cvx:
             from ppedit._cvxopf import solve_options # pylint: disable=import-outside-toplevel
@@ -1634,6 +1913,9 @@ def {name}():
                 cvx_options = solve_options(options,OPF_SOLVERS[algorithm][2])
             except ValueError as err:
                 raise CaseError(str(err)) from err
+            if series and series["gen_limited"] and cvx_options["preparation"] != "default":
+                raise CaseError("per-step generator limits (gen Pmin, Pmax series) need the "
+                    "default cvxopf preparation (Settings tab)")
         ppc = self.to_ppc(arrays=True)
         # buses with no in-service branch make the solver fail; solve them as isolated
         connected = {r[k] for r in self.tables["branch"] if r[10] == 1 and r[0] != r[1] for k in (0,1)}
@@ -1651,7 +1933,8 @@ def {name}():
         else:
             opt = ppoption(OPF_ALG=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
         info = {"kind":kind,"algorithm":algorithm,"solver":algs[algorithm][0],"dc":dc,
-            "options":cvx_options}
+            "options":cvx_options,"multistep":None if series is None else
+                {"steps":series["T"],"delta":series["delta"],"index":list(self.series["index"])}}
         log = io.StringIO()
         messages = []
         def message(level,text,detail=None):
@@ -1678,7 +1961,8 @@ def {name}():
                     "element":f"dcline {n+1}","table":"dcline","row":n,"value":None} for n in cut]))
             if not cvx:
                 ppc = add_dclines(ppc)
-        what = ("DC " if dc else "") + kind.upper() + f" ({re.sub(r'^(AC|DC): ','',algs[algorithm][0])})"
+        what = ("multistep " if series else "") + ("DC " if dc else "") + kind.upper() \
+            + f" ({re.sub(r'^(AC|DC): ','',algs[algorithm][0])})"
         failed = None
         with contextlib.redirect_stdout(log), warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
@@ -1688,7 +1972,7 @@ def {name}():
                     res["success"] = bool(success)
                 elif cvx:
                     from ppedit._cvxopf import runopf as cvxopf_runopf # pylint: disable=import-outside-toplevel
-                    res = cvxopf_runopf(ppc,OPF_SOLVERS[algorithm][2],log,cvx_options)
+                    res = cvxopf_runopf(ppc,OPF_SOLVERS[algorithm][2],log,cvx_options,series)
                 else:
                     res = runopf(ppc,opt)
             except Exception as err: # pylint: disable=broad-exception-caught
@@ -1700,6 +1984,7 @@ def {name}():
             message("error",f"{what} failed: {failed}")
             return {"success":False,**info,"log":log.getvalue(),"messages":messages,
                 "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[],"extended":{}}
+        dead = {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated)
         for w in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
             messages.append({"level":"warning","message":w["message"]}
                 | ({"detail":w["detail"]} if w.get("detail") else {}))
@@ -1707,6 +1992,29 @@ def {name}():
             message("error",f"{what} did not converge"
                 + (f" (solver status {res['status']})" if "status" in res else "")
                 + "; see the solver log on the Results tab")
+        if series is None:
+            result = self._solution(res,kind,cvx,info,opt,log,dead)
+            result["messages"] = messages
+            return _jsonsafe(result)
+        common = log.getvalue()
+        steps = []
+        for t,step in enumerate(res["steps"]):
+            label = self.series["index"][t]
+            slog = io.StringIO()
+            slog.write(f"Step {t+1} of {len(res['steps'])} ({label})\n")
+            out = self.at_step(t)._solution(step,kind,cvx,info,opt,slog,dead) # pylint: disable=protected-access
+            out["label"] = label
+            steps.append({k:out[k] for k in ("label","success","objective","losses_MW",
+                "dcline_losses_MW","bus","gen","branch","dcline","areas","extended","log")})
+        result = dict(steps[0])
+        result.update(info,label=None,messages=messages,log=common,steps=steps,
+            horizon_objective=float(res["f"]) if "f" in res else None)
+        return _jsonsafe(result)
+
+    def _solution(self,res,kind,cvx,info,opt,log,dead) -> dict:
+        """Result rows of one solver result `res` (see `solve`), with the
+        solver report written to `log`; `dead`: unsolved bus numbers"""
+        from pypower.api import ppoption # pylint: disable=import-outside-toplevel,no-name-in-module
         try:
             from pypower.printpf import printpf # pylint: disable=import-outside-toplevel
             with warnings.catch_warnings():
@@ -1740,7 +2048,6 @@ def {name}():
         result = {
             "success": bool(res["success"]),
             **info,
-            "messages": messages,
             "iterations": int(res["iterations"]) if "iterations" in res else None,
             "objective": float(res["f"]) if kind == "opf" and "f" in res else None,
             "log": log.getvalue(),
@@ -1764,8 +2071,7 @@ def {name}():
         result["extended"] = _extended(res,kind == "opf" and not cvx,res.get("flows",True))
         result["dcline_losses_MW"] = sum(d["loss_MW"] for d in dclines)
         result["losses_MW"] = losses + result["dcline_losses_MW"]
-        result["areas"] = self._area_summary(result,
-            {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated))
+        result["areas"] = self._area_summary(result,dead)
         if result["success"] and (self.tables["areas"] or len(result["areas"]) > 1):
             log = io.StringIO()
             log.write("\nAreas\n  area  buses      Pg MW      Pd MW"
@@ -1776,7 +2082,7 @@ def {name}():
                     + (f"{a['lam_P']:13.2f}" if kind == "opf" and a["lam_P"] is not None else "")
                     + (f"  {a['name']}" if a["name"] else "") + "\n")
             result["log"] += log.getvalue()
-        return _jsonsafe(result)
+        return result
 
     @staticmethod
     def _solver_warnings(caught,message):

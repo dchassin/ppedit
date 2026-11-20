@@ -253,6 +253,21 @@ API key to start sessions; tests use a fake client).
   `Case.import_rows` drops columns with their names (`ignored`).
   `S.tableSort` column indexes past `COLUMNS[table]` refer to them.
 
+- Time series and multistep OPF (decision #59, issue #124): `Case.series`
+  (`set_series`, `_series_rekey` keeps columns valid on edits, `at_step`,
+  `_series_input`), `read_series`/`dump_series` in `_tableio.py`,
+  `/api/series*` routes, `renderSeries` and `stepView`/`setStep` in
+  `app.js`, `series` argument of `_cvxopf.runopf`. Per-step generator
+  limits are CVXPY constraints ppedit appends after `build_opf_multistep`
+  (`_gen_limits`; it replaces `build.prob`), because cvxopf has no
+  time-varying generator limits as of cvxopf fd4d279 (2026-11-18); they
+  only work with the default preparation (the prepared solve rebuilds the
+  problem). Switch to cvxopf's own input if it adds one. The diagram still
+  draws case loads for a multistep step. Full AC multistep memory grows
+  with the horizon inside cvxopf (case118: about 0.5 GB per step, the same
+  with or without `automatic_sparse_dispatch`; 24 steps did not fit in
+  7 GB), while the DC models are light (case118, 24 steps: about 1 s).
+
 - Claude tab (`ppedit/claude.py`, `renderClaude` in `app.js`): sessions
   call the Messages API with `urllib` (no SDK dependency) in background
   threads; each tool call that changes the case is one `Editor.edit()`

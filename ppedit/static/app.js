@@ -12,6 +12,7 @@ const S = {
   resSort: {},         // Results table title -> {col, dir} (see block)
   tableSort: {},       // case table -> {col, dir} (see tableOrder)
   claude: null,        // Claude sessions from /api/claude
+  step: 0,             // step of a multistep solution shown (issue #124, stepView)
   issueOpen: null,     // message of the solver warning whose detail is open (Issues tab)
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
@@ -129,7 +130,7 @@ const BUSY_LABELS = [  // [path prefix, label], first match wins
   ["/api/solve", "Solving"], ["/api/open", "Opening case"], ["/api/new", "Loading case"],
   ["/api/save", "Saving"], ["/api/geodata", "Loading geodata"], ["/api/table/import", "Importing rows"],
   ["/api/table/export", "Exporting rows"], ["/api/folders", "Listing folders"], ["/api/state", "Loading"],
-  ["/api/meta", "Loading"],
+  ["/api/meta", "Loading"], ["/api/series/import", "Importing series"], ["/api/series/export", "Exporting series"],
 ];
 const busy = { items: new Map([[0, { label: "Loading", t0: performance.now() }]]), next: 1, timer: null, tick: null };
 function busyLabel(path) { return (BUSY_LABELS.find(([p]) => path.startsWith(p)) || [null, "Working"])[1]; }
@@ -209,6 +210,7 @@ function toast(msg, error = false) {
 
 function setState(st) {
   const prev = S.state;
+  st.result = stepView(st.result);
   S.state = st;
   const c = st.case;
   // drop selections that no longer exist
@@ -261,6 +263,12 @@ function renderChrome() {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
   for (const t of S.meta.tables) $(`[data-count="${t}"]`).textContent = c.tables[t].length;
+  $("#series-count").textContent = c.series ? c.series.values.length : "";
+  $$("#opf-menu [data-multistep]").forEach(b => {
+    b.disabled = !c.series;
+    b.title = c.series ? `Solve the ${c.series.values.length} steps of the time series as one OPF`
+      : "Import a time series on the Series tab first";
+  });
   // Issues tab: case issues plus the last solve's messages (issue #89); red
   // dot for errors, yellow for warnings only
   const msgs = solverMessages();
@@ -300,6 +308,7 @@ function renderView() {
   if (isTable) { $("#view-table").classList.add("active"); renderTable(S.view); }
   else if (S.view === "network") { $("#view-network").classList.add("active"); renderNetwork(); }
   else if (S.view === "results") { $("#view-results").classList.add("active"); renderResults(); }
+  else if (S.view === "series") { $("#view-series").classList.add("active"); renderSeries(); }
   else if (S.view === "claude") { $("#view-claude").classList.add("active"); renderClaude(); }
   else if (S.view === "settings") { $("#view-settings").classList.add("active"); renderSettings(); }
   else { $("#view-issues").classList.add("active"); renderIssues(); }
@@ -368,6 +377,68 @@ function renderCvxopfSettings() {
 }
 
 // ---------------------------------------------------------------- tables
+
+// ---------------------------------------------------------------- series
+
+// Series tab (issue #124): the case time series (state.case.series) of bus
+// Pd/Qd, generator and DC line Pmin/Pmax by step, used by the Run OPF ▾
+// multistep solvers. Read from a data file (one row per step), shown read only.
+const SERIES_SHOW = 500;  // most steps listed
+function seriesTitle(name) {
+  const [table, column, key] = name.split(".");
+  const c = S.state.case, unit = column === "Qd" ? "MVAr" : "MW";
+  if (table === "bus") return `bus ${key} ${column} (${unit})`;
+  const row = c.tables[table][+key - 1];
+  return `${TABLE_TITLES[table]} ${key}` + (row ? (table === "gen" ? ` at bus ${row[0]}` : ` ${row[0]}–${row[1]}`) : "") + ` ${column} (${unit})`;
+}
+function renderSeries() {
+  const ser = S.state.case.series, exts = S.meta.table_formats || [];
+  const item = x => h("button", { "data-action": "series-export", "data-format": x, role: "menuitem" }, x.slice(1));
+  $("#series-export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"), ...exts.map(item));
+  $("#series-input").accept = exts.join(",");
+  $("#series-export-btn").disabled = $("#series-clear").disabled = !ser;
+  const d = $("#series-delta");
+  d.disabled = !ser;
+  if (document.activeElement !== d) d.value = ser ? ser.delta : "";
+  $("#series-hint").textContent = ser
+    ? `${ser.values.length} step(s) × ${ser.columns.length} value(s), ${fmt(ser.values.length * ser.delta, 6).replace(/\.?0+$/, "")} h in all`
+    : "";
+  const format = h("div", { class: "hint series-format" },
+    "A series file has one row per time step: an optional label column (named time, timestamp, date, step or index) ",
+    "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
+    "for generator row N, dcline.Pmin.N and dcline.Pmax.N for DC line row N (rows counted from 1). Values not in the file keep ",
+    "their case values at every step. Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
+    "The series is saved with .py and .json cases (not .glm).");
+  if (!ser) {
+    $("#series-body").replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No time series"),
+      exts.length ? "Import a CSV, Excel or other data file with the values by step." : TABLE_IO_NONE), format);
+    return;
+  }
+  const rows = ser.values.slice(0, SERIES_SHOW).map((v, t) => h("tr", {}, h("td", { class: "rowhead" }, t + 1),
+    h("td", {}, ser.index[t]), ...v.map(x => h("td", { class: "num" }, fmt(x, S.precision.MW ?? 6)))));
+  $("#series-body").replaceChildren(format, h("div", { class: "table-wrap" }, h("table", { class: "series-table" },
+    h("thead", {}, h("tr", {}, h("th", { class: "rowhead" }, "#"), h("th", {}, "time"),
+      ...ser.columns.map(n => h("th", { title: seriesTitle(n) }, n)))),
+    h("tbody", {}, rows))),
+    ...(ser.values.length > SERIES_SHOW ? [h("div", { class: "hint" }, `First ${SERIES_SHOW} of ${ser.values.length} steps shown; export the series to see them all.`)] : []));
+}
+async function importSeries(file) {
+  const data = await fileBase64(file);
+  const st = await act("/api/series/import", { filename: file.name, data });
+  toast(`Read ${st.imported.steps} step(s) of ${st.imported.columns} value(s) from ${file.name} (Ctrl+Z to undo)`);
+}
+async function exportSeries(ext) {
+  const id = busyStart("/api/series/export");
+  try {
+    const res = await fetch("/api/series/export?" + new URLSearchParams({ format: ext.replace(/^\./, "") }));
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+    const name = ((res.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/) || [])[1] || "series" + ext;
+    const url = URL.createObjectURL(await res.blob());
+    const a = h("a", { href: url, download: name });
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  } catch (err) { toast(err.message, true); } finally { busyEnd(id); }
+}
 
 function cellEditor(table, row, col, value) {
   const spec = S.meta.columns[table][col];
@@ -2666,6 +2737,40 @@ function sourceReport() {
       : h("div", { class: "hint" }, "Everything in the file was read."));
 }
 
+// A multistep solution (result.steps, issue #124) is shown one step at a time:
+// the step's rows replace the first step's, so the diagram, tables and
+// Results tab all show S.step. `base` keeps the whole solution.
+function stepView(r) {
+  if (!r || !(r.base || r).steps) return r;
+  const base = r.base || r, n = base.steps.length;
+  const k = S.step = Math.max(0, Math.min(n - 1, S.step));
+  return { ...base, ...base.steps[k], base, step: k, stepLog: base.steps[k].log, log: base.log };
+}
+function setStep(k) {
+  S.step = k;
+  S.state.result = stepView(S.state.result);
+  renderView();
+}
+function stepPicker(r) {
+  const n = r.steps.length, m = r.multistep;
+  const sel = h("select", { "aria-label": "Time step shown", onchange: e => setStep(+e.target.value) },
+    r.steps.map((s, i) => h("option", { value: i, selected: i === r.step }, `${i + 1}: ${s.label}`)));
+  return h("div", { class: "step-picker" },
+    h("span", {}, "Step"),
+    h("button", { title: "Previous step", disabled: r.step === 0, onclick: () => setStep(r.step - 1) }, "◀"),
+    sel,
+    h("button", { title: "Next step", disabled: r.step === n - 1, onclick: () => setStep(r.step + 1) }, "▶"),
+    h("span", { class: "hint" }, `of ${n}, ${m.delta} h each; the diagram and table solution columns show this step (loads drawn on the diagram are the case values; see the Series tab)`));
+}
+function stepTable(r) {
+  const rows = r.steps.map((s, i) => {
+    const pg = s.gen.reduce((a, g) => a + g.Pg, 0), pd = (s.areas || []).reduce((a, x) => a + x.Pd, 0);
+    return [i + 1, s.label, fmt(s.objective, 2), fmt(pg, 2), fmt(pd, 2), fmt(s.losses_MW, 2)];
+  });
+  return block("Steps", ["step", "time", "cost $/h", "Pg MW", "Pd MW", "loss MW"], rows,
+    r.steps.map((_, i) => i === r.step ? Array(6).fill("current") : []), "wide");
+}
+
 function renderResults() {
   const box = $("#view-results");
   const r = S.state.result;
@@ -2676,22 +2781,25 @@ function renderResults() {
     return;
   }
   const c = S.state.case;
-  const kind = (r.kind === "pf" ? "Power flow" : r.dc ? "DC optimal power flow" : "Optimal power flow")
+  const kind = (r.multistep ? "Multistep " : "") + (r.kind === "pf" ? "Power flow" : r.dc ? "DC optimal power flow" : "Optimal power flow")
     + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
   const totalPg = r.gen.reduce((s, g) => s + g.Pg, 0);
-  const totalPd = c.tables.bus.reduce((s, b) => s + b[2], 0);
+  // a multistep step has its own loads: sum them from its area rows
+  const totalPd = r.multistep ? (r.areas || []).reduce((s, a) => s + a.Pd, 0) : c.tables.bus.reduce((s, b) => s + b[2], 0);
   const cards = h("div", { class: "cards" },
     card(kind, r.success ? "Converged" : "Failed", r.success ? "ok" : "fail"),
     r.success ? card("Generation", `${fmt(totalPg, 1)} MW`) : null,
     r.success ? card("Load", `${fmt(totalPd, 1)} MW`) : null,
     r.success ? card("Losses", `${fmt(r.losses_MW, 2)} MW` + (r.dcline && r.dcline.length ? ` (DC ${fmt(r.dcline_losses_MW, 2)})` : "")) : null,
     r.objective !== null && r.success ? card("Cost", `${fmt(r.objective, 2)} $/h`) : null,
-    r.success ? card("Vm range", `${fmt(Math.min(...r.bus.map(b => b.Vm)), 3)} – ${fmt(Math.max(...r.bus.map(b => b.Vm)), 3)}`) : null);
-  const kids = [cards];
+    r.success ? card("Vm range", `${fmt(Math.min(...r.bus.map(b => b.Vm)), 3)} – ${fmt(Math.max(...r.bus.map(b => b.Vm)), 3)}`) : null,
+    r.multistep && r.success && r.horizon_objective !== null ? card("Horizon cost", `${fmt(r.horizon_objective, 2)} $ over ${r.steps.length} step(s)`) : null);
+  const kids = r.multistep ? [stepPicker(r), cards] : [cards];
   if (r.success) {
     kids.push(h("div", { style: "margin-bottom:12px" },
-      h("button", { onclick: () => act("/api/apply").then(() => toast("Solution copied into bus Vm/Va, generator Pg/Qg and DC line flows")) },
-        "Apply solution to case"),
+      h("button", { onclick: () => act("/api/apply", r.multistep ? { step: r.step } : {})
+        .then(() => toast("Solution copied into bus Vm/Va, generator Pg/Qg and DC line flows" + (r.multistep ? ` (step ${r.step + 1})` : ""))) },
+        r.multistep ? `Apply step ${r.step + 1} to case` : "Apply solution to case"),
       h("span", { class: "hint", style: "margin-left:10px" }, "copies Vm, Va, Pg, Qg and DC line Pf, Pt, Qf, Qt into the case (undoable)")));
     const busRows = r.bus.map(b => [b.bus_i, fmt(b.Vm, 4), fmt(b.Va, 3)].concat(r.kind === "opf" ? [fmt(b.lam_P, 3)] : []));
     const busCls = r.bus.map((b, i) => {
@@ -2714,9 +2822,11 @@ function renderResults() {
       r.areas && (r.areas.length > 1 || c.tables.areas.length) ? block("Areas", ["area", "name", "buses", "Pg MW", "Pd MW", "shunt MW", "loss MW", "export MW", "ref bus"]
         .concat(r.kind === "opf" ? ["price $/MWh"] : []),
         r.areas.map(a => [a.area, a.name || "–", a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
-          .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null));
+          .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null,
+      r.multistep ? stepTable(r) : null));
   }
-  kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"), h("pre", { class: "log" }, r.log || "(no output)")));
+  kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"),
+    h("pre", { class: "log" }, (r.log || "(no output)") + (r.stepLog ? "\n" + r.stepLog : ""))));
   if (report) kids.push(report);
   box.replaceChildren(...kids);
 }
@@ -3021,9 +3131,9 @@ async function onAction(btn) {
       trigger.title = SOLVING;
       renderChrome();
       try {
-        await act("/api/solve", solveRequest(btn.dataset.kind, btn.dataset.algorithm));
+        await act("/api/solve", solveRequest(btn.dataset.kind, btn.dataset.algorithm, !!btn.dataset.multistep));
         const r = S.state.result;
-        const what = (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
+        const what = (r.multistep ? `${r.steps ? r.steps.length : ""}-step ` : "") + (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
         const nwarn = (r.messages || []).filter(m => m.level === "warning").length;
         toast(r.success ? `${what} converged` + (nwarn ? ` with ${nwarn} warning(s) — see Issues` : "")
           : `${what} did not converge — see Issues and Results`, !r.success);
@@ -3053,6 +3163,11 @@ async function onAction(btn) {
     else if (a === "geodata-export") downloadUrl("/api/export?format=csv");
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
+    }
+    else if (a === "series-import") $("#series-input").click();
+    else if (a === "series-export") await exportSeries(btn.dataset.format);
+    else if (a === "series-clear") {
+      if (confirm("Remove the time series from this case? Undo restores it.")) await act("/api/series", { clear: true });
     }
     else if (a === "claude-new") await newClaudeSession();
     else if (a === "exit") await exitServer();
@@ -3267,10 +3382,11 @@ function showRestart() {
 }
 
 // /api/solve request; CVXOPF-* solvers get the solve options from the Settings tab
-function solveRequest(kind, algorithm) {
+function solveRequest(kind, algorithm, multistep = false) {
   const req = { kind };
   if (algorithm) req.algorithm = algorithm;
   if (kind === "opf" && algorithm && algorithm.startsWith("CVXOPF-")) req.options = cvxopfOptions();
+  if (multistep) req.multistep = true;
   return req;
 }
 
@@ -3280,10 +3396,17 @@ function buildSolverMenus() {
   const item = (kind, x) => h("button", { "data-action": "solve", "data-kind": kind, "data-algorithm": x.algorithm, role: "menuitem" }, x.label);
   $("#pf-menu").replaceChildren(...S.meta.solvers.pf.map(x => item("pf", x)));
   const opf = S.meta.solvers.opf;
+  // Multistep (issue #124): the cvxopf solvers over the case time series
+  const multi = opf.filter(x => x.algorithm.startsWith("CVXOPF-")).map(x => {
+    const b = item("opf", { ...x, label: x.label.replace(/^(AC|DC): CVXOPF ?/, "").replace(/^\((IPOPT)\)$/, "full AC ($1)") || x.label });
+    b.dataset.multistep = "1";
+    b.textContent = `${x.dc ? "DC" : "AC"}: ${b.textContent}`;
+    return b;
+  });
   $("#opf-menu").replaceChildren(...[["AC OPF", false], ["DC OPF", true]].flatMap(([title, dc]) => {
     const rows = opf.filter(x => x.dc === dc);
     return rows.length ? [h("div", { class: "sep" }, title), ...rows.map(x => item("opf", { ...x, label: x.label.replace(/^(AC|DC): /, "") }))] : [];
-  }));
+  }), ...(multi.length ? [h("div", { class: "sep" }, "Multistep (CVXOPF, Series tab)"), ...multi] : []));
 }
 
 // About dialog: package metadata from /api/meta `about` (ppedit.server.about),
@@ -3367,6 +3490,13 @@ async function init() {
     const f = e.target.files[0]; e.target.value = "";
     if (f) importRows(f).catch(() => { /* toast already shown */ });
   });
+  $("#series-input").addEventListener("change", e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (f) importSeries(f).catch(() => { /* toast already shown */ });
+  });
+  const delta = $("#series-delta");
+  delta.addEventListener("change", () => act("/api/series", { delta: delta.value }).catch(() => renderSeries()));
+  delta.addEventListener("keydown", e => { if (e.key === "Enter") delta.blur(); });
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";
     if (f) loadGeodata(f).catch(() => { /* toast already shown */ });

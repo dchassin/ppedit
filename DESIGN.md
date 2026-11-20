@@ -1,6 +1,6 @@
 # eudoxys/ppedit — package design (draft 1)
 
-Status: design recorded as built, 2026-11-15 (version 0.2.0, after PR #50; issue #52); decision #43 added 2026-11-17 (issue #69); inherited conventions revised 2026-11-17; decision #44 added 2026-11-17 (page URL parameters); decision #45 added 2026-11-18 (open from URL, issue #83); decisions #48 (cvxopf solve options, issue #88) and #49 (solver messages on the Issues tab, issue #89) added 2026-11-18; decision #15 (area names, issue #93) added 2026-11-18; decision #53 (solver warning details, follow-up to PR #92) added 2026-11-18; decision #27 revised 2026-11-20 (area outer hulls, issue #106); decision #58 added 2026-11-20 (stopped server, issue #51); decisions renumbered sequentially 2026-11-20; decision #43 revised 2026-11-20 (cvxopf sparse dispatch, issue #122).
+Status: design recorded as built, 2026-11-15 (version 0.2.0, after PR #50; issue #52); decision #43 added 2026-11-17 (issue #69); inherited conventions revised 2026-11-17; decision #44 added 2026-11-17 (page URL parameters); decision #45 added 2026-11-18 (open from URL, issue #83); decisions #48 (cvxopf solve options, issue #88) and #49 (solver messages on the Issues tab, issue #89) added 2026-11-18; decision #15 (area names, issue #93) added 2026-11-18; decision #53 (solver warning details, follow-up to PR #92) added 2026-11-18; decision #27 revised 2026-11-20 (area outer hulls, issue #106); decision #58 added 2026-11-20 (stopped server, issue #51); decisions renumbered sequentially 2026-11-20; decision #43 revised 2026-11-20 (cvxopf sparse dispatch, issue #122); decision #59 added 2026-11-20 (time series and multistep OPF, issue #124).
 Draft 1 documents the current state; it was written after the code, so
 every decision below is already implemented unless it is listed under
 `# planned` or in Open questions.
@@ -37,7 +37,9 @@ Excluded (and where it lives instead):
   `powerplant`, `powerline`, `shunt`, ..., other modules): reported on
   load and dropped on save; edit them in the GLM source or in GridLAB-D
   (planned: issue #33 and TODO "Preserve non-solver GLM objects").
-- Running GridLAB-D itself, time series, and distribution models.
+- Running GridLAB-D itself, GridLAB-D time series (players, schedules), and
+  distribution models. (A case time series for multistep OPF is in scope:
+  decision #59.)
 - Multi-user or networked use: one case, one user, the local machine.
 
 Coverage: any PYPOWER case size the browser can draw (the diagram is
@@ -113,6 +115,7 @@ commit messages from before that date use the old numbers.
 | 56 | Extended result columns in the tables (2026-11-20, issue #108): `RESULT_COLUMNS` in `case.py` lists the columns PYPOWER appends to `bus` (`lam_P`, `lam_Q`, `mu_Vmax`, `mu_Vmin`), `gen` (`mu_Pmax`, `mu_Pmin`, `mu_Qmax`, `mu_Qmin`), `branch` (`PF`, `QF`, `PT`, `QT`, `mu_Sf`, `mu_St`, `mu_angmin`, `mu_angmax`) and `dcline` (`mu_Pmin` .. `mu_QmaxT`), with their PYPOWER array index, unit and whether only OPF gives them; `GET /api/meta` sends them as `result_columns`. `Case.solve` returns `extended`: per table, one row per case row of those values, `None` where the solver gives none (multipliers for PF and `CVXOPF-*`, branch flows for `CVXOPF-1NODE`). After a successful solve each case table shows them after its editable columns, read only and shaded, leaving out columns that are all `None`; they sort like the other columns (#41) but are not filtered on. They are part of the solution, not the case (#4): not saved or applied (Apply copies only Vm/Va/Pg/Qg and DC line flows), and they disappear when the next edit clears the solution. Table export (#55) writes the columns the page shows after the table columns, for all or the selected rows (`Editor.extended`; a missing value is an empty cell); import ignores columns with those names and reports them (`ignored`), so an exported file imports again. Their `$` units use the `$` precision setting. |
 | 57 | Area inspector (2026-11-20, issue #112): a click on an area name in the diagram (`areaNameClick` in `app.js`, classic, geodata and one-line styles) opens its `areas` row in the side panel as `S.pick = {kind: "areas", index}`; the bus panel's area links open it too. An area with no row asks before adding one (`pickArea`, price reference bus chosen as in `Case._price_ref`). The panel edits the row through `POST /api/cell` (renumbering moves the buses, #17) and shows totals computed in the browser (`areaTotals`), with no API change: without a solution, the case values `PG` of in-service generators, their `PMAX`, bus `PD`, and the scheduled net interchange `PG − PD` (before losses and shunts); with a successful solution, the `result.areas` row (`Case._area_summary`: `Pg`, `Pd`, `shunt_MW`, `losses_MW`, `export_MW`, `lam_P`) and the interchange with each neighboring area summed from the in-service tie branch `PF`/`PT` and solved DC line `Pf`/`−Pt`, the same convention as `export_MW` (positive: export). |
 | 58 | Stopped server (2026-11-20, issue #51; revised the same day): the page polls `GET /api/ping` every `PING_INTERVAL` = 5 s (`watchServer` in `app.js`; outside `api()`, so `#busy` (#54) does not count it, and answered by the server without `editor.lock`, so a long solve or download is not mistaken for a stopped server; `PING_TIMEOUT` = 10 s), and `api()` treats a request that gets no HTTP response at all as the same signal. Either opens the modal `#server-down` dialog, which waits by itself: it checks again every `DOWN_POLL` = 2 s, shows how long it has waited, and closes when the server answers (there is no wait button, and Escape does not close it). It offers two choices: **Restart server** shows the command that starts the server for the open file, port and host, with `--no-browser` so that no second tab opens (this page reconnects), and a Copy button, since a web page cannot start a program; **Exit browser window** closes the tab, or shows the stopped page when the browser keeps it open (`window.close` works only for tabs the browser lets scripts close, e.g. one opened by `ppedit serve` with no back history). `/api/meta` and `/api/ping` carry `instance`, a token new for each server start: when the server answers with the same instance the page reloads the state and continues; with another instance it reloads the page, because the case the server holds is no longer the one shown, and if the page had unsaved changes it says after the reload that they were lost (they lived in the old server, #4). **Exit** while the server is not responding, or whose `POST /api/exit` gets no response, closes the tab without asking the server. Claude polling (#35) pauses while the server is not responding. |
+| 59 | Time series and multistep OPF (2026-11-20, issue #124; settles part of open question #88): the case carries an optional time series `Case.series` = `{index, delta, columns, values}` (step labels, hours per step, column names, one row of values per step). Columns are `table.column.key` for the values cvxopf's multistep builder can take by step: `bus.Pd`/`bus.Qd` keyed by bus number, and `gen.Pmin`/`gen.Pmax`, `dcline.Pmin`/`dcline.Pmax` keyed by row number counted from 1 (generators and DC lines have no other identity); values not in the series keep their case values. It is case data, not study configuration: saved under the `series` key of `.py`/`.json` cases (GLM output says it was not written), part of undo snapshots, and kept consistent by the edit methods like other references (#17-style cascades: bus renumber renames columns, deleting buses/generators/DC lines drops their columns and renumbers later rows, inserting rows renumbers later rows). It is read from a data file on the **Series** tab with the table formats of #55 (`_tableio.read_series`: one row per step, optional label column `time`/`timestamp`/`datetime`/`date`/`step`/`index`, `POST /api/series/import`) and replaces any series; it is shown read only (first `SERIES_SHOW` = 500 steps). **Run OPF ▾ › Multistep** lists the installed `CVXOPF-*` solvers again, enabled only with a series, and sends `multistep: true` with the #48 options: `Case.solve` builds all steps in one `build_opf_multistep` problem (vectorized assembly, `delta` from the series, DC line boxes by step with the signs of #43, `df_Q` only for AC and SOCP). cvxopf has no per-step generator limits, so ppedit widens the case bounds to the horizon envelope and appends `Pmin(t) <= Pg(t) <= Pmax(t)` to the CVXPY problem; this works only without numerical preparation, so the `recommended` preparation with generator series is refused. Each step is converted to a `runopf`-layout result and summarized with a copy of the case holding that step's values (`Case.at_step`), so areas and totals use the step's loads; the step cost is the generator and DC line cost of its dispatch ($/h) and the horizon objective is cvxopf's ($, rates times `delta`). The browser shows one step at a time (`stepView` in `app.js`): the step's rows replace the solution's, so the Results tab, diagram flows and solution columns (#56) show it, while the diagram still draws case loads. Apply copies the chosen step (`POST /api/apply` `step`). No coupling between steps (ramps, storage, unit commitment) and no cvxopf device models: see open question #88. |
 
 ## Conventions inherited from the `eudoxys-package` skill
 
@@ -142,13 +145,14 @@ ppedit/
                     Case.load(path,text=None), Case.builtin(name)
   _dcline.py        add_dclines(ppc): DC line userfcn callbacks for pypower
   _psse.py          parse_raw(text): PSS/E RAW case -> ppc dict and notes
-  _tableio.py       read_rows/dump_rows: table data files via pandas
+  _tableio.py       read_rows/dump_rows, read_series/dump_series: table and
+                    time series data files via pandas
   server.py         Editor (case, path, undo/redo, lock);
                     create_app(case,path,allow_remote,shutdown,claude_client)
   claude.py         Sessions(editor,client): Messages API tool-use loops
   static/
-    index.html      page layout: toolbar, tabs (Network, Tables, Results,
-                    Issues, Claude, Settings), table tabs, inspector, menus
+    index.html      page layout: toolbar, tabs (Network, Tables, Series,
+                    Results, Issues, Claude, Settings), table tabs, inspector, menus
     style.css       styles
     app.js          state rendering, tables, network diagram (styles,
                     layouts, map layers, labels, areas, search), results,
@@ -179,8 +183,9 @@ partially applied, because the server rolls back through `Editor.edit()`.
 | `Case.geodata`, `Case.geotags` | rows `[BUS_I,LAT,LON,aux...]` (WGS84 degrees); auxiliary column names |
 | `Case.notes` | content read but not kept (GLM objects, PSS/E data) |
 | `Case.source` | how `Case.load` read the case: `file`, `format`, `revision`, `size`, `notes` (#39) |
+| `Case.series` | time series for multistep OPF or `None`: `index`, `delta`, `columns` (`table.column.key`), `values` (#59) |
 | `Case.validate()` | list of `{level,table,row,column,message}`, `level` `error` or `warning` |
-| `Case.solve(kind,algorithm)` | `success`, `kind`, `algorithm`, `solver`, `dc`, `iterations`, `objective`, `losses_MW`, `dcline_losses_MW`, `log`, rows `bus`, `gen`, `branch`, `dcline`, `areas` (see the `Case.solve` docstring) |
+| `Case.solve(kind,algorithm,options,multistep)` | `success`, `kind`, `algorithm`, `solver`, `dc`, `iterations`, `objective`, `losses_MW`, `dcline_losses_MW`, `log`, rows `bus`, `gen`, `branch`, `dcline`, `areas`; multistep adds `multistep`, `horizon_objective`, `steps` (see the `Case.solve` docstring) |
 | editor state (every API response) | `case`, `path`, `format`, `dirty`, `issues`, `can_undo`, `can_redo`, `result`, `cascade`, `revision`, `source`; Claude routes add `claude` |
 
 The API routes are listed in the `ppedit.server` docstring, which is
@@ -302,9 +307,9 @@ editor state JSON (see Contracts). There are no generated data tables.
 - **#54 PSS/E names and locations.** Bus names and (revision 35)
   substation coordinates could become geodata auxiliary columns and
   locations; they are dropped for now.
-- **#88 cvxopf horizons and devices.** Multi-period studies
-  (`build_opf_multistep` with horizon `T`, interval `delta` and demand
-  profiles), cvxopf device models (storage, nondispatchable units with
+- **#88 cvxopf horizons and devices.** Multi-period studies with load and
+  limit profiles are decision #59 (issue #124); still open: coupling
+  between steps (ramp limits), cvxopf device models (storage, nondispatchable units with
   curtailment, curtailable loads) and hierarchical rollout need study
   configuration the PYPOWER case does not hold. The cvxopf authors suggest
   building every horizon with `build_opf_multistep` (including `T=1`, then

@@ -63,15 +63,30 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
+  - `POST /api/series/import`: `{"filename", "data", "delta"?}` read a time
+    series of case values from a file (`data`: its contents in base64; see
+    `ppedit._tableio.read_series`) and replace the case series with it
+    (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
+    the series replaced, else 1); the state has `imported` (`{"steps",
+    "columns"}`)
+  - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
+    true}` remove the series (both undoable)
+  - `GET  /api/series/export?format=csv`: download the series as a data
+    file (a `time` column, then the series columns), named
+    `<case>_series.<format>`
   - `POST /api/undo`, `POST /api/redo`
-  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?}`;
+  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?,
+    "multistep"?}`;
     `algorithm` is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`)
     or an OPF solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
     `ppedit.case.OPF_SOLVERS`); `options` are the `CVXOPF-*` solve options
-    (see `ppedit.Case.solve`). The result's `messages` (solver errors and
+    (see `ppedit.Case.solve`); `multistep` true solves the case time
+    series as one multistep OPF with a `CVXOPF-*` solver (the result has
+    `steps`). The result's `messages` (solver errors and
     warnings, with an optional `detail`: physical meaning and constraints
     involved) are listed on the page's Issues tab
-  - `POST /api/apply`: copy the last solution into the case
+  - `POST /api/apply`: `{"step"?}` copy the last solution into the case
+    (`step`: the step of a multistep solution, counted from 0; default 0)
   - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
     `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the
     case geodata (see `ppedit.Case.load_geodata`) as one undoable edit
@@ -128,7 +143,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from ppedit.case import Case, CaseError, COLUMNS, RESULT_COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
-from ppedit._tableio import table_formats, read_rows, dump_rows
+from ppedit._tableio import table_formats, read_rows, dump_rows, read_series, dump_series
 
 _logger = logging.getLogger(__file__)
 
@@ -401,14 +416,15 @@ class Editor:
         return (copy.deepcopy(self.case.tables),self.case.baseMVA,
             self.case.version,self.case.name,
             copy.deepcopy(self.case.geodata),list(self.case.geotags),
-            copy.deepcopy(self.loads_off))
+            copy.deepcopy(self.loads_off),copy.deepcopy(self.case.series))
 
     def _restore(self,snap):
-        tables,base,version,name,geodata,geotags,loads_off = snap
+        tables,base,version,name,geodata,geotags,loads_off,series = snap
         self.case.tables = copy.deepcopy(tables)
         self.case.baseMVA,self.case.version,self.case.name = base,version,name
         self.case.geodata,self.case.geotags = copy.deepcopy(geodata),list(geotags)
         self.loads_off = copy.deepcopy(loads_off)
+        self.case.series = copy.deepcopy(series)
 
     def _prune_loads_off(self):
         # a switched-off load stays off only while its bus exists with Pd = Qd = 0
@@ -753,17 +769,60 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         data = body()
         with editor.lock:
             editor.result = editor.case.solve(data.get("kind","pf"),
-                data.get("algorithm"),data.get("options"))
+                data.get("algorithm"),data.get("options"),bool(data.get("multistep")))
             return jsonify(editor.state())
 
     @app.post("/api/apply")
     def apply():
+        data = body()
         with editor.lock:
             if not editor.result:
                 raise CaseError("no solution to apply")
             result = editor.result
+            if result.get("steps"):
+                step = int(data.get("step") or 0)
+                if not 0 <= step < len(result["steps"]):
+                    raise CaseError(f"the solution has no step {step+1}")
+                result = result["steps"][step]
             editor.edit(lambda: editor.case.apply_result(result))
             return jsonify(editor.state(True))
+
+    @app.post("/api/series/import")
+    def import_series():
+        data = body()
+        try:
+            content = base64.b64decode(data["data"],validate=True)
+        except (binascii.Error,TypeError) as err:
+            raise CaseError("data must be the file contents in base64") from err
+        index,columns,rows = read_series(str(data["filename"]),content)
+        with editor.lock:
+            old = editor.case.series
+            delta = data.get("delta") or (old["delta"] if old else 1.0)
+            series = editor.edit(lambda: editor.case.set_series(columns,rows,index,delta))
+            out = editor.state()
+            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"])}
+            return jsonify(out)
+
+    @app.post("/api/series")
+    def set_series():
+        data = body()
+        with editor.lock:
+            if data.get("clear"):
+                editor.edit(lambda: editor.case.set_series(None))
+            else:
+                editor.edit(lambda: editor.case.set_series_delta(data.get("delta")))
+            return jsonify(editor.state())
+
+    @app.get("/api/series/export")
+    def export_series():
+        fmt = request.args.get("format","csv").lstrip(".")
+        with editor.lock:
+            if not editor.case.series:
+                raise CaseError("the case has no time series")
+            name = f"{editor.case.name or 'untitled'}_series.{fmt}"
+            content = dump_series(editor.case.series,name)
+        return Response(content,mimetype="application/octet-stream",headers={
+            "Content-Disposition":f'attachment; filename="{name}"'})
 
     @app.post("/api/geodata")
     def geodata():
