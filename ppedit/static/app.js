@@ -700,11 +700,15 @@ function clipHalf(poly, a, b, c) {
   }
   return out;
 }
-function areaRegions(sites, R) {
-  // one bounded, labeled region per area: the union, over the area's sites (its buses and
-  // points along its internal lines), of the disc of radius R around each site cut back to
-  // the points nearer that site than any site of another area. Regions of different areas
-  // therefore never overlap and every bus lies only in its own area's region.
+function areaRegions(sites, R, view) {
+  // one bounded, labeled region per area, drawn as its outer hull only (issue #106). Cells:
+  // the disc of radius R around each site (the area's buses and points along its internal
+  // lines) cut back to the points nearer that site than any site of another area, so cells
+  // of different areas never overlap. The cells are rasterized on a grid; gaps enclosed by
+  // the cells (between lines of a meshed network) are filled from the nearest area, and the
+  // outline of each area's grid cells is traced and smoothed, so no inner boundaries remain
+  // and the borders of neighboring areas coincide. view ({x0,y0,x1,y1}, screen) limits the
+  // grid to what can be seen, with a margin.
   const cells = new Map(), K = 28;
   for (const p of sites) {
     let poly = [];
@@ -725,27 +729,130 @@ function areaRegions(sites, R) {
     cells.get(p.area).push(poly);
   }
   const regions = sv("g", { class: "area-regions" }), names = sv("g", { class: "area-regions" });
+  if (!cells.size) return { regions, names };
+  const list = [...cells.keys()].sort((u, v) => u - v);
+  // grid: bounding box of the cells, cut to the view plus a margin, at most ~250k points
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const polys of cells.values()) for (const P of polys) for (const q of P) {
+    x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y);
+  }
+  if (view) {
+    const m = 3 * R;
+    x0 = Math.max(x0, view.x0 - m); y0 = Math.max(y0, view.y0 - m);
+    x1 = Math.min(x1, view.x1 + m); y1 = Math.min(y1, view.y1 + m);
+  }
+  if (!(x1 > x0 && y1 > y0)) return { regions, names };
+  const s = Math.max(R / 6, Math.sqrt((x1 - x0) * (y1 - y0) / 250000), 1);
+  x0 -= 2 * s; y0 -= 2 * s; // an empty border row and column all around
+  const nx = Math.ceil((x1 - x0) / s) + 3, ny = Math.ceil((y1 - y0) / s) + 3;
+  const lab = new Int16Array(nx * ny).fill(-1);
+  list.forEach((a, ai) => {
+    for (const P of cells.get(a)) {
+      let px0 = Infinity, py0 = Infinity, px1 = -Infinity, py1 = -Infinity;
+      for (const q of P) { px0 = Math.min(px0, q.x); py0 = Math.min(py0, q.y); px1 = Math.max(px1, q.x); py1 = Math.max(py1, q.y); }
+      const i0 = Math.max(1, Math.ceil((px0 - x0) / s)), i1 = Math.min(nx - 2, Math.floor((px1 - x0) / s));
+      const j0 = Math.max(1, Math.ceil((py0 - y0) / s)), j1 = Math.min(ny - 2, Math.floor((py1 - y0) / s));
+      for (let j = j0; j <= j1; j++) {
+        const y = y0 + j * s;
+        for (let i = i0; i <= i1; i++) {
+          const x = x0 + i * s;
+          let inside = false; // even-odd ray test (cells are convex)
+          for (let u = 0, v = P.length - 1; u < P.length; v = u++) {
+            const a1 = P[u], b1 = P[v];
+            if ((a1.y > y) !== (b1.y > y) && x < (b1.x - a1.x) * (y - a1.y) / (b1.y - a1.y) + a1.x) inside = !inside;
+          }
+          if (inside) lab[j * nx + i] = ai;
+        }
+      }
+    }
+  });
+  // empty points reachable from the border are outside; other empty points are enclosed gaps
+  const OUT = -2, nbr = [1, -1, nx, -nx];
+  let queue = [];
+  for (let i = 0; i < nx; i++) queue.push(i, (ny - 1) * nx + i);
+  for (let j = 1; j < ny - 1; j++) queue.push(j * nx, j * nx + nx - 1);
+  for (const c of queue) lab[c] = OUT;
+  for (let h = 0; h < queue.length; h++) {
+    const c = queue[h];
+    for (const d of nbr) {
+      const e = c + d;
+      if (e >= 0 && e < lab.length && lab[e] === -1) { lab[e] = OUT; queue.push(e); }
+    }
+  }
+  // fill enclosed gaps from the nearest area (breadth first from the labeled points)
+  queue = [];
+  for (let c = 0; c < lab.length; c++) if (lab[c] >= 0) queue.push(c);
+  for (let h = 0; h < queue.length; h++) {
+    const c = queue[h];
+    for (const d of nbr) {
+      const e = c + d;
+      if (e >= 0 && e < lab.length && lab[e] === -1) { lab[e] = lab[c]; queue.push(e); }
+    }
+  }
   const refs = new Map(S.state.case.tables.areas.map(a => [a[0], a[1]]));
-  for (const [a, polys] of [...cells].sort((u, v) => u[0] - v[0])) {
+  list.forEach((a, ai) => {
+    const loops = traceOutline(lab, nx, ny, ai).map(L => smoothLoop(L.map(([i, j]) => ({ x: x0 + i * s, y: y0 + j * s })), 2));
+    if (!loops.length) return;
     const color = areaOutline(a);
-    const d = polys.map(P => "M" + P.map(q => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join("L") + "Z").join("");
-    // the border is the outer half of a stroke around every cell; the fills drawn over it
-    // hide the strokes between cells of the same area, and the group is faded as a whole
+    const d = loops.map(P => "M" + P.map(q => `${q.x.toFixed(1)},${q.y.toFixed(1)}`).join("L") + "Z").join("");
+    // the border is the outer half of the stroke; the fill drawn over it hides the inner half
     const grp = sv("g", { class: "area-region", opacity: 0.55 });
-    grp.append(sv("path", { d, stroke: color, "stroke-width": 4, "stroke-linejoin": "round", fill: color }),
-      sv("path", { d, fill: tint(color, 0.88) }));
+    grp.append(sv("path", { d, stroke: color, "stroke-width": 4, "stroke-linejoin": "round", fill: color, "fill-rule": "evenodd" }),
+      sv("path", { d, fill: tint(color, 0.88), "fill-rule": "evenodd" }));
     const title = sv("title");
     const nb = sites.filter(p => p.area === a && p.bus).length;
     title.textContent = `${areaText(a)}: ${nb} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)");
     grp.append(title);
     regions.append(grp);
     let top = null;
-    polys.forEach(P => P.forEach(q => { if (!top || q.y < top.y) top = q; }));
+    loops.forEach(P => P.forEach(q => { if (!top || q.y < top.y) top = q; }));
     const label = sv("text", { x: top.x, y: top.y - 4, class: "area-name", fill: color, "text-anchor": "middle" });
     label.textContent = areaTitle(a);
     names.append(label);
-  }
+  });
   return { regions, names };
+}
+function traceOutline(lab, nx, ny, v) {
+  // closed loops, in grid units, through the midpoints of the grid edges that separate
+  // points labeled v from other points (marching squares on a 0/1 mask). Each crossing is
+  // shared by the two areas on either side, so neighboring outlines coincide.
+  const id = (i, j, o) => (j * nx + i) * 2 + o; // o = 0: edge (i,j)-(i+1,j); 1: edge (i,j)-(i,j+1)
+  const pt = k => { const c = k >> 1, i = c % nx, j = (c - i) / nx; return k & 1 ? [i, j + 0.5] : [i + 0.5, j]; };
+  const next = new Map(); // directed segments: crossing -> following crossing, mask kept on the left
+  const isv = (i, j) => lab[j * nx + i] === v;
+  for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    const a = isv(i, j), b = isv(i + 1, j), c = isv(i + 1, j + 1), d = isv(i, j + 1);
+    const n = (a ? 8 : 0) | (b ? 4 : 0) | (c ? 2 : 0) | (d ? 1 : 0);
+    if (n === 0 || n === 15) continue;
+    const T = id(i, j, 0), Rt = id(i + 1, j, 1), B = id(i, j + 1, 0), L = id(i, j, 1);
+    // segment lists per case, oriented so that the v points are on the left (y down)
+    const segs = {
+      1: [[B, L]], 2: [[Rt, B]], 3: [[Rt, L]], 4: [[T, Rt]], 5: [[T, L], [B, Rt]], 6: [[T, B]], 7: [[T, L]],
+      8: [[L, T]], 9: [[B, T]], 10: [[L, B], [Rt, T]], 11: [[Rt, T]], 12: [[L, Rt]], 13: [[B, Rt]], 14: [[L, B]],
+    }[n];
+    for (const [p, q] of segs) next.set(p, q);
+  }
+  const loops = [];
+  for (const start of next.keys()) {
+    if (!next.has(start)) continue;
+    const loop = [];
+    let k = start;
+    while (next.has(k)) { const q = next.get(k); next.delete(k); loop.push(pt(k)); k = q; }
+    if (loop.length >= 3) loops.push(loop);
+  }
+  return loops;
+}
+function smoothLoop(P, n) {
+  // Chaikin corner cutting, n rounds, of a closed polyline
+  for (let r = 0; r < n; r++) {
+    const Q = [];
+    for (let i = 0; i < P.length; i++) {
+      const a = P[i], b = P[(i + 1) % P.length];
+      Q.push({ x: 0.75 * a.x + 0.25 * b.x, y: 0.75 * a.y + 0.25 * b.y }, { x: 0.25 * a.x + 0.75 * b.x, y: 0.25 * a.y + 0.75 * b.y });
+    }
+    P = Q;
+  }
+  return P;
 }
 function areaLegend() {
   if (!showAreas()) return;
@@ -1104,7 +1211,7 @@ function renderNetwork() {
       const n = Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (0.7 * R));
       for (let t = 1; t < n; t++) sites.push({ area: area.get(b[0]), x: p.x + (q.x - p.x) * t / n, y: p.y + (q.y - p.y) * t / n });
     }
-    const R2 = areaRegions(sites, R);
+    const R2 = areaRegions(sites, R, { x0: 0, y0: 0, x1: svg.clientWidth, y1: svg.clientHeight });
     g.prepend(R2.regions);
     g.insertBefore(R2.names, labels.nextSibling);
   }
