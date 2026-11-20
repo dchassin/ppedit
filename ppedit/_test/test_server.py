@@ -317,3 +317,12 @@ def test_oneline_switches_in_page(client):
     assert 'setStatus("branch", i, on)' in js and 'setStatus("gen", i, on)' in js
     assert 'act("/api/load", { bus: b[0] })' in js and '"gen", i);' in js
     assert 'kind === "gen"' in js
+
+
+def test_area_inspector_js(client):
+    """Area names open the areas row in the inspector with area totals (issue #112)"""
+    js = client.get("/static/app.js").get_data(as_text=True)
+    for name in ["function areaNameClick","function pickArea","function areaTotals",'kind === "areas"']:
+        assert name in js
+    css = client.get("/static/style.css").get_data(as_text=True)
+    assert "text.area-name { pointer-events: auto; }" in css

@@ -223,7 +223,9 @@ td.bad input { color: var(--err); }
 /* areas */
 #net .node text.area-star { font-size: 13px; fill: var(--ink); stroke-width: 2px; }
 #net .area-box { fill-opacity: .05; stroke-width: 1.5; stroke-dasharray: 6 3; stroke-linejoin: round; vector-effect: non-scaling-stroke; }
-#net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; pointer-events: none; }
+#net .area-name { font: 600 12px var(--sans, sans-serif); paint-order: stroke; stroke: #fff; stroke-width: 3px; cursor: pointer; }
+#net .area-name:hover, #net .area-name.sel { text-decoration: underline; }
+#net.oneline text.area-name { pointer-events: auto; } /* clickable (issue #112) */
 .res-pair { display: flex; flex-wrap: wrap; gap: 14px; flex: 1 1 auto; min-width: 0; } /* branch + DC line flows, kept together */
 .dropdown.left { left: 0; right: auto; }
 #export-menu .fmt { display: flex; }
@@ -330,6 +332,7 @@ td.bad input { color: var(--err); }
 .inspector dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 8px; margin: 0 0 10px; align-items: center; }
 .inspector dt { color: var(--muted); font-size: 12px; }
 .inspector dd { margin: 0; }
+.inspector dd.num { font-family: var(--mono); font-size: 12px; text-align: right; }
 .inspector dd input, .inspector dd select { width: 100%; border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font-family: var(--mono); font-size: 12px; text-align: right; }
 .inspector dd select { font-family: var(--sans); text-align: left; }
 .inspector h4 { margin: 12px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); }

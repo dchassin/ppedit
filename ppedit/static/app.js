@@ -775,6 +775,65 @@ function areaTitle(a) {
   // diagram label of area a: its name, else "Area 3"
   return areaName(a) || `Area ${a}`;
 }
+function areaNameClass(a) {
+  // area name label, marked when its areas row is open in the inspector
+  const T = S.state.case.tables;
+  return "area-name" + (S.pick && S.pick.kind === "areas" && T.areas[S.pick.index] && T.areas[S.pick.index][0] === a ? " sel" : "");
+}
+function areaNameClick(label, a) {
+  // a click on an area name opens its areas row in the inspector (issue #112); the
+  // pointerdown is kept from the diagram so it does not start a pan
+  const title = sv("title");
+  title.textContent = `${areaText(a)}: click to edit and see its totals`;
+  label.append(title);
+  label.addEventListener("pointerdown", e => e.stopPropagation());
+  label.addEventListener("click", e => { e.stopPropagation(); pickArea(a); });
+}
+async function pickArea(a) {
+  // open the areas row of area a in the inspector; an area with no row asks to add one
+  const T = S.state.case.tables, i = T.areas.findIndex(r => r[0] === a);
+  if (i >= 0) return pick("areas", i);
+  if (!confirm(`Area ${a} has no row in the areas table. Add one?`)) return;
+  // its price reference bus as Case._price_ref chooses it: the REF bus, else the bus
+  // with the most in-service generating capacity, else the first bus
+  const inside = T.bus.filter(b => b[6] === a), cap = new Map();
+  T.gen.forEach(g => { if (g[7] === 1) cap.set(g[0], (cap.get(g[0]) || 0) + g[8]); });
+  const ref = inside.find(b => b[1] === 3) ||
+    inside.reduce((best, b) => (cap.get(b[0]) ?? -1) > (cap.get(best[0]) ?? -1) ? b : best, inside[0]);
+  try {
+    const st = await act("/api/rows", { table: "areas", values: { area: a, ...(ref ? { price_ref_bus: ref[0] } : {}) } });
+    pick("areas", st.row);
+  } catch (_) { /* reported by act */ }
+}
+function areaTotals(a) {
+  // totals of area a (issue #112): case values (scheduled generation of in-service
+  // generators, bus load, scheduled net export before losses and shunts), and with a
+  // successful solution the solved values of result.areas plus the interchange with each
+  // neighboring area over the in-service ties (positive: export from area a)
+  const T = S.state.case.tables, res = S.state.result && S.state.result.success ? S.state.result : null;
+  const area = new Map(T.bus.map(b => [b[0], b[6]]));
+  const buses = T.bus.filter(b => b[6] === a);
+  const out = { buses: buses.length, Pg: 0, Pmax: 0, gens: 0, Pd: 0, Qd: 0, ties: 0 };
+  for (const b of buses) { out.Pd += b[2]; out.Qd += b[3]; }
+  for (const g of T.gen) if (g[7] === 1 && area.get(g[0]) === a) { out.Pg += g[1]; out.Pmax += g[8]; out.gens++; }
+  out.export = out.Pg - out.Pd;
+  const lines = [...T.branch.map((b, i) => ({ f: b[0], t: b[1], on: b[10] === 1, r: res && res.branch[i] ? [res.branch[i].PF, res.branch[i].PT] : null })),
+    ...T.dcline.map((d, i) => { const rd = res && res.dcline && res.dcline[i]; return { f: d[0], t: d[1], on: d[2] === 1, r: rd && rd.solved ? [rd.Pf, -rd.Pt] : null }; })];
+  const flows = new Map();
+  for (const L of lines) {
+    const af = area.get(L.f), at = area.get(L.t);
+    if (!L.on || af === undefined || at === undefined || af === at || (af !== a && at !== a)) continue;
+    out.ties++;
+    const other = af === a ? at : af;
+    const x = flows.get(other) || { ties: 0, MW: 0 };
+    x.ties++;
+    if (L.r) x.MW += af === a ? L.r[0] : L.r[1];
+    flows.set(other, x);
+  }
+  out.neighbors = [...flows].sort((p, q) => p[0] - q[0]);
+  out.solved = res && (res.areas || []).find(r => r.area === a) || null;
+  return out;
+}
 function areaOutline(a) {
   // outline color of an area region (buses keep their own colors)
   const list = areaList();
@@ -928,8 +987,9 @@ function areaRegions(sites, R, view, convex) {
     regions.append(grp);
     let top = null;
     loops.forEach(P => P.forEach(q => { if (!top || q.y < top.y) top = q; }));
-    const label = sv("text", { x: top.x, y: top.y - 4, class: "area-name", fill: color, "text-anchor": "middle" });
+    const label = sv("text", { x: top.x, y: top.y - 4, class: areaNameClass(a), fill: color, "text-anchor": "middle" });
     label.textContent = areaTitle(a);
+    areaNameClick(label, a);
     names.append(label);
   });
   return { regions, names };
@@ -1805,8 +1865,9 @@ function renderOneline() {
       const r = sv("rect", { x: B.x0, y: B.y0, width: B.x1 - B.x0, height: B.y1 - B.y0, rx: 10, class: "area-box", stroke: color, fill: color });
       tip(r, `${areaText(a)}: ${T.bus.filter(b => b[6] === a).length} bus(es)` + (refs.has(a) ? `, price reference bus ${refs.get(a)}` : " (no areas row)"));
       regions.append(r);
-      const t = sv("text", { x: B.x0 + 8 / k, y: B.y0 - 6 / k, class: "area-name", fill: color, style: `font-size:${13 / k}px;stroke-width:${3 / k}px` });
+      const t = sv("text", { x: B.x0 + 8 / k, y: B.y0 - 6 / k, class: areaNameClass(a), fill: color, style: `font-size:${13 / k}px;stroke-width:${3 / k}px` });
       t.textContent = areaTitle(a);
+      areaNameClick(t, a);
       names.append(t);
     }
     g.prepend(regions);
@@ -2381,9 +2442,9 @@ function renderInspector() {
     const ai = c.tables.areas.findIndex(a => a[0] === row[6]);
     const refOf = c.tables.areas.map((a, i) => [a, i]).filter(([a], i) => a[1] === num && i !== ai);
     kids.push(h("div", { class: "sub" }, ai < 0 ? `Area ${row[6]} has no row in the areas table` :
-      h("span", {}, h("a", { onclick: () => goto("areas", ai) }, `Area ${row[6]}`),
+      h("span", {}, h("a", { onclick: () => pick("areas", ai) }, `Area ${row[6]}`),
         c.tables.areas[ai][1] === num ? " · this bus is its price reference bus" : ` · price reference bus ${c.tables.areas[ai][1]}`),
-      ...refOf.map(([a, i]) => h("span", {}, " · ", h("a", { onclick: () => goto("areas", i) }, `price reference bus of area ${a[0]}`)))));
+      ...refOf.map(([a, i]) => h("span", {}, " · ", h("a", { onclick: () => pick("areas", i) }, `price reference bus of area ${a[0]}`)))));
     if (hasGeo()) {
       const geo = c.geodata.find(r => r[0] === num);
       kids.push(h("h4", {}, "Location"));
@@ -2422,6 +2483,36 @@ function renderInspector() {
     const cost = c.tables.gencost[index];
     kids.push(h("div", { class: "btns" }, h("button", { onclick: () => goto("gen", index) }, "Show in table"),
       cost ? h("button", { onclick: () => goto("gencost", index) }, "Show cost") : null));
+  } else if (kind === "areas") {
+    const num = row[0], t = areaTotals(num), sol = t.solved;
+    const bi = c.tables.bus.findIndex(b => b[0] === row[1]);
+    kids.push(h("h3", {}, row[2] ? `Area ${num} (${row[2]})` : `Area ${num}`), h("div", { class: "sub" }, `row ${index + 1} · ${t.buses} bus(es) · price reference `,
+      bi < 0 ? `bus ${row[1]} (not found)` : h("a", { onclick: () => pick("bus", bi) }, `bus ${row[1]}`)));
+    kids.push(h("dl", {}, cols.map((_, k) => k).flatMap(field)));
+    const mw = (x) => `${fmt(x, 2)} MW`;
+    const net = (x) => Math.abs(x) < 5e-3 ? "0.00 MW" : x > 0 ? `${fmt(x, 2)} MW export` : `${fmt(-x, 2)} MW import`;
+    const val = (x) => h("dd", { class: "num" }, x);
+    if (sol) {
+      kids.push(h("h4", {}, `Totals (${S.state.result.kind === "opf" ? "OPF" : "power flow"} solution)`), h("dl", { class: "totals" },
+        h("dt", {}, "Generation"), val(mw(sol.Pg)),
+        h("dt", {}, "Load"), val(mw(sol.Pd)),
+        h("dt", { title: "Real power consumed by bus shunts (Gs) at the solved voltages" }, "Shunts"), val(mw(sol.shunt_MW)),
+        h("dt", { title: "Losses on lines inside the area" }, "Losses"), val(mw(sol.losses_MW)),
+        h("dt", { title: "Sum of the tie flows leaving the area (negative: import)" }, "Net interchange"), val(net(sol.export_MW)),
+        ...(sol.lam_P !== null && sol.lam_P !== undefined ? [h("dt", { title: "λP at the price reference bus" }, "Price"), val(`${fmt(sol.lam_P, 2)} $/MWh`)] : [])));
+    } else {
+      kids.push(h("h4", {}, "Totals (case values)"), h("dl", { class: "totals" },
+        h("dt", { title: `PG of the ${t.gens} in-service generator(s)` }, "Generation"), val(mw(t.Pg)),
+        h("dt", { title: "PMAX of the in-service generators" }, "Capacity"), val(mw(t.Pmax)),
+        h("dt", {}, "Load"), val(mw(t.Pd)),
+        h("dt", { title: "Generation minus load, before losses and shunts (scheduled)" }, "Net interchange"), val(net(t.export))));
+      kids.push(h("div", { class: "sub" }, "Run a power flow or OPF for solved generation, losses and tie flows."));
+    }
+    kids.push(h("h4", {}, `Ties (${t.ties})`), h("ul", {}, t.neighbors.map(([o, x]) =>
+      h("li", {}, h("a", { onclick: () => pickArea(o) }, `${areaText(o)}`),
+        `${x.ties} line(s)` + (sol ? ` · ${net(x.MW)}` : "")))));
+    if (!t.buses) kids.push(h("div", { class: "sub" }, "No bus is in this area."));
+    kids.push(h("div", { class: "btns" }, h("button", { onclick: () => goto("areas", index) }, "Show in table")));
   } else if (kind === "dcline") {
     kids.push(h("h3", {}, `DC line ${row[0]} → ${row[1]}`), h("div", { class: "sub" }, `row ${index + 1}` + (row[2] ? "" : " · out of service")));
     const rd = res && res.dcline && res.dcline[index];

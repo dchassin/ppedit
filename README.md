@@ -132,6 +132,13 @@ In the editor:
     each area its own box of columns (areas left to right in number order);
     a line between two areas is drawn with a jog from its column in one box
     to its column in the other, so every bus bar stays inside its area.
+    Click an area's name to edit its `areas` row (number, price reference
+    bus, name) in the side panel, which also shows the area's totals:
+    generation, load and net interchange (export or import) from the case
+    values, or, after a solve, the solved generation, load, shunts, internal
+    losses, net interchange and price, with the flow to or from each
+    neighboring area over the tie lines. An area with no `areas` row asks
+    before adding one.
 
     The **Labels ▾** menu (to the right of **View ▾**) turns
     the diagram labels on and off. For buses: the bus number, voltage,
