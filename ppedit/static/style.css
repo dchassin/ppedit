@@ -398,6 +398,26 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 }
 .toast.error { background: var(--err); }
 
+/* Work-in-progress indicator (decision #36p): shown while a request to the
+   server has been pending for BUSY_DELAY ms, and from page load until init()
+   ends. The bar moves by a transform animation, which browsers keep running
+   while the page script is busy re-rendering. */
+.busy { position: fixed; inset: 0 0 auto 0; z-index: 60; pointer-events: none; }
+.busy[hidden] { display: none; }
+.busy-bar { height: 3px; overflow: hidden; background: rgba(31,111,92,.18); }
+.busy-bar::before {
+  content: ""; display: block; height: 100%; width: 35%; background: var(--accent);
+  animation: busy-slide 1.1s ease-in-out infinite;
+}
+@keyframes busy-slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
+.busy-text {
+  position: absolute; top: 52px; left: 50%; transform: translateX(-50%); /* below the top bar */
+  background: var(--ink); color: #fff; padding: 4px 12px; border-radius: 12px;
+  font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.2); white-space: nowrap;
+}
+body.busy, body.busy * { cursor: progress !important; }
+@media (prefers-reduced-motion: reduce) { .busy-bar::before { animation-duration: 4s; } }
+
 .topbar button.exit:hover { background: #8a2e2e; border-color: #a33a3a; }
 .stopped { max-width: 32em; margin: 20vh auto; text-align: center; color: #44514d; }
 .stopped h1 { font-size: 1.4em; color: #1f6f5c; }
