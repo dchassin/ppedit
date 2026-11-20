@@ -700,7 +700,7 @@ function clipHalf(poly, a, b, c) {
   }
   return out;
 }
-function areaRegions(sites, R, view) {
+function areaRegions(sites, R, view, convex) {
   // one bounded, labeled region per area, drawn as its outer hull only (issue #106). Cells:
   // the disc of radius R around each site (the area's buses and points along its internal
   // lines) cut back to the points nearer that site than any site of another area, so cells
@@ -708,7 +708,9 @@ function areaRegions(sites, R, view) {
   // the cells (between lines of a meshed network) are filled from the nearest area, and the
   // outline of each area's grid cells is traced and smoothed, so no inner boundaries remain
   // and the borders of neighboring areas coincide. view ({x0,y0,x1,y1}, screen) limits the
-  // grid to what can be seen, with a margin.
+  // grid to what can be seen, with a margin. With convex (geodata layout), each area also
+  // grows into its convex hull (expanded by R) where no other area's cells are, ties going
+  // to the nearer area, so its shape is as convex as its neighbors allow.
   const cells = new Map(), K = 28;
   for (const p of sites) {
     let poly = [];
@@ -766,8 +768,29 @@ function areaRegions(sites, R, view) {
       }
     }
   });
+  const nbr = [1, -1, nx, -nx];
+  if (convex) { // grow each area into the empty points of its convex hull, nearest area first
+    const hulls = list.map(a => convexHull(cells.get(a).flat()));
+    const inHull = (H, x, y) => { // H with positive orientation (convexHull)
+      for (let u = 0, v = H.length - 1; u < H.length; v = u++)
+        if ((H[u].x - H[v].x) * (y - H[v].y) - (H[u].y - H[v].y) * (x - H[v].x) < 0) return false;
+      return true;
+    };
+    const queue = [];
+    for (let c = 0; c < lab.length; c++) if (lab[c] >= 0) queue.push(c);
+    for (let h = 0; h < queue.length; h++) {
+      const c = queue[h], ai = lab[c];
+      for (const d of nbr) {
+        const e = c + d;
+        if (e < 0 || e >= lab.length || lab[e] !== -1) continue;
+        const i = e % nx, j = (e - i) / nx;
+        if (i === 0 || j === 0 || i === nx - 1 || j === ny - 1) continue; // keep the empty border
+        if (hulls[ai].length >= 3 && inHull(hulls[ai], x0 + i * s, y0 + j * s)) { lab[e] = ai; queue.push(e); }
+      }
+    }
+  }
   // empty points reachable from the border are outside; other empty points are enclosed gaps
-  const OUT = -2, nbr = [1, -1, nx, -nx];
+  const OUT = -2;
   let queue = [];
   for (let i = 0; i < nx; i++) queue.push(i, (ny - 1) * nx + i);
   for (let j = 1; j < ny - 1; j++) queue.push(j * nx, j * nx + nx - 1);
@@ -811,6 +834,17 @@ function areaRegions(sites, R, view) {
     names.append(label);
   });
   return { regions, names };
+}
+function convexHull(P) {
+  // convex hull of points {x,y} (Andrew's monotone chain), with positive orientation (every
+  // inside point is on the positive side of each edge); collinear points dropped
+  const Q = [...P].sort((a, b) => a.x - b.x || a.y - b.y);
+  if (Q.length < 3) return Q;
+  const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lo = [], hi = [];
+  for (const p of Q) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p) <= 0) lo.pop(); lo.push(p); }
+  for (let i = Q.length - 1; i >= 0; i--) { const p = Q[i]; while (hi.length >= 2 && cross(hi[hi.length - 2], hi[hi.length - 1], p) <= 0) hi.pop(); hi.push(p); }
+  return lo.slice(0, -1).concat(hi.slice(0, -1));
 }
 function traceOutline(lab, nx, ny, v) {
   // closed loops, in grid units, through the midpoints of the grid edges that separate
@@ -1211,7 +1245,7 @@ function renderNetwork() {
       const n = Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (0.7 * R));
       for (let t = 1; t < n; t++) sites.push({ area: area.get(b[0]), x: p.x + (q.x - p.x) * t / n, y: p.y + (q.y - p.y) * t / n });
     }
-    const R2 = areaRegions(sites, R, { x0: 0, y0: 0, x1: svg.clientWidth, y1: svg.clientHeight });
+    const R2 = areaRegions(sites, R, { x0: 0, y0: 0, x1: svg.clientWidth, y1: svg.clientHeight }, geo);
     g.prepend(R2.regions);
     g.insertBefore(R2.names, labels.nextSibling);
   }
