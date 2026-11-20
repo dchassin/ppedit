@@ -508,7 +508,8 @@ function updateTableHint() {
   $("#import-btn").title = none ? TABLE_IO_NONE : n
     ? `Replace the ${n} selected row(s) with the rows of a data file (same columns, same number of rows)`
     : "Append the rows of a data file (CSV, Parquet, Excel, …; columns named as in this table)";
-  $("#export-btn").title = none ? TABLE_IO_NONE : n ? `Download the ${n} selected row(s) as a data file` : "Download all rows as a data file";
+  $("#export-btn").title = none ? TABLE_IO_NONE : (n ? `Download the ${n} selected row(s) as a data file` : "Download all rows as a data file")
+    + (extendedColumns(t).cols.length ? ", with the solution columns shown" : "");
   const head = $("#export-menu .sep");
   if (head) head.textContent = n ? `Export ${n} selected row(s) as` : `Export all ${all} row(s) as`;
 }
@@ -610,12 +611,14 @@ async function importRows(file) {
   const data = await fileBase64(file);
   const st = await act("/api/table/import", { table, filename: file.name, data, rows });
   const r = st.imported, what = TABLE_TITLES[table];
+  // solution columns written by export (decision #36r) are not case data
+  const ign = r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "";
   if (r.added) {
-    toast(`Appended ${r.added} ${what} row(s) from ${file.name} (Ctrl+Z to undo)`);
+    toast(`Appended ${r.added} ${what} row(s) from ${file.name}${ign} (Ctrl+Z to undo)`);
     flashRow(S.state.case.tables[table].length - 1);
   } else {
     toast(`Replaced ${r.replaced} selected ${what} row(s) from ${file.name}` +
-      (r.cascade ? "; related values updated" : "") + " (Ctrl+Z to undo)");
+      (r.cascade ? "; related values updated" : "") + `${ign} (Ctrl+Z to undo)`);
   }
 }
 

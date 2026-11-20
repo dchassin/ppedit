@@ -1134,7 +1134,8 @@ def {name}():
           - `table`: table name
 
           - `columns`: column names of the imported data, in `COLUMNS[table]`
-            (any order)
+            (any order); columns named as in `RESULT_COLUMNS[table]` (solution
+            values written by export) are ignored
 
           - `rows`: imported rows, values in `columns` order (`None` for a
             missing value)
@@ -1157,8 +1158,9 @@ def {name}():
         Returns
         -------
 
-          - `dict`: `added` or `replaced` (number of rows), and `cascade`
-            (`True` if other cells or tables changed as a result)
+          - `dict`: `added` or `replaced` (number of rows), `cascade`
+            (`True` if other cells or tables changed as a result), and
+            `ignored` (the `RESULT_COLUMNS` names left out) when there are any
 
         Exceptions
         ----------
@@ -1179,6 +1181,12 @@ def {name}():
         self._check(table)
         names = [c["name"] for c in COLUMNS[table]]
         columns = [str(c).strip() for c in columns]
+        results = {c["name"] for c in RESULT_COLUMNS.get(table,[])} - set(names)
+        ignored = [c for c in columns if c in results]
+        if ignored: # solution values written by export: not case data
+            keep = [k for k,c in enumerate(columns) if c not in results]
+            rows = [[r[k] for k in keep] if len(r) == len(columns) else r for r in rows]
+            columns = [columns[k] for k in keep]
         unknown = [c for c in columns if c not in names]
         if unknown:
             raise CaseError(f"{table} has no column(s) " + ", ".join(f"'{c}'" for c in unknown)
@@ -1203,7 +1211,8 @@ def {name}():
                 except CaseError as err:
                     raise CaseError(f"row {n+1}: {err}") from err
             cost = {v:k for k,v in COST_TABLES.items()}.get(table)
-            return {"added":len(rows),"cascade":bool(cost and self.tables[cost])}
+            return {"added":len(rows),"cascade":bool(cost and self.tables[cost])} \
+                | ({"ignored":ignored} if ignored else {})
         for row in replace:
             self._check(table,row)
         targets = sorted(set(replace))
@@ -1250,7 +1259,7 @@ def {name}():
                         cascade |= self._set_value(table,row,column,vals[column])
             except CaseError as err:
                 raise CaseError(f"row {n+1}: {err}") from err
-        return {"replaced":len(rows),"cascade":cascade}
+        return {"replaced":len(rows),"cascade":cascade} | ({"ignored":ignored} if ignored else {})
 
     # ----- geodata -----
 

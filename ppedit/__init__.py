@@ -224,7 +224,8 @@ What is not promised
   - The extended (result) columns shown in the tables after a solve
     (`ppedit.case.RESULT_COLUMNS`, the `extended` rows of
     `ppedit.Case.solve`) are not part of the case: they are not edited,
-    saved, exported or kept after the next edit. Multipliers are given
+    saved, imported or kept after the next edit (table export includes
+    them while they are shown). Multipliers are given
     only by the PYPOWER OPF solvers, as PYPOWER computes them.
 
   - Solver messages (`messages` of a solution, listed on the Issues tab)

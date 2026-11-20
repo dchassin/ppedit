@@ -56,7 +56,9 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
   - `GET  /api/table/export?table=...&format=csv&rows=1,2`: download the
     rows of a table (`rows`: comma-separated row indexes, default all) as
     a data file in the format of the extension `format` (e.g. `csv`,
-    `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`
+    `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
+    successful solution exists, the extended (result) columns the page
+    shows follow the table columns (`Editor.extended`)
   - `POST /api/undo`, `POST /api/redo`
   - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?}`;
     `algorithm` is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`)
@@ -496,6 +498,23 @@ class Editor:
 
         return self.edit(run)
 
+    def extended(self,table:str,index:list[int]) -> tuple[list[dict],list[list]]|None:
+        """Extended (result) columns of the last solution for rows `index`
+        of `table`, as `(columns, rows)` for `dump_rows`, or `None`
+
+        Only the columns the solver gave (not all `None` over the whole
+        table) are included, as the page shows them (decision #36r).
+        """
+        res = self.result
+        ext = res.get("extended",{}).get(table) if res and res.get("success") else None
+        if not ext or len(ext) != len(self.case.tables[table]):
+            return None
+        spec = RESULT_COLUMNS[table]
+        keep = [j for j in range(len(spec)) if any(row[j] is not None for row in ext)]
+        if not keep:
+            return None
+        return [spec[j] for j in keep],[[ext[i][j] for j in keep] for i in index]
+
     def state(self,cascade:bool=False) -> dict:
         """Return the editor state sent to the browser"""
         fmt = INPUT_FORMATS.get(os.path.splitext(self.path)[1].lower()) if self.path else None
@@ -697,9 +716,11 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
                     raise CaseError("rows must be comma-separated row indexes") from err
                 for i in index:
                     editor.case._check(table,i) # pylint: disable=protected-access
-                rows = [rows[i] for i in index]
+            else:
+                index = list(range(len(rows)))
+            rows = [rows[i] for i in index]
             name = f"{editor.case.name or 'untitled'}_{table}.{fmt}"
-            content = dump_rows(table,rows,name)
+            content = dump_rows(table,rows,name,editor.extended(table,index))
         return Response(content,mimetype="application/octet-stream",headers={
             "Content-Disposition":f'attachment; filename="{name}"'})
 

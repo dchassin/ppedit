@@ -116,6 +116,31 @@ def test_server_export_import(client,post):
     assert status == 200 and state["imported"] == {"added":2,"cascade":False}
     assert [b[0] for b in state["case"]["tables"]["bus"][-2:]] == [20,21]
 
+@pytest.mark.parametrize("ext",FORMATS)
+def test_server_export_extended(client,post,ext):
+    """Export adds the solution's extended columns the page shows; import
+    ignores them (issue #108)"""
+    fmt = ext.lstrip(".")
+    status,state = post("/api/solve",{"kind":"pf"})
+    assert status == 200 and state["result"]["success"]
+    res = client.get(f"/api/table/export?table=branch&format={fmt}&rows=2,0")
+    assert res.status_code == 200
+    columns,rows = read_rows(f"x{ext}",res.get_data())
+    assert columns == NAMES["branch"] + ["PF","QF","PT","QT"] # PF: no multipliers
+    ext_rows = state["result"]["extended"]["branch"]
+    for row,i in zip(rows,(0,2)):
+        assert row[:len(NAMES["branch"])] == state["case"]["tables"]["branch"][i]
+        assert row[len(NAMES["branch"]):] == pytest.approx(ext_rows[i][:4])
+    bus = read_rows(f"x{ext}",client.get(f"/api/table/export?table=bus&format={fmt}").get_data())
+    assert bus[0] == NAMES["bus"] # no bus values from PF
+    status,state = _upload(post,"branch",f"b{ext}",res.get_data(),[0,2]) # solution columns ignored
+    assert status == 200 and state["imported"]["ignored"] == ["PF","QF","PT","QT"]
+    status,state = post("/api/cell",{"table":"branch","row":0,"column":"rateA","value":200})
+    assert status == 200 and state["result"] is None # an edit clears the solution
+    columns,_ = read_rows(f"x{ext}",
+        client.get(f"/api/table/export?table=branch&format={fmt}").get_data())
+    assert columns == NAMES["branch"]
+
 def test_server_import_rolls_back(client,post):
     """A failing row leaves the case unchanged"""
     before = client.get("/api/state").get_json()["case"]["tables"]["bus"]

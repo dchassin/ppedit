@@ -183,7 +183,9 @@ In the editor:
     multipliers (`mu_Vmax`, `mu_Pmax`, `mu_Sf`, `mu_angmin`, ...).
     Columns the solver does not give (multipliers for PF and cvxopf) are
     left out; the columns go away with the solution on the next edit and
-    are neither saved nor exported.
+    are not saved. While they are shown, **Export ▾** writes them after the
+    table columns; **Import…** ignores them (and says so), so an exported
+    file can be imported again.
   - **Run PF ▾** and **Run OPF ▾** (toolbar) each open a menu of solvers;
     choosing one runs it; while it runs, the button's ▾ turns into ● and
     the button is disabled until the solver returns. Run PF lists the PYPOWER power flow algorithms
