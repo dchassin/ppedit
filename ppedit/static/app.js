@@ -118,7 +118,7 @@ function numInput(attrs, value, spec) {
 
 // ---------------------------------------------------------------- server
 
-// Work-in-progress indicator (#busy, decision #36p): every api() request
+// Work-in-progress indicator (#busy, decision #54): every api() request
 // counts as pending work unless `background` (polling); the indicator shows
 // once work has been pending for BUSY_DELAY ms (so quick edits don't flash
 // it), names the slowest kind of request, and counts seconds after
@@ -396,7 +396,7 @@ function rowLabel(table, i) {
   return `${i + 1}`;
 }
 
-// Extended (result) columns (decision #36r, issue #108): after a successful
+// Extended (result) columns (decision #56, issue #108): after a successful
 // solve, the columns PYPOWER appends to bus, gen, branch and dcline
 // (RESULT_COLUMNS in case.py: branch flows, OPF prices and multipliers) show
 // read only after the editable columns, until the next edit clears the
@@ -617,7 +617,7 @@ async function importRows(file) {
   const data = await fileBase64(file);
   const st = await act("/api/table/import", { table, filename: file.name, data, rows });
   const r = st.imported, what = TABLE_TITLES[table];
-  // solution columns written by export (decision #36r) are not case data
+  // solution columns written by export (decision #56) are not case data
   const ign = r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "";
   if (r.added) {
     toast(`Appended ${r.added} ${what} row(s) from ${file.name}${ign} (Ctrl+Z to undo)`);
@@ -2224,7 +2224,7 @@ async function loadGeodata(file) {
   toast(`Loaded ${n} bus location(s)${tags.length ? ` with ${tags.join(", ")}` : ""} from ${file.name}`);
 }
 
-// diagram style and layout chosen when a case is opened (decision #26b): the
+// diagram style and layout chosen when a case is opened (decision #28): the
 // geodata layout (classic style) when the case has geodata, else the one-line
 // style for cases with fewer than ONELINE_MAX buses, else the classic style
 const ONELINE_MAX = 20;
@@ -2790,7 +2790,7 @@ function renderIssues() {
     const r = st.result;
     kids.push(h("h3", { class: "issue-group" }, `Last solve: ${r.dc ? "DC " : ""}${r.kind.toUpperCase()} (${r.solver.replace(/^(AC|DC): /, "")})`));
     for (const m of msgs) {
-      // a message with a detail (decision #36m) opens it in place; others show the log
+      // a message with a detail (decision #53) opens it in place; others show the log
       const open = !!m.detail && S.issueOpen === m.message;
       kids.push(h("div", { class: "issue" + (m.detail ? " has-detail" : "") + (open ? " open" : ""),
           title: m.detail ? "Show what this means and the constraints involved" : "Show the solver log on the Results tab",
@@ -2810,7 +2810,7 @@ function renderIssues() {
   box.replaceChildren(...kids);
 }
 
-// Detail of a solver warning (decision #36m): what it means physically and
+// Detail of a solver warning (decision #53): what it means physically and
 // the constraints involved; elements link to their table rows
 function issueDetail(d) {
   const kids = [h("p", { class: "explain" }, d.explain)];
@@ -3152,7 +3152,7 @@ function closeWindow(title) {
   window.close(); // browsers allow this only for some tabs (e.g. no back history); otherwise the page above stays
 }
 
-// Server watch (decision #36t, issue #51): the page polls GET /api/ping every
+// Server watch (decision #58, issue #51): the page polls GET /api/ping every
 // PING_INTERVAL ms (outside api(), so #busy does not count it) and api() reports
 // requests that get no response at all. Either opens the #server-down dialog,
 // which checks again every DOWN_POLL ms by itself and closes when the server

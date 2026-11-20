@@ -28,7 +28,7 @@ How the case is passed:
     must be polynomial (model 2) of degree 2 or less; cvxopf applies it to
     `|Pf|`. The copper-plate model (`singlenode_dc`) ignores DC lines.
 
-Solve options (`solve_options`, issue #88; decision #36k):
+Solve options (`solve_options`, issue #88; decision #48):
 
   - `preparation`: `default` builds with cvxopf's defaults (original
     coordinates, no `NumericalPreparation`); `recommended` builds with
@@ -49,7 +49,7 @@ Solve options (`solve_options`, issue #88; decision #36k):
 Notes about data cvxopf does not model and the warnings cvxopf issues while
 building and solving are written to `log` and returned in `warnings`, each
 as `{"message", "detail"}`. `detail` (or `None`) says what the warning
-means physically and lists the constraints involved (decision #36m):
+means physically and lists the constraints involved (decision #53):
 
   - `explain`: what the warning means for the network and the solution
 

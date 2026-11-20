@@ -410,7 +410,7 @@ details summary { cursor: pointer; color: var(--muted); margin: 14px 0 6px; }
 }
 .toast.error { background: var(--err); }
 
-/* Work-in-progress indicator (decision #36p): shown while a request to the
+/* Work-in-progress indicator (decision #54): shown while a request to the
    server has been pending for BUSY_DELAY ms, and from page load until init()
    ends. The bar moves by a transform animation, which browsers keep running
    while the page script is busy re-rendering. */

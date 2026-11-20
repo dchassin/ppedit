@@ -312,7 +312,7 @@ whether only OPF gives it)
 
 They are read only and not part of the case: `Case.solve` returns their
 values in `extended`, and the editor shows them after the editable columns
-until the next edit (decision #36r).
+until the next edit (decision #56).
 """
 
 AREAS_PPC = 2
@@ -1560,7 +1560,7 @@ def {name}():
         warnings the solver raised (at most `SOLVER_WARNINGS`). Each is
         also written to `log`. Warnings about isolated buses, unsolved DC
         lines and cvxopf's notes and warnings have a `detail` (decision
-        #36m): `explain` (what the warning means physically), `constraints`
+        #53): `explain` (what the warning means physically), `constraints`
         (rows of `constraint`, `element`, `table`, `row` and `value`: the
         constraints involved and the case rows they belong to, at most 20)
         and `more` (constraints not listed). cvxopf's per-element warnings
