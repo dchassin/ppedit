@@ -178,6 +178,14 @@ API key to start sessions; tests use a fake client).
   as the union of per-site discs clipped to the half-planes nearer than any
   other area's site (`areaRegions`; sites are buses plus points along
   internal lines), so regions never overlap; bus colors don't change.
+  Only the outer hull is drawn (issue #106): the discs are rasterized on a
+  grid limited to the view (about 250k points), enclosed gaps are filled
+  from the nearest area, and the outline is traced (`traceOutline`,
+  marching squares) and smoothed (`smoothLoop`); an area nested inside
+  another still shows as a hole in it.
+  In the geodata layout (`convex` argument) each area also grows, breadth
+  first, into the empty grid points of its convex hull (`convexHull`),
+  so shapes are as convex as their neighbors allow.
   Turning it on re-runs the force layout with area cohesion and gives each
   area its own column strip (box) in the one-line layout (part of the
   `olCache` signature), where ties always keep a column in each box and
