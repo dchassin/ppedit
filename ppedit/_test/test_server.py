@@ -11,6 +11,12 @@ def test_index_and_meta(client):
     assert meta["solvers"]["opf"][0]["algorithm"] == "PIPS"
     assert "cvxopf" in meta["solvers"]
 
+def test_meta_result_columns(client):
+    """`/api/meta` lists the extended (result) columns of each table (issue #108)"""
+    cols = client.get("/api/meta").get_json()["result_columns"]
+    assert set(cols) == {"bus","gen","branch","dcline"}
+    assert [c["name"] for c in cols["branch"][:4]] == ["PF","QF","PT","QT"]
+
 def test_meta_about(client):
     """`/api/meta` carries the package metadata the "ppedit" title shows"""
     about = client.get("/api/meta").get_json()["about"]

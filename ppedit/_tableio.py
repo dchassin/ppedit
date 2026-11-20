@@ -153,7 +153,8 @@ def read_rows(filename:str,data:bytes) -> tuple[list[str],list[list]]:
     rows = [[_value(v) for v in row] for row in frame.astype(object).itertuples(index=False,name=None)]
     return columns,rows
 
-def dump_rows(table:str,rows:list[list],filename:str) -> bytes:
+def dump_rows(table:str,rows:list[list],filename:str,
+        extended:tuple[list[dict],list[list]]|None=None) -> bytes:
     """Write table rows to file contents
 
     Arguments
@@ -164,6 +165,11 @@ def dump_rows(table:str,rows:list[list],filename:str) -> bytes:
       - `rows`: rows in `COLUMNS[table]` order
 
       - `filename`: file name, whose extension sets the format
+
+      - `extended`: optional `(columns, rows)` of solution values to write
+        after the table columns: `columns` are `RESULT_COLUMNS` entries,
+        `rows` one per row of `rows` (`None` for a missing value, written
+        as an empty cell)
 
     Returns
     -------
@@ -188,6 +194,11 @@ def dump_rows(table:str,rows:list[list],filename:str) -> bytes:
             frame[col["name"]] = frame[col["name"]].astype("float64")
         else:
             frame[col["name"]] = frame[col["name"]].astype(str)
+    if extended:
+        cols,values = extended
+        for j,col in enumerate(cols):
+            frame[col["name"]] = pd.Series([math.nan if v[j] is None else float(v[j])
+                for v in values],dtype="float64")
     buffer = io.BytesIO()
     if fmt in ("csv","tsv"):
         frame.to_csv(buffer,sep="," if fmt == "csv" else "\t",index=False,

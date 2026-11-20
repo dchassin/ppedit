@@ -176,6 +176,16 @@ In the editor:
     defaults) and export writes every row; with rows selected, import
     replaces them with the file's rows (same columns and number of rows)
     and export writes only the selected rows. An import is one undo step.
+    After a successful PF or OPF, the Buses, Generators, Branches and DC
+    lines tables also show PYPOWER's extended (result) columns, shaded and
+    read only, after the editable ones: branch flows `PF`, `QF`, `PT`,
+    `QT`, and for OPF the prices `lam_P`, `lam_Q` and the Kuhn-Tucker
+    multipliers (`mu_Vmax`, `mu_Pmax`, `mu_Sf`, `mu_angmin`, ...).
+    Columns the solver does not give (multipliers for PF and cvxopf) are
+    left out; the columns go away with the solution on the next edit and
+    are not saved. While they are shown, **Export ▾** writes them after the
+    table columns; **Import…** ignores them (and says so), so an exported
+    file can be imported again.
   - **Run PF ▾** and **Run OPF ▾** (toolbar) each open a menu of solvers;
     choosing one runs it; while it runs, the button's ▾ turns into ● and
     the button is disabled until the solver returns. Run PF lists the PYPOWER power flow algorithms

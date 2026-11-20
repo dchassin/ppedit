@@ -96,6 +96,9 @@ def test_opf_matches_pypower(case):
         assert [got[k] for k in ("Pf","Pt","Qf","Qt","Vf","Vt")] == pytest.approx(want,abs=2e-3)
     assert [d["solved"] for d in result["dcline"]] == [True,True,False,True]
     assert result["dcline"][3]["mu_Pmax"] == pytest.approx(7.2209,abs=1e-2)
+    ext = result["extended"]["dcline"] # mu_Pmin, mu_Pmax, ... (issue #108)
+    assert len(ext) == 4 and ext[3][1] == pytest.approx(7.2209,abs=1e-2)
+    assert len(result["extended"]["gen"]) == len(case.tables["gen"])
 
 def test_opf_with_cost(case):
     """dclinecost changes the dispatch as in PYPOWER's t_dcline 'poly cost' test"""

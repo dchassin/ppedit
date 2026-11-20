@@ -228,6 +228,14 @@ API key to start sessions; tests use a fake client).
   taken from the file. Parquet/Feather/Excel depend on optional engines
   (CI installs `pyarrow` and `openpyxl`).
 
+- Extended result columns (decision #36r, issue #108): `RESULT_COLUMNS` in
+  `case.py` (PYPOWER array indexes), `extended` of `Case.solve`
+  (`_extended`), `extendedColumns` in `app.js`. Shown only while a
+  successful solution exists; not saved or applied. Export appends them
+  (`Editor.extended` in `server.py`, `extended` of `dump_rows`);
+  `Case.import_rows` drops columns with their names (`ignored`).
+  `S.tableSort` column indexes past `COLUMNS[table]` refer to them.
+
 - Claude tab (`ppedit/claude.py`, `renderClaude` in `app.js`): sessions
   call the Messages API with `urllib` (no SDK dependency) in background
   threads; each tool call that changes the case is one `Editor.edit()`

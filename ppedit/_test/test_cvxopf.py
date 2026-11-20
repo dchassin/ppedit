@@ -51,8 +51,10 @@ def test_formulations(algorithm):
     if res["dc"]:
         assert all(b["Vm"] == 1 and b["Va"] == 0 for b in res["bus"])
         assert all(g["Qg"] == 0 for g in res["gen"]) and res["losses_MW"] == pytest.approx(0,abs=1e-6)
+    assert all(x is None for t in ("bus","gen","dcline") for row in res["extended"][t] for x in row)
     if algorithm == "CVXOPF-1NODE":
         assert res["branch"] == []
+        assert all(x is None for row in res["extended"]["branch"] for x in row)
     else:
         assert len(res["branch"]) == len(case.tables["branch"])
     if algorithm == "CVXOPF-DC":
