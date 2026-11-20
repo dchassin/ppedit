@@ -41,7 +41,7 @@ jobs:
     - name: Install packages
       run: |
         pip install --upgrade pip
-        pip install . pytest pylint   # non-editable: catches missing package-data
+        pip install . pytest pytest-cov pylint   # non-editable: catches missing package-data
 
     - name: Install table data engines (optional Parquet, Feather and Excel formats)
       run: |
@@ -59,5 +59,22 @@ jobs:
         pylint --fail-under 0 *.py
 
     - name: Run tests
+      # coverage settings are in pyproject.toml ([tool.coverage.*]); informational only
       run: |
-        pytest --durations=10
+        pytest --durations=10 --cov --cov-report=term --cov-report=xml --cov-report=html
+
+    - name: Coverage summary
+      if: ${{ !cancelled() && hashFiles('.coverage') != '' }}
+      run: |
+        echo "## Test coverage" >> "$GITHUB_STEP_SUMMARY"
+        coverage report --format=markdown >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload coverage report
+      if: ${{ !cancelled() && hashFiles('.coverage') != '' }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-report
+        path: |
+          coverage.xml
+          htmlcov/
+        retention-days: 30

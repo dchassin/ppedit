@@ -6,3 +6,6 @@ dist/
 .venv/
 docs/
 .pytest_cache/
+.coverage
+coverage.xml
+htmlcov/

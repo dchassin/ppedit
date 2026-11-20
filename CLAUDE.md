@@ -62,6 +62,7 @@ Frontend is vanilla JS in one file (`app.js`) with a tiny `h()` DOM helper.
 python3.12 -m venv .venv && . .venv/bin/activate
 pip install --upgrade pip && pip install -e . pytest
 pytest            # ~2 s, includes ppedit/case.py docstring examples (test_doctest.py)
+pytest --cov      # with coverage (pip install pytest-cov; config in pyproject.toml)
 make docs
 ppedit serve ppedit/_test/data/case3.glm   # manual UI check
 ```
