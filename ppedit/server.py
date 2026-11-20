@@ -22,7 +22,9 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
 `{"error": message}` with status 400.
 
   - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
-    input formats (read), solvers (`ppedit.case.solvers`: the PF algorithms,
+    input formats (read), table data formats (`table_formats`: file
+    extensions `POST /api/table/import` and `GET /api/table/export` accept),
+    solvers (`ppedit.case.solvers`: the PF algorithms,
     the installed OPF solvers and the cvxopf solve option choices), version,
     and `about` (package metadata shown when the page's "ppedit" title is
     clicked; see `about`)
@@ -43,6 +45,16 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `loads_off` lists the loads switched off as `[bus, Pd, Qd]`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
+  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?}`
+    read table data from a file (`data`: its contents in base64; the
+    format comes from the `filename` extension, see
+    `ppedit._tableio.table_format`) and append the rows, or replace the
+    rows listed in `rows` (see `ppedit.Case.import_rows`); the state has
+    `imported` (`{"added"|"replaced": n, "cascade"}`)
+  - `GET  /api/table/export?table=...&format=csv&rows=1,2`: download the
+    rows of a table (`rows`: comma-separated row indexes, default all) as
+    a data file in the format of the extension `format` (e.g. `csv`,
+    `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`
   - `POST /api/undo`, `POST /api/redo`
   - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?}`;
     `algorithm` is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`)
@@ -89,6 +101,8 @@ Caveats
     meant for local use only.
 """
 
+import base64
+import binascii
 import copy
 import importlib.metadata
 import logging
@@ -105,6 +119,7 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
+from ppedit._tableio import table_formats, read_rows, dump_rows
 
 _logger = logging.getLogger(__file__)
 
@@ -568,7 +583,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         from ppedit import __version__ # pylint: disable=import-outside-toplevel
         return jsonify(columns=COLUMNS,tables=TABLES,builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            solvers=solvers(),version=__version__,about=about())
+            table_formats=table_formats(),solvers=solvers(),version=__version__,about=about())
 
     @app.get("/api/state")
     def state():
@@ -646,6 +661,44 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             out = editor.state(True)
             out["removed"] = removed
             return jsonify(out)
+
+    @app.post("/api/table/import")
+    def import_table():
+        data = body()
+        try:
+            content = base64.b64decode(data["data"],validate=True)
+        except (binascii.Error,TypeError) as err:
+            raise CaseError("data must be the file contents in base64") from err
+        columns,rows = read_rows(str(data["filename"]),content)
+        replace = data.get("rows")
+        with editor.lock:
+            result = editor.edit(lambda: editor.case.import_rows(data["table"],columns,rows,
+                None if not replace else [int(x) for x in replace]))
+            out = editor.state(result["cascade"])
+            out["imported"] = result
+            return jsonify(out)
+
+    @app.get("/api/table/export")
+    def export_table():
+        table = request.args.get("table","")
+        fmt = request.args.get("format","csv").lstrip(".")
+        text = request.args.get("rows","").strip()
+        with editor.lock:
+            if table not in COLUMNS:
+                raise CaseError(f"unknown table '{table}'")
+            rows = editor.case.tables[table]
+            if text:
+                try:
+                    index = sorted({int(x) for x in text.split(",")})
+                except ValueError as err:
+                    raise CaseError("rows must be comma-separated row indexes") from err
+                for i in index:
+                    editor.case._check(table,i) # pylint: disable=protected-access
+                rows = [rows[i] for i in index]
+            name = f"{editor.case.name or 'untitled'}_{table}.{fmt}"
+            content = dump_rows(table,rows,name)
+        return Response(content,mimetype="application/octet-stream",headers={
+            "Content-Disposition":f'attachment; filename="{name}"'})
 
     @app.post("/api/undo")
     def undo():

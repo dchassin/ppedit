@@ -43,6 +43,10 @@ jobs:
         pip install --upgrade pip
         pip install . pytest pylint   # non-editable: catches missing package-data
 
+    - name: Install table data engines (optional Parquet, Feather and Excel formats)
+      run: |
+        pip install pyarrow openpyxl
+
     - name: Install cvxopf (optional OPF solvers)
       run: |
         sudo apt-get update

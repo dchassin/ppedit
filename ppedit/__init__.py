@@ -115,6 +115,15 @@ in `POST /api/solve`, else the default), and `?view=NAME` opens the tab
 table name such as `bus`).
 Unknown values are ignored, and a solver error is shown as usual.
 
+Each case table can be imported from and exported to a data file
+(*Import…*, *Export ▾*; `POST /api/table/import`, `GET /api/table/export`),
+read and written with pandas in the format of the file extension (`.csv`,
+`.tsv`, `.json`, optionally compressed, `.parquet`, `.feather`, `.xlsx`;
+see `ppedit.server`). With no rows selected, import appends rows and export
+writes all rows; with rows selected, import replaces them
+(`ppedit.Case.import_rows`, same columns and row count) and export writes
+only them.
+
 The network diagram has a *Geodata* layout, available when the case has
 geodata, that places buses at their locations on a map (Web Mercator) with
 optional USGS satellite imagery, Census TIGERweb roads, and state and county

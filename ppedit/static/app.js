@@ -126,7 +126,8 @@ function numInput(attrs, value, spec) {
 const BUSY_DELAY = 300, BUSY_ELAPSED = 2000;
 const BUSY_LABELS = [  // [path prefix, label], first match wins
   ["/api/solve", "Solving"], ["/api/open", "Opening case"], ["/api/new", "Loading case"],
-  ["/api/save", "Saving"], ["/api/geodata", "Loading geodata"], ["/api/folders", "Listing folders"], ["/api/state", "Loading"],
+  ["/api/save", "Saving"], ["/api/geodata", "Loading geodata"], ["/api/table/import", "Importing rows"],
+  ["/api/table/export", "Exporting rows"], ["/api/folders", "Listing folders"], ["/api/state", "Loading"],
   ["/api/meta", "Loading"],
 ];
 const busy = { items: new Map([[0, { label: "Loading", t0: performance.now() }]]), next: 1, timer: null, tick: null };
@@ -479,6 +480,14 @@ function updateTableHint() {
   $("#table-hint").textContent = n ? `${n} selected` : "Enter or Tab commits an edit · hover headers for descriptions";
   $("[data-action=del-rows]").disabled = !n;
   $("[data-action=dup-row]").disabled = !n;
+  const all = S.state.case.tables[t]?.length || 0, none = !(S.meta.table_formats || []).length;
+  $("#import-btn").disabled = $("#export-btn").disabled = none;
+  $("#import-btn").title = none ? TABLE_IO_NONE : n
+    ? `Replace the ${n} selected row(s) with the rows of a data file (same columns, same number of rows)`
+    : "Append the rows of a data file (CSV, Parquet, Excel, …; columns named as in this table)";
+  $("#export-btn").title = none ? TABLE_IO_NONE : n ? `Download the ${n} selected row(s) as a data file` : "Download all rows as a data file";
+  const head = $("#export-menu .sep");
+  if (head) head.textContent = n ? `Export ${n} selected row(s) as` : `Export all ${all} row(s) as`;
 }
 
 async function commitCell(el) {
@@ -545,6 +554,70 @@ async function deleteRows() {
   renderTable(table);
   const r = st.removed;
   toast(Object.entries(r).filter(([, v]) => v).map(([k, v]) => `${v} ${k}`).join(", ") + " deleted (Ctrl+Z to undo)");
+}
+
+// Table data import/export (issue #73): files are read and written by the
+// server with pandas, in the format of the file name extension. With rows
+// selected, import replaces them (same columns, same number of rows) and
+// export writes only them; otherwise import appends and export writes all rows.
+const TABLE_IO_NONE = "Importing and exporting table data needs the pandas package on the server";
+
+function renderExportMenu() {
+  // one line per format, its compressed variants beside it
+  const exts = S.meta.table_formats || [];
+  const item = (x, text, title) => h("button", { "data-action": "export-rows", "data-format": x, role: "menuitem", title }, text);
+  $("#export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"),
+    ...exts.filter(x => x.split(".").length === 2).map(x => h("div", { class: "fmt" }, item(x, x.slice(1)),
+      ...exts.filter(y => y.startsWith(x + ".")).map(y => item(y, y.slice(x.length), `${y.slice(1)} (compressed)`)))));
+  $("#table-input").accept = exts.join(",");
+}
+
+function fileBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ""));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
+
+async function importRows(file) {
+  const table = S.view;
+  const rows = [...S.selected[table]].sort((a, b) => a - b);
+  const data = await fileBase64(file);
+  const st = await act("/api/table/import", { table, filename: file.name, data, rows });
+  const r = st.imported, what = TABLE_TITLES[table];
+  if (r.added) {
+    toast(`Appended ${r.added} ${what} row(s) from ${file.name} (Ctrl+Z to undo)`);
+    flashRow(S.state.case.tables[table].length - 1);
+  } else {
+    toast(`Replaced ${r.replaced} selected ${what} row(s) from ${file.name}` +
+      (r.cascade ? "; related values updated" : "") + " (Ctrl+Z to undo)");
+  }
+}
+
+async function exportRows(ext) {
+  const table = S.view, rows = [...S.selected[table]].sort((a, b) => a - b);
+  const q = new URLSearchParams({ table, format: ext.replace(/^\./, "") });
+  if (rows.length) q.set("rows", rows.join(","));
+  const id = busyStart("/api/table/export");
+  try {
+    const res = await fetch("/api/table/export?" + q);
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.error || `HTTP ${res.status}`);
+    }
+    const name = ((res.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/) || [])[1] || table + ext;
+    const url = URL.createObjectURL(await res.blob());
+    const a = h("a", { href: url, download: name });
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast(`Exported ${rows.length || S.state.case.tables[table].length} row(s) to ${name}`);
+  } catch (err) {
+    toast(err.message, true);
+  } finally { busyEnd(id); }
 }
 
 function flashRow(i) {
@@ -2843,6 +2916,8 @@ async function onAction(btn) {
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
     else if (a === "del-rows") await deleteRows();
+    else if (a === "import-rows") $("#table-input").click();
+    else if (a === "export-rows") await exportRows(btn.dataset.format);
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
     else if (a === "labels-none") { curLabels().bus.clear(); curLabels().branch.clear(); saveLabels(); }
@@ -3010,6 +3085,7 @@ async function init() {
   });
   loadLabels();
   buildLabelMenu();
+  renderExportMenu();
   $("#builtin-list").replaceChildren(...S.meta.builtin.map(n => h("button", { "data-action": "builtin", "data-name": n }, n)));
   buildSolverMenus();
   $("#opf-wrap").addEventListener("click", () => {
@@ -3038,6 +3114,10 @@ async function init() {
     else if (t.id === "net-areas") setAreas(t.checked);
   });
   $("#map-menu").addEventListener("change", e => { if (e.target.dataset.layer) setMapLayer(e.target.dataset.layer, e.target.checked); });
+  $("#table-input").addEventListener("change", e => {
+    const f = e.target.files[0]; e.target.value = "";
+    if (f) importRows(f).catch(() => { /* toast already shown */ });
+  });
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";
     if (f) loadGeodata(f).catch(() => { /* toast already shown */ });
