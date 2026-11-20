@@ -54,6 +54,12 @@ version, copyright, license, and links to the source code, documentation,
 issue tracker and license, with the funding acknowledgment from this README.
 **Exit** stops the server after asking for confirmation and closes the
 browser tab when the browser allows it.
+If the server stops (Ctrl-C, a closed terminal, an error) or stops
+answering, the page says so within a few seconds, waits for it, and
+continues when it answers again. **Restart server** shows the
+`ppedit serve ... --no-browser` command to run (the page reconnects, so no
+new window opens); **Exit browser window** closes the tab.
+Unsaved changes are held by the server, so they are lost when it stops.
 
 In the editor:
 

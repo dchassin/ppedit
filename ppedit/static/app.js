@@ -167,7 +167,13 @@ async function api(path, body, { background = false } = {}) {
   const id = background ? null : busyStart(path);
   let res, data;
   try {
-    res = await fetch(path, opts);
+    try { res = await fetch(path, opts); }
+    catch (_) {  // no HTTP response at all: the server stopped or cannot be reached (#51)
+      if (path !== "/api/exit") serverDown();
+      const err = new Error("The ppedit server is not responding");
+      err.network = true;
+      throw err;
+    }
     data = await res.json().catch(() => ({ error: `HTTP ${res.status}` }));
   } finally { if (id !== null) busyEnd(id); }
   if (!res.ok || data.error) {
@@ -2844,7 +2850,7 @@ async function claudeAct(path, body) {
 }
 
 async function pollClaude() {
-  if (S.exited || !S.state || (S.view !== "claude" && !claudeBusy())) return;
+  if (S.exited || conn.down || !S.state || (S.view !== "claude" && !claudeBusy())) return;
   let data;
   try { data = await api("/api/claude", undefined, { background: true }); } catch (_) { return; }
   const was = claudeBusy();
@@ -3120,18 +3126,144 @@ async function showFolder(path) {
 }
 
 async function exitServer() {
+  if (conn.down) return closeWindow("ppedit server stopped");  // nothing to stop (#51)
   const msg = S.state.dirty
     ? "The case has unsaved changes that will be lost.\n\nStop the ppedit server anyway?"
     : "Stop the ppedit server? The editor will stop working until you run ppedit serve again.";
   if (!confirm(msg)) return;
   try { await api("/api/exit", {}); }
-  catch (err) { return toast(err.message, true); }
+  catch (err) { if (!err.network) return toast(err.message, true); }  // no response: already stopped (#51)
+  closeWindow("ppedit server stopped");
+}
+
+// Leave the page: stop watching the server, close the tab, and show `title`
+// in it if the browser keeps it open
+function closeWindow(title) {
+  S.exited = true; // already confirmed: skip the unsaved-changes prompt on close
+  conn.down = false;
+  clearInterval(conn.timer);
+  clearInterval(conn.poll);
+  const d = $("#server-down");
+  if (d && d.open) d.close();
   document.body.replaceChildren(h("div", { class: "stopped" },
-    h("h1", {}, "ppedit server stopped"),
+    h("h1", {}, title),
     h("p", {}, "You can close this tab. Run ppedit serve to start the editor again.")));
   document.title = "ppedit (stopped)";
-  S.exited = true; // already confirmed: skip the unsaved-changes prompt on close
   window.close(); // browsers allow this only for some tabs (e.g. no back history); otherwise the page above stays
+}
+
+// Server watch (decision #36t, issue #51): the page polls GET /api/ping every
+// PING_INTERVAL ms (outside api(), so #busy does not count it) and api() reports
+// requests that get no response at all. Either opens the #server-down dialog,
+// which checks again every DOWN_POLL ms by itself and closes when the server
+// answers. It offers to restart (the `ppedit serve --no-browser` command to run,
+// so no second tab opens: this one reconnects) or to exit (close the tab). A
+// server answering with another `instance` than /api/meta gave was restarted:
+// the page reloads from it, since the case it shows is no longer the server's.
+const PING_INTERVAL = 5000, PING_TIMEOUT = 10000, DOWN_POLL = 2000;
+const conn = { down: false, timer: null, checking: false, poll: null, since: 0 };
+
+async function ping() {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), PING_TIMEOUT);
+  try {
+    const res = await fetch("/api/ping", { signal: ctl.signal, cache: "no-store" });
+    return res.ok ? await res.json() : null;
+  } catch (_) { return null; }
+  finally { clearTimeout(t); }
+}
+
+async function watchServer() {
+  if (S.exited || conn.down || conn.checking || !S.meta) return;
+  conn.checking = true;
+  let p;
+  try { p = await ping(); } finally { conn.checking = false; }
+  if (S.exited || conn.down) return;
+  if (!p) serverDown();
+  else if (p.instance !== S.meta.instance) serverBack(p);
+}
+
+function serverDown() {
+  if (conn.down || S.exited || !S.meta) return;
+  conn.down = true;
+  conn.since = Date.now();
+  document.title = "ppedit (not responding)";
+  showServerDialog();
+  let busy = false;
+  conn.poll = setInterval(async () => {  // wait for the server to come back
+    const status = $("#server-down .status");
+    if (status) status.textContent = waitingText();
+    if (busy || S.exited) return;
+    busy = true;
+    const p = await ping();
+    busy = false;
+    if (p && conn.down && !S.exited) serverBack(p);
+  }, DOWN_POLL);
+}
+
+// The server answers again: the same one (it was busy or unreachable) or a new one
+function serverBack(p) {
+  clearInterval(conn.poll); conn.poll = null;
+  const d = $("#server-down");
+  if (d.open) d.close();
+  if (p.instance !== S.meta.instance) {
+    try { if (S.state && S.state.dirty) sessionStorage.setItem("ppedit.restarted", "1"); } catch (_) { /* no storage */ }
+    S.exited = true;  // the unsaved changes went with the old server: no leave-site prompt
+    location.reload();
+    return;
+  }
+  conn.down = false;
+  document.title = S.state ? `${S.state.dirty ? "• " : ""}${S.state.case.name} — ppedit` : "ppedit";
+  api("/api/state", undefined, { background: true }).then(setState).catch(() => {});
+  toast("Connected to the ppedit server again");
+}
+
+// The command that starts the server again for this page: same file, port and
+// host, and --no-browser because this page reconnects by itself
+function serverCommand() {
+  const q = a => /^[\w@%+=:,./\\-]+$/.test(a) ? a : `"${a.replace(/"/g, '\\"')}"`;
+  const args = ["ppedit", "serve"];
+  if (S.state && S.state.path) args.push(q(S.state.path));
+  if (location.port && location.port !== "8050") args.push("--port", location.port);
+  if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) args.push("--host", location.hostname);
+  args.push("--no-browser");
+  return args.join(" ");
+}
+
+const waitingText = () => `Waiting for the server to answer… (${Math.round((Date.now() - conn.since) / 1000)} s)`;
+const exitButton = () => h("button", { onclick: () => closeWindow("ppedit server not responding") }, "Exit browser window");
+
+function showServerDialog() {
+  const d = $("#server-down");
+  const dirty = S.state && S.state.dirty;
+  d.replaceChildren(...[
+    h("h2", { id: "server-down-title" }, "ppedit server not responding"),
+    h("p", {}, `This page cannot reach the ppedit server at ${location.host}. The server may have stopped (Ctrl-C, Exit, a closed terminal, or an error), or it may be too busy to answer. The editor continues when it answers again.`),
+    dirty ? h("p", { class: "warn" }, "The case has unsaved changes. The server holds them: if it stopped, they are lost.") : null,
+    h("p", { class: "status" }, waitingText()),
+    h("div", { class: "actions" },
+      h("button", { onclick: showRestart, title: "Show how to start the server again" }, "Restart server"),
+      exitButton())].filter(Boolean));
+  if (!d.open) d.showModal();
+  d.querySelector("button").focus();
+}
+
+function showRestart() {
+  const d = $("#server-down");
+  const cmd = serverCommand();
+  const copy = h("button", { onclick: () => {
+    navigator.clipboard.writeText(cmd).then(() => { copy.textContent = "Copied"; }, () => toast("Copy the command by hand", true));
+  } }, "Copy");
+  d.replaceChildren(
+    h("h2", { id: "server-down-title" }, "Restart the ppedit server"),
+    h("p", {}, "A web page cannot start programs on your computer, so run this command in a terminal on the server machine:"),
+    h("div", { class: "command" }, h("code", {}, cmd), navigator.clipboard ? copy : null),
+    h("p", {}, "No new browser window opens: this page reconnects as soon as the server answers, and reloads the case the new server opens."),
+    h("p", { class: "status" }, waitingText()),
+    h("div", { class: "actions" },
+      h("button", { onclick: showServerDialog }, "Back"),
+      exitButton()));
+  if (!d.open) d.showModal();
 }
 
 // /api/solve request; CVXOPF-* solvers get the solve options from the Settings tab
@@ -3281,6 +3413,14 @@ async function init() {
   setupSearch();
   setupBusMenu();
   setInterval(pollClaude, 1000);
+  $("#server-down").addEventListener("cancel", e => e.preventDefault());  // stays until the server answers or the tab closes
+  conn.timer = setInterval(watchServer, PING_INTERVAL);
+  try {
+    if (sessionStorage.getItem("ppedit.restarted")) {
+      sessionStorage.removeItem("ppedit.restarted");
+      setTimeout(() => toast("The ppedit server was restarted: unsaved changes made before it stopped were lost", true), 500);
+    }
+  } catch (_) { /* no storage */ }
   S.state = await api("/api/state");
   defaultView();
   setState(S.state);

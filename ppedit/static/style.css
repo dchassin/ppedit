@@ -497,3 +497,21 @@ dialog.about .funding h3 { margin: 0 0 4px; font-size: 13px; }
 dialog.about .funding p { margin: 0 0 6px; white-space: pre-wrap; }
 dialog.about .funding .none { color: var(--muted); font-style: italic; }
 dialog.about .close-row { display: flex; justify-content: flex-end; margin-top: 10px; }
+
+/* Server watch (#51): #server-down dialog */
+dialog.server-down {
+  max-width: min(34em, 92vw); border: 1px solid var(--line-strong); border-radius: 8px;
+  color: var(--ink); background: var(--panel);
+  padding: 16px 20px; box-shadow: 0 10px 30px rgba(0,0,0,.2);
+}
+dialog.server-down::backdrop { background: rgba(20,26,24,.35); }
+dialog.server-down h2 { margin: 0 0 8px; font-size: 17px; }
+dialog.server-down p { margin: 0 0 10px; }
+dialog.server-down .warn { color: #a33; }
+dialog.server-down .status { color: var(--muted); font-style: italic; }
+dialog.server-down .command { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; }
+dialog.server-down .command code {
+  flex: 1; padding: 6px 8px; background: rgba(0,0,0,.04); border: 1px solid var(--line);
+  border-radius: 5px; overflow-wrap: anywhere; user-select: all;
+}
+dialog.server-down .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
