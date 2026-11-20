@@ -1,5 +1,6 @@
 [![Validation](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/validate.yaml)
 [![Documentation](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml/badge.svg)](https://github.com/eudoxys/ppedit/actions/workflows/deploy-pages.yaml)
+[![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fwww.eudoxys.com%2Fppedit%2Fcoverage%2Fbadge.json)](https://www.eudoxys.com/ppedit/coverage/)
 
 Browser-based editor for PYPOWER and Arras Energy `module pypower` models
 
@@ -314,6 +315,16 @@ single-user desktop tool.
 
 The tests need no network or credentials; see
 [`ppedit/_test/README.md`](ppedit/_test/README.md).
+
+## Test coverage
+
+    pip install pytest-cov
+    pytest --cov --cov-report=html   # report in htmlcov/
+
+CI measures coverage on every push and pull request to `main` (job summary
+and `coverage-report` artifact of the Validation workflow). The report for
+`main` is published at https://www.eudoxys.com/ppedit/coverage/ and feeds
+the Coverage badge above.
 
 # Examples
 

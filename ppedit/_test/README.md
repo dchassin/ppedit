@@ -15,7 +15,9 @@ Coverage (settings in `pyproject.toml` under `[tool.coverage.*]`):
 The Validation workflow runs the tests with coverage on every push and pull
 request to `main`, writes the per-module table to the run's job summary,
 and uploads `coverage.xml` and `htmlcov/` as the `coverage-report`
-artifact. Coverage is informational: no minimum is enforced.
+artifact. The Documentation workflow republishes the latest report from
+`main` at https://www.eudoxys.com/ppedit/coverage/, with `badge.json` for
+the README badge. Coverage is informational: no minimum is enforced.
 
 | File | Checks |
 |---|---|
