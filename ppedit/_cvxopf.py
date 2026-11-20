@@ -28,6 +28,15 @@ How the case is passed:
     must be polynomial (model 2) of degree 2 or less; cvxopf applies it to
     `|Pf|`. The copper-plate model (`singlenode_dc`) ignores DC lines.
 
+Sparse derivatives (issue #122): every formulation is built with
+`automatic_sparse_dispatch=True`, so CVXPY keeps its density threshold
+(`cvxpy.settings.SPARSE_DENSITY_THRESHOLD`) during the build and the
+solve. cvxopf's AC default sets it to 0 instead, which makes CVXPY's
+derivative engine treat the sparse injection matrices as dense. IPOPT
+then factors a far denser KKT system: case300 runs in about 13 s
+instead of 55 s with the threshold kept, with the same iterations and
+objective. Convex formulations ignore the flag.
+
 Solve options (`solve_options`, issue #88; decision #48):
 
   - `preparation`: `default` builds with cvxopf's defaults (original
@@ -531,7 +540,8 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None) -> dict:
         + "".join(f", {k}={v!r}" for k,v in opts["solver_options"].items()) + "\n")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        build = build_opf(case,formulation=formulation,hvdc=links or None,options=build_options)
+        build = build_opf(case,formulation=formulation,hvdc=links or None,options=build_options,
+            automatic_sparse_dispatch=True) # issue #122: keep CVXPY's sparse derivatives
         with _capture_output(log,opts["verbose"]):
             build.solve(**kwargs)
         res = extract_results(build)

@@ -95,6 +95,9 @@ API key to start sessions; tests use a fake client).
   cvxopf authors (issue #88) and may need revising as cvxopf changes.
   `verbose` captures file descriptors 1 and 2 while solving, so other
   threads' output in that window lands in the log too.
+  `build_opf` gets `automatic_sparse_dispatch=True` (issue #122): without
+  it cvxopf zeroes CVXPY's density threshold for AC and the solve runs 3-4x
+  slower on a needlessly dense Jacobian.
 - Solver messages (decision #49): `Case.solve` returns `messages`; the
   Issues tab lists them under *Last solve* and its dot counts them, but
   `state.issues` stays `Case.validate()` only. Python warnings raised
