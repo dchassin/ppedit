@@ -28,9 +28,13 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     extensions `POST /api/table/import` and `GET /api/table/export` accept),
     solvers (`ppedit.case.solvers`: the PF algorithms,
     the installed OPF solvers and the cvxopf solve option choices), version,
-    and `about` (package metadata shown when the page's "ppedit" title is
-    clicked; see `about`)
+    `about` (package metadata shown when the page's "ppedit" title is
+    clicked; see `about`), and `instance` (a token that changes each time
+    the server starts)
   - `GET  /api/state`: current state
+  - `GET  /api/ping`: `{"instance", "revision"}`, answered without waiting
+    for the editor lock; the page polls it to notice that the server stopped
+    or was restarted (a different `instance`)
   - `POST /api/new`: `{}` empty case or `{"builtin": "case14"}`
   - `POST /api/open`: `{"filename": ..., "text": ...}` (upload),
     `{"path": ...}` (server file), or `{"url": ...}` (an `http`/`https` URL
@@ -112,6 +116,7 @@ import importlib.metadata
 import logging
 import os
 import re
+import secrets
 import signal
 import threading
 import urllib.error
@@ -562,6 +567,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     claude = Sessions(editor,claude_client)
     app.config["CLAUDE"] = claude
     app.config["SHUTDOWN"] = shutdown or _shutdown
+    instance = secrets.token_hex(8) # tells the page a restarted server from the one it loaded from
 
     @app.before_request
     def _guard():
@@ -605,7 +611,13 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         return jsonify(columns=COLUMNS,result_columns=RESULT_COLUMNS,tables=TABLES,
             builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            table_formats=table_formats(),solvers=solvers(),version=__version__,about=about())
+            table_formats=table_formats(),solvers=solvers(),version=__version__,about=about(),
+            instance=instance)
+
+    @app.get("/api/ping")
+    def ping():
+        # no editor.lock: a long solve or load must not look like a stopped server
+        return jsonify(instance=instance,revision=editor.revision)
 
     @app.get("/api/state")
     def state():

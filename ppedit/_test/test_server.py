@@ -158,6 +158,31 @@ def test_exit():
     res = app.test_client().post("/api/exit",json={})
     assert res.status_code == 403
 
+def test_ping():
+    """`/api/ping` answers with the instance token of `/api/meta`, new for each server (issue #51)"""
+    import threading # pylint: disable=import-outside-toplevel
+    from ppedit import Case,create_app # pylint: disable=import-outside-toplevel
+    app = create_app(Case.builtin("case9"))
+    client = app.test_client()
+    meta = client.get("/api/meta").get_json()
+    ping = client.get("/api/ping").get_json()
+    assert ping == {"instance":meta["instance"],"revision":0}
+    held,done = threading.Event(),threading.Event()
+    def hold(): # another thread holds the lock, as a long solve does (it is an RLock)
+        with app.config["EDITOR"].lock:
+            held.set()
+            done.wait(5)
+    worker = threading.Thread(target=hold)
+    worker.start()
+    try:
+        assert held.wait(2)
+        assert client.get("/api/ping").get_json()["instance"] == meta["instance"]
+    finally:
+        done.set()
+        worker.join()
+    other = create_app(Case.builtin("case9")).test_client().get("/api/ping").get_json()
+    assert other["instance"] != meta["instance"]
+
 def test_areas_api(client,post):
     """Areas are edited, solved, cascaded and undone through the API"""
     meta = client.get("/api/meta").get_json()
