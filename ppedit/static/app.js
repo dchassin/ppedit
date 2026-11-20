@@ -94,6 +94,7 @@ function cvxopfOptions() {
 }
 function precisionKey(spec) {
   if (spec.kind !== "float") return null;
+  if (spec.unit && spec.unit.startsWith("$")) return "$";
   if (spec.unit === "pu") return PU_VOLTAGE.has(spec.name) ? "puV" : "puMVA";
   return spec.unit || "none";
 }
@@ -389,9 +390,25 @@ function rowLabel(table, i) {
   return `${i + 1}`;
 }
 
+// Extended (result) columns (decision #36r, issue #108): after a successful
+// solve, the columns PYPOWER appends to bus, gen, branch and dcline
+// (RESULT_COLUMNS in case.py: branch flows, OPF prices and multipliers) show
+// read only after the editable columns, until the next edit clears the
+// solution. Columns the solver did not give (all null) are left out. They
+// sort like the others: S.tableSort col indexes past the editable columns
+// are extended columns.
+function extendedColumns(table) {
+  const r = S.state.result, ext = r && r.success && r.extended && r.extended[table];
+  const spec = (S.meta.result_columns || {})[table];
+  if (!ext || !spec || ext.length !== S.state.case.tables[table].length) return { cols: [], rows: [] };
+  const keep = spec.map((_, j) => ext.some(row => row[j] !== null && row[j] !== undefined));
+  return { cols: spec.filter((_, j) => keep[j]), rows: ext.map(row => row.filter((_, j) => keep[j])) };
+}
+
 function renderTable(table) {
   const grid = $("#grid");
-  const cols = S.meta.columns[table];
+  const ext = extendedColumns(table);
+  const cols = S.meta.columns[table], allCols = cols.concat(ext.cols);
   const rows = S.state.case.tables[table];
   const active = document.activeElement;
   const focus = active && active.dataset && active.dataset.row !== undefined && grid.contains(active)
@@ -406,11 +423,11 @@ function renderTable(table) {
       checked: rows.length > 0 && sel.size === rows.length,
       onchange: e => { S.selected[table] = new Set(e.target.checked ? rows.map((_, i) => i) : []); renderTable(table); },
     })),
-    cols.map((c, k) => {
-      const st = S.tableSort[table], on = !!st && st.col === k;
-      return h("th", { class: "sortable" + (on ? (st.dir === 1 ? " asc" : " desc") : ""),
+    allCols.map((c, k) => {
+      const st = S.tableSort[table], on = !!st && st.col === k, res = k >= cols.length;
+      return h("th", { class: "sortable" + (res ? " result" : "") + (on ? (st.dir === 1 ? " asc" : " desc") : ""),
         "aria-sort": on ? (st.dir === 1 ? "ascending" : "descending") : "none",
-        title: `${c.desc ? c.desc + "\n" : ""}Click to sort by this column (again to reverse, a third time to restore the case order)`,
+        title: `${c.desc ? c.desc + "\n" : ""}${res ? "Solution value (read only; cleared by the next edit)\n" : ""}Click to sort by this column (again to reverse, a third time to restore the case order)`,
         onclick: () => {
           const cur = S.tableSort[table];
           S.tableSort[table] = !cur || cur.col !== k ? { col: k, dir: 1 } : cur.dir === 1 ? { col: k, dir: -1 } : null;
@@ -433,11 +450,16 @@ function renderTable(table) {
       tr.append(h("td", { class: is ? (is.level === "error" ? "err" : "warn") : null, title: is ? is.message : null },
         cellEditor(table, i, k, r[k])));
     });
+    ext.cols.forEach((c, j) => {
+      const v = ext.rows[i][j];
+      tr.append(h("td", { class: "result", title: v === null || v === undefined ? null : String(v) },
+        v === null || v === undefined ? "" : fmtCell(v, c).replace(/^-(0(\.0*)?)$/, "$1")));
+    });
     body.append(tr);
   });
   grid.replaceChildren(head, body);
   if (!rows.length) {
-    grid.append(h("tbody", {}, h("tr", {}, h("td", { colspan: cols.length + 1, class: "empty" },
+    grid.append(h("tbody", {}, h("tr", {}, h("td", { colspan: allCols.length + 1, class: "empty" },
       h("div", { class: "big" }, `No ${TABLE_TITLES[table]} rows`),
       table === "bus" ? "Add a bus to start a model, or open a built-in case from New." : "Use + Add row."))));
   }
@@ -465,8 +487,9 @@ function tableKey(v) {
 function tableOrder(table, rows) {
   const idx = rows.map((_, i) => i);
   const st = S.tableSort[table];
-  if (!st || st.col >= S.meta.columns[table].length) return idx;
-  const keys = rows.map(r => tableKey(r[st.col]));
+  const ncol = S.meta.columns[table].length, ext = st && st.col >= ncol ? extendedColumns(table) : null;
+  if (!st || (ext && st.col >= ncol + ext.cols.length)) return idx;
+  const keys = ext ? ext.rows.map(r => tableKey(r[st.col - ncol])) : rows.map(r => tableKey(r[st.col]));
   return idx.sort((a, b) => {
     const p = keys[a], q = keys[b];
     if (p === null || q === null) return (p === null) - (q === null) || a - b;

@@ -6,7 +6,7 @@ import os
 import pytest
 
 from ppedit import Case, CaseError, COLUMNS, builtin_cases
-from ppedit.case import PF_SOLVERS, OPF_SOLVERS, solvers
+from ppedit.case import PF_SOLVERS, OPF_SOLVERS, RESULT_COLUMNS, solvers
 
 DATA = os.path.join(os.path.dirname(__file__),"data")
 
@@ -266,6 +266,26 @@ module pypower { save_case TRUE; }
         Case.load("x.glm",text)
     # without directives, an empty pypower model is still an empty case
     assert not Case.load("x.glm","module pypower { baseMVA 100; }").tables["bus"]
+
+def test_solve_extended_columns():
+    """Solutions carry PYPOWER's extended columns, one row per case row (issue #108)"""
+    case = Case.builtin("case9")
+    pf = case.solve("pf")
+    for table,spec in RESULT_COLUMNS.items():
+        assert len(pf["extended"][table]) == len(case.tables[table])
+        assert all(len(row) == len(spec) for row in pf["extended"][table])
+    names = [c["name"] for c in RESULT_COLUMNS["branch"]]
+    for row,res in zip(pf["extended"]["branch"],pf["branch"]):
+        assert row[:4] == [res[k] for k in ("PF","QF","PT","QT")]
+        assert row[4:] == [None]*4 # PF gives no multipliers
+    assert all(x is None for row in pf["extended"]["bus"] for x in row)
+    opf = case.solve("opf")
+    assert [row[0] for row in opf["extended"]["bus"]] == [b["lam_P"] for b in opf["bus"]]
+    for table in RESULT_COLUMNS:
+        assert all(x is not None for row in opf["extended"][table] for x in row)
+    assert names[:4] == ["PF","QF","PT","QT"]
+    dc = case.solve("opf","DC-PIPS")
+    assert dc["success"] and dc["extended"]["branch"][0][1] == 0 # no reactive power in DC
 
 def test_solve_with_isolated_bus():
     """A bus with no in-service branch does not stop the solve"""

@@ -221,6 +221,12 @@ What is not promised
     solver output and solver options for one snapshot; cvxopf's
     multi-period horizons and device models are not offered.
 
+  - The extended (result) columns shown in the tables after a solve
+    (`ppedit.case.RESULT_COLUMNS`, the `extended` rows of
+    `ppedit.Case.solve`) are not part of the case: they are not edited,
+    saved, exported or kept after the next edit. Multipliers are given
+    only by the PYPOWER OPF solvers, as PYPOWER computes them.
+
   - Solver messages (`messages` of a solution, listed on the Issues tab)
     report what the solver reports and what ppedit changed to solve the
     case; they are not a diagnosis of why a solve failed. The `detail` of a

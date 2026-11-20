@@ -15,6 +15,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 ## Task index
 
 - Add or change a table column: `COLUMNS` (and `GLM_UNITS`) in `ppedit/case.py`; validation in `Case.validate`; `ppedit/_test/test_case.py`
+- Change the extended (result) columns shown after a solve: `RESULT_COLUMNS` and `_extended` in `ppedit/case.py`; `extendedColumns`/`renderTable` in `ppedit/static/app.js`; `test_solve_extended_columns` in `ppedit/_test/test_case.py`
 - Add a validation rule: `Case.validate`; test in `test_validate_finds_errors`
 - Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
 - Change area handling: `COLUMNS["areas"]`, `Case.validate` and `Case._area_summary` in `ppedit/case.py`; `areaRegions`/`convexHull`/`traceOutline`, area grouping in `layout`/`onelineLayout` in `ppedit/static/app.js`; `ppedit/_test/test_areas.py`

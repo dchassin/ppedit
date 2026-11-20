@@ -271,6 +271,50 @@ Kinds: `float`, `int`, `enum` (one of `options`), `text` (comma-separated
 cost data) and `name` (free text).
 """
 
+def _res(name,unit,index,desc,opf=True):
+    return {"name":name,"unit":unit,"kind":"float","index":index,"desc":desc,"opf":opf}
+
+RESULT_COLUMNS = {
+    "bus": [
+        _res("lam_P","$/MWh",13,"Lagrange multiplier on real power mismatch (nodal price)"),
+        _res("lam_Q","$/MVArh",14,"Lagrange multiplier on reactive power mismatch"),
+        _res("mu_Vmax","$/pu/h",15,"Kuhn-Tucker multiplier on the upper voltage limit"),
+        _res("mu_Vmin","$/pu/h",16,"Kuhn-Tucker multiplier on the lower voltage limit"),
+    ],
+    "gen": [
+        _res("mu_Pmax","$/MWh",21,"Kuhn-Tucker multiplier on Pmax"),
+        _res("mu_Pmin","$/MWh",22,"Kuhn-Tucker multiplier on Pmin"),
+        _res("mu_Qmax","$/MVArh",23,"Kuhn-Tucker multiplier on Qmax"),
+        _res("mu_Qmin","$/MVArh",24,"Kuhn-Tucker multiplier on Qmin"),
+    ],
+    "branch": [
+        _res("PF","MW",13,"real power injected at the from bus",False),
+        _res("QF","MVAr",14,"reactive power injected at the from bus",False),
+        _res("PT","MW",15,"real power injected at the to bus",False),
+        _res("QT","MVAr",16,"reactive power injected at the to bus",False),
+        _res("mu_Sf","$/MVAh",17,"Kuhn-Tucker multiplier on the MVA limit at the from bus"),
+        _res("mu_St","$/MVAh",18,"Kuhn-Tucker multiplier on the MVA limit at the to bus"),
+        _res("mu_angmin","$/deg/h",19,"Kuhn-Tucker multiplier on the lower angle difference limit"),
+        _res("mu_angmax","$/deg/h",20,"Kuhn-Tucker multiplier on the upper angle difference limit"),
+    ],
+    "dcline": [
+        _res("mu_Pmin","$/MWh",17,"Kuhn-Tucker multiplier on Pmin"),
+        _res("mu_Pmax","$/MWh",18,"Kuhn-Tucker multiplier on Pmax"),
+        _res("mu_QminF","$/MVArh",19,"Kuhn-Tucker multiplier on QminF"),
+        _res("mu_QmaxF","$/MVArh",20,"Kuhn-Tucker multiplier on QmaxF"),
+        _res("mu_QminT","$/MVArh",21,"Kuhn-Tucker multiplier on QminT"),
+        _res("mu_QmaxT","$/MVArh",22,"Kuhn-Tucker multiplier on QmaxT"),
+    ],
+}
+"""Extended (result) columns PYPOWER appends to each table when a solver
+finishes (name, unit, `index` in the PYPOWER array, description, and `opf`:
+whether only OPF gives it)
+
+They are read only and not part of the case: `Case.solve` returns their
+values in `extended`, and the editor shows them after the editable columns
+until the next edit (decision #36r).
+"""
+
 AREAS_PPC = 2
 """Number of `areas` columns in PYPOWER's `areas` array (`area`,
 `price_ref_bus`); the `name` column is kept in `ppc["areanames"]`"""
@@ -1492,7 +1536,13 @@ def {name}():
             and warnings as `{"level": "error"|"warning", "message"}`,
             with `detail` when ppedit can say what a warning means (see
             below); `options` gives the cvxopf solve options used
-            (`None` for other solvers).
+            (`None` for other solvers). `extended` maps `bus`, `gen`,
+            `branch` and `dcline` to one row per case row with the values
+            of `RESULT_COLUMNS[table]` (PYPOWER's extended columns:
+            branch flows, and for OPF the prices and Kuhn-Tucker
+            multipliers); a value is `None` when the solver does not give
+            it (multipliers for PF and the `CVXOPF-*` solvers, flows for
+            `CVXOPF-1NODE`).
 
         `messages` has an error when the solver fails or does not
         converge, and warnings for buses solved as isolated, DC lines not
@@ -1640,7 +1690,7 @@ def {name}():
             log.write("\n")
             message("error",f"{what} failed: {failed}")
             return {"success":False,**info,"log":log.getvalue(),"messages":messages,
-                "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[]}
+                "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[],"extended":{}}
         for w in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
             messages.append({"level":"warning","message":w["message"]}
                 | ({"detail":w["detail"]} if w.get("detail") else {}))
@@ -1702,6 +1752,7 @@ def {name}():
             result["branch"].append({"fbus":int(b[0]),"tbus":int(b[1]),
                 "PF":pf,"QF":qf,"PT":pt,"QT":qt,
                 "loading_pct":100*smax/rate if rate > 0 else None})
+        result["extended"] = _extended(res,kind == "opf" and not cvx,res.get("flows",True))
         result["dcline_losses_MW"] = sum(d["loss_MW"] for d in dclines)
         result["losses_MW"] = losses + result["dcline_losses_MW"]
         result["areas"] = self._area_summary(result,
@@ -1782,6 +1833,20 @@ def {name}():
 # ---------------------------------------------------------------------------
 # module helpers
 # ---------------------------------------------------------------------------
+
+def _extended(res,multipliers,flows):
+    """Rows of `RESULT_COLUMNS` values of a solver result `res` (see
+    `Case.solve`); `multipliers`: whether the solver gives OPF multipliers,
+    `flows`: whether it gives branch flows"""
+    out = {}
+    for table,spec in RESULT_COLUMNS.items():
+        rows = res[table] if table in res else []
+        if table == "branch" and not flows:
+            rows = [[]]*len(rows)
+        out[table] = [[float(row[c["index"]])
+                if len(row) > c["index"] and (multipliers or not c["opf"]) else None
+                for c in spec] for row in rows]
+    return out
 
 def solvers() -> dict:
     """Return the PF and OPF solvers that can run here

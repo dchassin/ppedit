@@ -21,7 +21,9 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
 (loads switched off by `POST /api/load`, as `[bus, Pd, Qd]`). Errors return
 `{"error": message}` with status 400.
 
-  - `GET  /api/meta`: columns, tables, built-in case names, formats (written),
+  - `GET  /api/meta`: columns, result columns (`ppedit.case.RESULT_COLUMNS`:
+    the read-only extended columns a solution adds to the tables), tables,
+    built-in case names, formats (written),
     input formats (read), table data formats (`table_formats`: file
     extensions `POST /api/table/import` and `GET /api/table/export` accept),
     solvers (`ppedit.case.solvers`: the PF algorithms,
@@ -116,7 +118,7 @@ import urllib.request
 
 from flask import Flask, jsonify, request, send_from_directory, Response
 
-from ppedit.case import Case, CaseError, COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
+from ppedit.case import Case, CaseError, COLUMNS, RESULT_COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
 from ppedit._tableio import table_formats, read_rows, dump_rows
@@ -581,7 +583,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     @app.get("/api/meta")
     def meta():
         from ppedit import __version__ # pylint: disable=import-outside-toplevel
-        return jsonify(columns=COLUMNS,tables=TABLES,builtin=builtin_cases(),
+        return jsonify(columns=COLUMNS,result_columns=RESULT_COLUMNS,tables=TABLES,
+            builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
             table_formats=table_formats(),solvers=solvers(),version=__version__,about=about())
 
