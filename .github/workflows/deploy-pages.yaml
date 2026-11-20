@@ -1,16 +1,16 @@
 name: Documentation
 
 on:
+  # Code, requirements.txt and pyproject.toml changes also trigger Validation,
+  # so their docs are published by the workflow_run below, together with that
+  # commit's coverage report (one deploy per push, docs only for passing code).
+  # Push triggers only for files Validation does not watch.
   push:
     branches: ["main"]
-    # pdoc reads ppedit/__init__.py and the public modules' docstrings
     paths:
-      - "ppedit/*.py"
       - "Makefile"
-      - "requirements.txt"
-      - "pyproject.toml"
       - ".github/workflows/deploy-pages.yaml"
-  # republish when Validation on main produces a new coverage report
+  # docs (pdoc reads the package docstrings) and coverage after Validation passes on main
   workflow_run:
     workflows: ["Validation"]
     types: [completed]
@@ -44,13 +44,15 @@ jobs:
       - name: Create docs
         run: make docs
       - name: Add coverage report
-        # latest coverage-report artifact of a successful Validation run on main,
+        # coverage-report artifact of the Validation run that triggered this one,
+        # else of the latest successful Validation run on main;
         # served at /coverage/ (badge.json feeds the README badge)
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
-          run=$(gh run list -R "$GITHUB_REPOSITORY" -w validate.yaml -b main -s success -L 1 --json databaseId -q '.[0].databaseId')
+          run=${RUN_ID:-$(gh run list -R "$GITHUB_REPOSITORY" -w validate.yaml -b main -s success -L 1 --json databaseId -q '.[0].databaseId')}
           gh run download "$run" -R "$GITHUB_REPOSITORY" -n coverage-report -D coverage-report
           mv coverage-report/htmlcov docs/coverage
       - name: Setup Pages
