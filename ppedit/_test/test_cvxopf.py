@@ -154,7 +154,7 @@ def test_cvxopf_messages():
 
 def test_socp_detail():
     """A non-exact SOCP relaxation lists the relaxed constraints that fail and the
-    AC constraints its recovered voltages violate, on case rows (decision #36m)"""
+    AC constraints its recovered voltages violate, on case rows (decision #53)"""
     res = Case.builtin("case9").solve("opf","CVXOPF-SOCP")
     msg = next(m for m in res["messages"] if m["message"].startswith("SOCP relaxation"))
     detail = msg["detail"]

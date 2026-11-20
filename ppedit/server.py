@@ -508,7 +508,7 @@ class Editor:
         of `table`, as `(columns, rows)` for `dump_rows`, or `None`
 
         Only the columns the solver gave (not all `None` over the whole
-        table) are included, as the page shows them (decision #36r).
+        table) are included, as the page shows them (decision #56).
         """
         res = self.result
         ext = res.get("extended",{}).get(table) if res and res.get("success") else None

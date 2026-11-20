@@ -39,7 +39,7 @@ GLM property names, units and keywords; `converters/py2glm.py` for the
   `COST_TABLES` maps each cost table to the table it follows row by row.
   `areas` rows are `[area, price_ref_bus, name]`; `name` is free text
   kept in `ppc["areanames"]` outside PYPOWER's two-column `areas` array
-  (decision #14b).
+  (decision #15).
 - Every edit goes through `Case.set_value`, `add_row`, `delete_rows`,
   `set_global`, or `apply_result`, which keep references valid (bus
   renumber cascades, bus delete needs `cascade`, gencost follows gen,
@@ -87,19 +87,19 @@ API key to start sessions; tests use a fake client).
   multipliers; `lam_P`/`mu_*` are `None`). DC lines are built as
   `HVDCLink` with `p_in = -Pf` because `cvxopf.hvdc_from_dcline` runs
   PYPOWER DC lines backwards (as of cvxopf b6edcc7, 2026-11-12); switch
-  to it once that is fixed upstream. cvxopf solve options (decision #36k)
+  to it once that is fixed upstream. cvxopf solve options (decision #48)
   come from the Settings tab (`ppedit.cvxopf` in `localStorage`,
   `cvxopfOptions()` in `app.js`) as `options` of `/api/solve`;
   `_cvxopf.RECOMMENDED` is the per-model preparation profile from the
   cvxopf authors (issue #88) and may need revising as cvxopf changes.
   `verbose` captures file descriptors 1 and 2 while solving, so other
   threads' output in that window lands in the log too.
-- Solver messages (decision #36l): `Case.solve` returns `messages`; the
+- Solver messages (decision #49): `Case.solve` returns `messages`; the
   Issues tab lists them under *Last solve* and its dot counts them, but
   `state.issues` stays `Case.validate()` only. Python warnings raised
   while solving are recorded (no longer silenced): numpy warnings from a
   failing PYPOWER solve now show up as solver warnings.
-- Solver warning details (decision #36m): `_cvxopf.EXPLAIN` and
+- Solver warning details (decision #53): `_cvxopf.EXPLAIN` and
   `ISOLATED_EXPLAIN`/`DCLINE_CUT_EXPLAIN` in `case.py` hold the physical
   explanations; `_cvxopf._cvxopf_warnings` recognizes cvxopf warnings by
   their text (regexes on cvxopf b6edcc7 wording), maps cvxopf's zero-based
@@ -167,9 +167,9 @@ API key to start sessions; tests use a fake client).
 - View menu (`#view-menu` in `index.html`): Re-layout, Fit, style and
   layout radio items, and the Areas check box; Labels, Map and search stay
   separate. Style and layout are set per opened case by `defaultView()`
-  (decision #26b: geodata layout when the case has geodata, else one-line
+  (decision #28: geodata layout when the case has geodata, else one-line
   under `ONELINE_MAX` = 20 buses, else classic) and are not persisted.
-- One-line switching devices (decision #36n): breakers and generator
+- One-line switching devices (decision #51): breakers and generator
   switches toggle `status` through `POST /api/cell`; load switches use
   `POST /api/load` (`Editor.toggle_load`), whose switched-off values live
   in `Editor.loads_off` (server memory, in undo snapshots, state
@@ -186,7 +186,7 @@ API key to start sessions; tests use a fake client).
   In the geodata layout (`convex` argument) each area also grows, breadth
   first, into the empty grid points of its convex hull (`convexHull`),
   so shapes are as convex as their neighbors allow.
-  Area names are clickable (decision #36s, issue #112, `areaNameClick`,
+  Area names are clickable (decision #57, issue #112, `areaNameClick`,
   `pickArea`, `areaTotals`): they open the area's `areas` row in the
   inspector (`S.pick.kind === "areas"`) with its totals; one-line text
   has `pointer-events: none` except `text.area-name`.
@@ -212,14 +212,14 @@ API key to start sessions; tests use a fake client).
   centered at the current zoom; several open `#search-menu` (at most 200
   listed).
 - Page URL parameters (`?solve=pf|opf`, `&algorithm=`, `?view=`; end of
-  `init()` in `app.js`, decision #36g) are used by `eudoxys/pptools`
+  `init()` in `app.js`, decision #44) are used by `eudoxys/pptools`
   (`pprun` Network tab: `?solve=pf&view=network`); keep them working when
   changing `init()`, tabs, or `/api/solve`.
 - A case without an `areas` table gets default rows from the bus areas on
   load (`Case._default_areas`, `_price_ref`); GLM output writes the "not
   written" comment only when the rows differ from those defaults.
 
-- Stopped server (decision #36t, issue #51, `watchServer`/`serverDown`/
+- Stopped server (decision #58, issue #51, `watchServer`/`serverDown`/
   `serverBack` in `app.js`): `GET /api/ping` is polled every 5 s outside
   `api()` and must stay free of `editor.lock`; a different `instance`
   (from `/api/meta`) means the server restarted and the page reloads.
@@ -228,20 +228,20 @@ API key to start sessions; tests use a fake client).
   `ppedit serve ... --no-browser` command: a page cannot start a process. `window.close()` is refused for tabs with back history
   (e.g. headless test browsers), which then show the stopped page.
 
-- Work-in-progress indicator (decision #36p, `#busy`, `busyStart`/`busyEnd` in
+- Work-in-progress indicator (decision #54, `#busy`, `busyStart`/`busyEnd` in
   `app.js`): every `api()` call counts unless it passes `{ background: true }`;
   pass it for any new polling so the indicator does not stay up. Rendering
   that is slow without a request (force layout of a large case) does not
   show it.
 
-- Table import/export (decision #36q, issue #73): pandas is used only in
+- Table import/export (decision #55, issue #73): pandas is used only in
   `ppedit/_tableio.py`; `Case.import_rows` takes plain lists. Replacing
   rows with changed bus/area numbers renumbers references (two passes via
   temporary numbers so swaps work), like cell edits do; `ncost` is never
   taken from the file. Parquet/Feather/Excel depend on optional engines
   (CI installs `pyarrow` and `openpyxl`).
 
-- Extended result columns (decision #36r, issue #108): `RESULT_COLUMNS` in
+- Extended result columns (decision #56, issue #108): `RESULT_COLUMNS` in
   `case.py` (PYPOWER array indexes), `extended` of `Case.solve`
   (`_extended`), `extendedColumns` in `app.js`. Shown only while a
   successful solution exists; not saved or applied. Export appends them

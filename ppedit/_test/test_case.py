@@ -305,7 +305,7 @@ def test_solve_messages():
     assert res["success"]
     assert [m["level"] for m in res["messages"]] == ["warning"]
     assert "isolated" in res["messages"][0]["message"]
-    detail = res["messages"][0]["detail"] # decision #36m
+    detail = res["messages"][0]["detail"] # decision #53
     assert "no electrical connection" in detail["explain"] and detail["more"] == 0
     row = len(case.tables["bus"]) - 1
     assert [(c["table"],c["row"]) for c in detail["constraints"]] == [("bus",row)]
