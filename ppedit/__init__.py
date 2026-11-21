@@ -130,8 +130,9 @@ The page takes optional URL parameters, so another tool can open it ready to
 show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver
 when the page loads (`&algorithm=NAME` picks a PF algorithm or OPF solver as
 in `POST /api/solve`, else the default), and `?view=NAME` opens the tab
-`NAME` (`network`, `tables`, `series`, `results`, `issues`, `claude`,
-`settings`, or a table name such as `bus`).
+`NAME` (`network`, `case`, `series`, `results`, `issues`, `claude`,
+`settings`, or a table name such as `bus`; `tables`, the Case tab's former
+name, also opens it).
 Unknown values are ignored, and a solver error is shown as usual.
 
 Each case table can be imported from and exported to a data file

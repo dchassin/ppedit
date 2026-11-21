@@ -5,7 +5,7 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
-  table: "bus",        // table the Tables tab opens (the one shown last)
+  table: "bus",        // table the Case tab opens (the one shown last)
   precision: null,     // decimal places by unit (set from loadPrecision below)
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
@@ -313,14 +313,15 @@ function renderChrome() {
   $("#claude-dot").title = busy ? "Claude is working" : "";
   document.title = `${st.dirty ? "• " : ""}${c.name} — ppedit`;
   const isTable = S.meta.tables.includes(S.view);
-  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "tables")));
+  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "case")));
   $$("#table-tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
 }
 
-// The Tables tab opens the table shown last (S.table); the table tabs below
+// The Case tab opens the table shown last (S.table); the table tabs below
 // it pick the table. Table names stay view names (?view=bus, Issues links).
+// "tables" is the tab's former name, kept so ?view=tables still works.
 function show(view) {
-  if (view === "tables") view = S.table;
+  if (view === "case" || view === "tables") view = S.table;
   if (S.meta.tables.includes(view)) S.table = view;
   S.view = view;
   renderChrome();
@@ -3729,7 +3730,8 @@ async function init() {
   if (["pf", "opf"].includes(qs.get("solve"))) {
     try { await act("/api/solve", solveRequest(qs.get("solve"), qs.get("algorithm"))); } catch (err) { toast(err.message, true); }
   }
-  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
+  const view = qs.get("view") === "tables" ? "case" : qs.get("view");
+  if (view && $(`#tabs [data-view="${view}"], #table-tabs [data-view="${view}"]`)) show(view);
 }
 
 busyRefresh();  // page load counts as pending work from the start

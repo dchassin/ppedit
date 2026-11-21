@@ -170,9 +170,9 @@ In the editor:
     contain it. A single match is selected for editing in the side panel
     and centered in the diagram; several matches open a list to choose from
     (mouse, or arrow keys and Enter; Escape closes it).
-  - **Tables**: a second row of tabs below the main tabs picks the table
+  - **Case**: a second row of tabs below the main tabs picks the table
     (**Buses / Generators / Branches / Gen costs / DC lines / DC line
-    costs / Areas**); the Tables tab reopens the table shown last.
+    costs / Areas**); the Case tab reopens the table shown last.
     Spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines
     and area price reference buses that use it; deleting a bus asks before
