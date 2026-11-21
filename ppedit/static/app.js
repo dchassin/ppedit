@@ -395,7 +395,7 @@ function renderSeries() {
   const ser = S.state.case.series, exts = S.meta.table_formats || [];
   const item = x => h("button", { "data-action": "series-export", "data-format": x, role: "menuitem" }, x.slice(1));
   $("#series-export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"), ...exts.map(item));
-  $("#series-input").accept = exts.join(",");
+  $("#series-input").accept = (S.meta.table_read_formats || exts).join(",");
   $("#series-export-btn").disabled = $("#series-clear").disabled = !ser;
   const d = $("#series-delta");
   d.disabled = !ser;
@@ -621,7 +621,7 @@ function updateTableHint() {
   $("#import-btn").disabled = $("#export-btn").disabled = none;
   $("#import-btn").title = none ? TABLE_IO_NONE : n
     ? `Replace the ${n} selected row(s) with the rows of a data file (same columns, same number of rows)`
-    : "Append the rows of a data file (CSV, Parquet, Excel, …; columns named as in this table)";
+    : `Append the rows of a data file (${(S.meta.table_read_formats || []).filter(x => x.split(".").length === 2).map(x => x.slice(1)).join(", ")}; columns named as in this table)`;
   $("#export-btn").title = none ? TABLE_IO_NONE : (n ? `Download the ${n} selected row(s) as a data file` : "Download all rows as a data file")
     + (extendedColumns(t).cols.length ? ", with the solution columns shown" : "");
   const head = $("#export-menu .sep");
@@ -707,7 +707,7 @@ function renderExportMenu() {
   $("#export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"),
     ...exts.filter(x => x.split(".").length === 2).map(x => h("div", { class: "fmt" }, item(x, x.slice(1)),
       ...exts.filter(y => y.startsWith(x + ".")).map(y => item(y, y.slice(x.length), `${y.slice(1)} (compressed)`)))));
-  $("#table-input").accept = exts.join(",");
+  $("#table-input").accept = (S.meta.table_read_formats || exts).join(",");
 }
 
 function fileBase64(file) {

@@ -243,7 +243,13 @@ API key to start sessions; tests use a fake client).
   rows with changed bus/area numbers renumbers references (two passes via
   temporary numbers so swaps work), like cell edits do; `ncost` is never
   taken from the file. Parquet/Feather/Excel depend on optional engines
-  (CI installs `pyarrow` and `openpyxl`).
+  (CI installs `pyarrow` and `openpyxl`). Import also reads the read-only
+  pandas formats of `_FORMATS` (`writable` False; `table_read_formats`,
+  meta `table_read_formats`) when their engine is installed (CI installs
+  them; `xlwt` only writes `.xls` test files). `.xlsb` and `.sas7bdat` have
+  no Python writer, so they are untested; pyreadstat's XPORT zero reads
+  back as about 5e-79 in pandas. `make docs` runs `pip install .`, which
+  replaces an editable install: reinstall with `pip install -e .` after it.
 
 - Extended result columns (decision #56, issue #108): `RESULT_COLUMNS` in
   `case.py` (PYPOWER array indexes), `extended` of `Case.solve`

@@ -25,7 +25,10 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     the read-only extended columns a solution adds to the tables), tables,
     built-in case names, formats (written),
     input formats (read), table data formats (`table_formats`: file
-    extensions `POST /api/table/import` and `GET /api/table/export` accept),
+    extensions `GET /api/table/export` and `GET /api/series/export` write;
+    `table_read_formats`: those and the other pandas formats
+    `POST /api/table/import` and `POST /api/series/import` read, see
+    `ppedit._tableio`),
     solvers (`ppedit.case.solvers`: the PF algorithms,
     the installed OPF solvers and the cvxopf solve option choices), version,
     `about` (package metadata shown when the page's "ppedit" title is
@@ -149,7 +152,8 @@ from flask import Flask, jsonify, request, send_from_directory, Response
 from ppedit.case import Case, CaseError, COLUMNS, RESULT_COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
-from ppedit._tableio import table_formats, read_rows, dump_rows, read_series, dump_series
+from ppedit._tableio import table_formats, table_read_formats, read_rows, dump_rows, \
+    read_series, dump_series
 
 _logger = logging.getLogger(__file__)
 
@@ -633,7 +637,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         return jsonify(columns=COLUMNS,result_columns=RESULT_COLUMNS,tables=TABLES,
             builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            table_formats=table_formats(),solvers=solvers(),version=__version__,about=about(),
+            table_formats=table_formats(),table_read_formats=table_read_formats(),solvers=solvers(),version=__version__,about=about(),
             instance=instance)
 
     @app.get("/api/ping")

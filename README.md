@@ -185,7 +185,15 @@ In the editor:
     rows as one; the format comes from the file extension: `.csv`,
     `.tsv`, `.json` (each optionally compressed as `.gz`, `.bz2`, `.xz`,
     `.zip`), `.parquet` and `.feather` (need `pyarrow`), `.xlsx` (needs
-    `openpyxl`). Columns are named as in the table header. With no rows
+    `openpyxl`). **Import…** (here and on the Series tab) also reads the
+    other formats pandas reads, when their engine is installed: `.jsonl`
+    and `.ndjson`, `.xml`, `.html` (first table; `lxml`), `.fwf`
+    (fixed-width text), `.xlsm`, `.xls`, `.xlsb` and `.ods`
+    (`python-calamine`, or `openpyxl`, `xlrd`, `pyxlsb`, `odfpy`), `.orc`
+    (`pyarrow`), `.h5`/`.hdf5` (`tables`; one data set), Stata `.dta`, SAS
+    `.sas7bdat` and `.xpt`, and SPSS `.sav` (`pyreadstat`); these are not
+    exported. Pickle files are refused, since loading one can run code.
+    Columns are named as in the table header. With no rows
     selected, import appends the file's rows (missing columns take their
     defaults) and export writes every row; with rows selected, import
     replaces them with the file's rows (same columns and number of rows)

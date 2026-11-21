@@ -43,9 +43,9 @@ jobs:
         pip install --upgrade pip
         pip install . pytest pytest-cov pylint   # non-editable: catches missing package-data
 
-    - name: Install table data engines (optional Parquet, Feather and Excel formats)
+    - name: Install table data engines (optional Parquet, Feather, Excel and read-only formats)
       run: |
-        pip install pyarrow openpyxl
+        pip install pyarrow openpyxl python-calamine lxml tables pyreadstat odfpy xlwt  # xlwt: tests only
 
     - name: Install cvxopf (optional OPF solvers)
       run: |

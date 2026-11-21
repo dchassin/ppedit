@@ -18,9 +18,11 @@ def test_formats():
     assert table_format("Bus.CSV") == ("csv",None)
     assert table_format("/tmp/gen.csv.gz") == ("csv","gzip")
     assert table_format("x.json.xz") == ("json","xz")
-    for bad in ["bus.txt","bus","bus.gz","bus.pickle"]:
+    for bad in ["bus.txt","bus","bus.gz"]:
         with pytest.raises(CaseError,match="not a supported"):
             table_format(bad)
+    with pytest.raises(CaseError,match="pickle files are not read"):
+        table_format("bus.pickle")
     if ".parquet" in FORMATS:
         with pytest.raises(CaseError,match="cannot be compressed"):
             table_format("bus.parquet.gz")
@@ -169,3 +171,103 @@ def test_replace_costs_ncost():
     row[3],row[4] = 7,"0.1,2,3,4"
     case.import_rows("gencost",NAMES["gencost"],[row],replace=[0])
     assert case.tables["gencost"][0][3:] == [4,"0.1,2,3,4"]
+
+# ----- read-only pandas formats -----
+
+import importlib.util as _util
+import os as _os
+import tempfile as _tempfile
+
+from ppedit._tableio import table_read_formats, read_series
+
+def _has(*modules):
+    return all(_util.find_spec(m) is not None for m in modules)
+
+def _frame():
+    import pandas as pd
+    return pd.DataFrame({"bus_i":[1,2,3],"Pd":[10.5,0.0,-3.25]})
+
+def _via_file(ext,write):
+    """Return the bytes of a file of extension `ext` written by `write(frame, path)`"""
+    with _tempfile.TemporaryDirectory() as tmp:
+        path = _os.path.join(tmp,"t"+ext)
+        write(_frame(),path)
+        with open(path,"rb") as fh:
+            return fh.read()
+
+def _write_xls(frame,path):
+    import xlwt
+    book = xlwt.Workbook()
+    sheet = book.add_sheet("bus")
+    for j,col in enumerate(frame.columns):
+        sheet.write(0,j,col)
+        for i,v in enumerate(frame[col]):
+            sheet.write(i+1,j,float(v))
+    book.save(path)
+
+def _write_sav(frame,path):
+    import pyreadstat
+    pyreadstat.write_sav(frame,path)
+
+def _write_xpt(frame,path):
+    import pyreadstat
+    pyreadstat.write_xport(frame,path,file_format_version=5)  # pandas reads version 5
+
+READERS = [
+    (".jsonl",(),lambda f,p: f.to_json(p,orient="records",lines=True)),
+    (".ndjson",(),lambda f,p: f.to_json(p,orient="records",lines=True)),
+    (".jsonl.gz",(),lambda f,p: f.to_json(p,orient="records",lines=True,compression="gzip")),
+    (".xml",("lxml",),lambda f,p: f.to_xml(p,index=False)),
+    (".html",("lxml",),lambda f,p: f.to_html(p,index=False)),
+    (".fwf",(),lambda f,p: open(p,"w").write(f.to_string(index=False))),
+    (".xlsm",("openpyxl",),lambda f,p: f.to_excel(p,index=False,engine="openpyxl")),
+    (".xls",("xlwt",),_write_xls),
+    (".ods",("odf",),lambda f,p: f.to_excel(p,index=False,engine="odf")),
+    (".orc",("pyarrow",),lambda f,p: f.to_orc(p,index=False)),
+    (".h5",("tables",),lambda f,p: f.to_hdf(p,key="bus",format="table",index=False)),
+    (".dta",(),lambda f,p: f.to_stata(p,write_index=False)),
+    (".sav",("pyreadstat",),_write_sav),
+    (".xpt",("pyreadstat",),_write_xpt),
+]
+
+@pytest.mark.parametrize("ext,modules,write",READERS,ids=[r[0] for r in READERS])
+def test_read_only_formats(ext,modules,write):
+    """Each pandas format reads back the same columns and values"""
+    if not _has(*modules):
+        pytest.skip(f"needs {', '.join(modules)}")
+    columns,rows = read_rows("bus"+ext,_via_file(ext,write))
+    assert columns == ["bus_i","Pd"]
+    # abs: pyreadstat's XPORT zero reads back in pandas as about 5e-79
+    assert [float(v) for r in rows for v in r] == pytest.approx([1,10.5,2,0.0,3,-3.25],abs=1e-12)
+    assert ext in table_read_formats() and ext not in table_formats()
+
+def test_read_only_not_written():
+    """Read-only formats are refused for export"""
+    if not _has("lxml"):
+        pytest.skip("needs lxml")
+    with pytest.raises(CaseError,match="imported but not exported"):
+        dump_rows("bus",[],"bus.xml")
+
+def test_pickle_refused():
+    """Pickle files are never read"""
+    with pytest.raises(CaseError,match="pickle files are not read"):
+        read_rows("bus.pkl",b"")
+
+def test_hdf_one_data_set():
+    """An HDF5 file must hold one data set"""
+    if not _has("tables"):
+        pytest.skip("needs tables")
+    def write(frame,path):
+        frame.to_hdf(path,key="a")
+        frame.to_hdf(path,key="b")
+    with pytest.raises(CaseError,match="holds 2 data sets"):
+        read_rows("x.h5",_via_file(".h5",write))
+
+def test_series_from_read_only_format():
+    """Time series files may use any readable format"""
+    if not _has("odf"):
+        pytest.skip("needs odfpy")
+    import pandas as pd
+    def write(_,path):
+        pd.DataFrame({"time":["a","b"],"bus.Pd.5":[90,95]}).to_excel(path,index=False,engine="odf")
+    assert read_series("s.ods",_via_file(".ods",write)) == (["a","b"],["bus.Pd.5"],[[90],[95]])
