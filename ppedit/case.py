@@ -1784,51 +1784,60 @@ def {name}():
         (else compared as text), and only the times present in every series
         are kept, in the order of the first series. When no series has time
         labels, steps are lined up by number, and all series must have the
-        same number of steps. The result has the first series' labels and
-        the `delta` all series share, `columns` and `values` of all series
-        side by side, `aligned` (`single`, `time` or `step`) and `used`
-        (steps kept from each series, by name).
+        same number of steps. A value given by several series is their sum
+        (e.g. a base load series and an EV load series for the same bus).
+        The result has the first series' labels and the `delta` all series
+        share, `columns` (each once, in order of first appearance) and
+        `values`, `aligned` (`single`, `time` or `step`), `used` (steps kept
+        from each series, by name) and `summed` (`{column: [series
+        names]}` for the columns added up).
 
         Exceptions
         ----------
 
           - `CaseError`: some series have time labels and others do not,
-            different step counts (by number) or step lengths, no time
-            common to all series, or two series giving the same column
+            different step counts (by number) or step lengths, or no time
+            common to all series
         """
         if not self.series:
             return None
         first = self.series[0]
-        owner = {}
+        owner = {}  # column -> names of the series giving it
         for ser in self.series:
             for c in ser["columns"]:
-                if c in owner:
-                    raise CaseError(f"series '{owner[c]}' and '{ser['name']}' both give {c}; "
-                        "remove it from one of them")
-                owner[c] = ser["name"]
+                owner.setdefault(c,[]).append(ser["name"])
+        summed = {c:names for c,names in owner.items() if len(names) > 1}
         deltas = {ser["delta"] for ser in self.series}
         if len(deltas) > 1:
             raise CaseError("the series have different step lengths ("
                 + ", ".join(f"{ser['name']}: {ser['delta']:g} h" for ser in self.series) + ")")
         if len(self.series) == 1:
             return {**copy.deepcopy(first),"aligned":"single",
-                "used":{first["name"]:len(first["values"])}}
+                "used":{first["name"]:len(first["values"])},"summed":{}}
         timed = [ser["timed"] for ser in self.series]
         if any(timed) and not all(timed):
             raise CaseError("series " + ", ".join(f"'{ser['name']}'" for ser in self.series if ser["timed"])
                 + " have time labels but " + ", ".join(f"'{ser['name']}'" for ser in self.series
                 if not ser["timed"]) + " do not: import all with a time column or none")
-        columns = [c for ser in self.series for c in ser["columns"]]
+        columns = list(owner)  # each column once, in order of first appearance
+        slot = {c:j for j,c in enumerate(columns)}
+        def merge(parts):
+            """One combined row from (series, row) pairs; shared columns add up"""
+            row = [0.0]*len(columns)
+            for ser,values in parts:
+                for c,v in zip(ser["columns"],values):
+                    row[slot[c]] += v
+            return row
         if not any(timed):
             counts = {len(ser["values"]) for ser in self.series}
             if len(counts) > 1:
                 raise CaseError("series without time labels are combined step by step and need the "
                     "same number of steps (" + ", ".join(f"{ser['name']}: {len(ser['values'])}"
                     for ser in self.series) + ")")
-            values = [sum((ser["values"][t] for ser in self.series),[]) for t in range(len(first["values"]))]
+            values = [merge((ser,ser["values"][t]) for ser in self.series) for t in range(len(first["values"]))]
             return {"name":first["name"],"index":list(first["index"]),"timed":False,"delta":first["delta"],
                 "columns":columns,"values":values,"aligned":"step",
-                "used":{ser["name"]:len(ser["values"]) for ser in self.series}}
+                "used":{ser["name"]:len(ser["values"]) for ser in self.series},"summed":summed}
         def parse(label):
             try:
                 return datetime.datetime.fromisoformat(label.strip())
@@ -1844,10 +1853,10 @@ def {name}():
         if not common:
             raise CaseError("the series have no time in common (" + ", ".join(
                 f"{ser['name']}: {ser['index'][0]} to {ser['index'][-1]}" for ser in self.series) + ")")
-        values = [sum((ser["values"][w[keys[0][t]]] for ser,w in zip(self.series,where)),[]) for t in common]
+        values = [merge((ser,ser["values"][w[keys[0][t]]]) for ser,w in zip(self.series,where)) for t in common]
         return {"name":first["name"],"index":[first["index"][t] for t in common],"timed":True,
             "delta":first["delta"],"columns":columns,"values":values,"aligned":"time",
-            "used":{ser["name"]:len(common) for ser in self.series}}
+            "used":{ser["name"]:len(common) for ser in self.series},"summed":summed}
 
     def _combined_info(self) -> dict|None:
         """Summary of `combined_series` for the browser: `steps`, `columns`,
@@ -1859,7 +1868,8 @@ def {name}():
         except CaseError as err:
             return {"error":str(err)}
         return {"steps":len(ser["values"]),"columns":len(ser["columns"]),"aligned":ser["aligned"],
-            "delta":ser["delta"],"first":ser["index"][0],"last":ser["index"][-1]}
+            "delta":ser["delta"],"first":ser["index"][0],"last":ser["index"][-1],
+            "summed":len(ser["summed"])}
 
     def series_values(self,table:str,column:str) -> list[list[float]]:
         """Return the values of `table.column` at every step of the series:

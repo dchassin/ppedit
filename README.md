@@ -246,9 +246,10 @@ In the editor:
     when every series was imported with a time column (only the times
     common to all are solved; ISO dates and times are compared as times,
     other labels as text), else step by step (all must have the same
-    number of steps). Two series may not give the same value (e.g. both
-    `bus.Pd.5`), and all must have the same step length; the tab says why
-    when they cannot be combined. Each series is read with **Import…** from a data file (same formats as the
+    number of steps). A value given by several series is their sum, e.g. a
+    base load series and an EV load series for the same bus (the sum
+    replaces the case value); all series must have the same step length,
+    and the tab says why when they cannot be combined. Each series is read with **Import…** from a data file (same formats as the
     tables) with one row per time step: an optional label column (`time`,
     `timestamp`, `date`, `step` or `index`) and one column per value,
     named `bus.Pd.N` or `bus.Qd.N` (bus number `N`), `gen.Pmin.N` or

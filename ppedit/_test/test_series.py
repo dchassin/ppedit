@@ -424,7 +424,6 @@ def test_combined_text_labels():
 
 @pytest.mark.parametrize("second,match",[
     ({"columns":["bus.Pd.7"],"values":[[1],[2]]},"have time labels but 'b' do not"),
-    ({"columns":["bus.Pd.5"],"values":[[1],[2]],"index":["x","y"]},"'a' and 'b' both give bus.Pd.5"),
     ({"columns":["bus.Pd.7"],"values":[[1],[2]],"index":["x","y"],"delta":0.5},"different step lengths"),
 ])
 def test_combined_errors(second,match):
@@ -434,6 +433,23 @@ def test_combined_errors(second,match):
     case.set_series(name="b",**second)
     with pytest.raises(CaseError,match=match):
         case.combined_series()
+
+def test_combined_sums_shared_values():
+    """A value given by several series is their sum, by step and by time"""
+    case = Case.builtin("case9")
+    case.set_series(["bus.Pd.5","gen.Pmax.3"],[[90,270],[100,200]],name="base")
+    case.set_series(["bus.Pd.5","bus.Pd.7"],[[10,1],[20,2]],name="ev")
+    ser = case.combined_series()
+    assert ser["columns"] == ["bus.Pd.5","gen.Pmax.3","bus.Pd.7"]
+    assert ser["values"] == [[100.0,270.0,1.0],[120.0,200.0,2.0]]
+    assert ser["summed"] == {"bus.Pd.5":["base","ev"]}
+    assert case.to_dict()["series_combined"]["summed"] == 1
+    assert case.at_step(1).tables["bus"][4][2] == 120.0
+    case = Case.builtin("case9")
+    case.set_series(["bus.Pd.5"],[[90],[100]],["2026-07-01 00:00","2026-07-01 01:00"],name="base")
+    case.set_series(["bus.Pd.5"],[[5],[7]],["2026-07-01T01:00","2026-07-01T02:00"],name="ev")
+    ser = case.combined_series()
+    assert ser["index"] == ["2026-07-01 01:00"] and ser["values"] == [[105.0]]
 
 def test_several_series_saved():
     """Several series round-trip through .py and .json; the old one-series form still loads"""

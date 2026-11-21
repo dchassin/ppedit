@@ -277,7 +277,8 @@ API key to start sessions; tests use a fake client).
   problem). Switch to cvxopf's own input if it adds one. The diagram still
   draws case loads for a multistep step. `Case.series` is a list of named
   series combined by `Case.combined_series` (used by `series_values`,
-  `at_step`, `_series_input`); state `series_combined` carries its summary
+  `at_step`, `_series_input`; a column in several series is summed);
+  state `series_combined` carries its summary
   or error, and `currentSeries()`/`S.seriesName` pick the one shown.
   Panels (decision #60,
   `Case.set_series_panel`, `geohash` in `case.py`, `panel` of

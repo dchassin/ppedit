@@ -450,7 +450,7 @@ function renderSeries() {
     ser ? `${ser.values.length} step(s) × ${ser.columns.length} value(s)${ser.timed ? "" : ", no time labels"}. ` : "",
     comb.error ? h("span", { class: "err-text" }, `Multistep OPF: ${comb.error}`)
       : `Multistep OPF uses ${comb.steps} step(s) × ${comb.columns} value(s)` + (all.length > 1 ? ` from ${all.length} series, aligned by ${comb.aligned === "time" ? "time" : "step number"}` : "")
-        + `, ${comb.first} to ${comb.last}.`]));
+        + (comb.summed ? `, ${comb.summed} value(s) summed over series` : "") + `, ${comb.first} to ${comb.last}.`]));
   const format = h("div", { class: "hint series-format" },
     "A series file has one row per time step: an optional label column (named time, timestamp, date, step or index) ",
     "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
@@ -458,7 +458,7 @@ function renderSeries() {
     "their case values at every step. Import ▾ › Panel… reads instead a file with one column per table row number or geohash cell, ",
     "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
     "A case holds several series (one per import, named after the file unless named in the dialog); multistep OPF combines them: by time when all have a time column, ",
-    "else step by step (same number of steps). Two series may not give the same value. The series are saved with .py and .json cases (not .glm).");
+    "else step by step (same number of steps). A value given by several series is their sum (it replaces the case value). The series are saved with .py and .json cases (not .glm).");
   if (!all.length) {
     $("#series-body").replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No time series"),
       exts.length ? "Import a CSV, Excel or other data file with the values by step." : TABLE_IO_NONE), format);
