@@ -54,21 +54,24 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `loads_off` lists the loads switched off as `[bus, Pd, Qd]`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
-  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?, "dropna"?}`
+  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?, "dropna"?, "range"?}`
     read table data from a file (`data`: its contents in base64; the
     format comes from the `filename` extension, see
     `ppedit._tableio.table_format`) and append the rows, or replace the
     rows listed in `rows` (see `ppedit.Case.import_rows`); the state has
     `imported` (`{"added"|"replaced": n, "cascade"}`). `dropna` drops
     missing values when the file is read (see `ppedit._tableio.read_rows`),
-    and `imported` then has `dropped` (`{"rows", "columns"}`)
+    and `imported` then has `dropped` (`{"rows", "columns"}`); `range`
+    keeps only those data rows of the file, counted from 1 (`N`, `A-B`,
+    `A-`, `-B`), and `imported` then has `selected` (`{"rows", "of"}`)
   - `GET  /api/table/export?table=...&format=csv&rows=1,2`: download the
     rows of a table (`rows`: comma-separated row indexes, default all) as
     a data file in the format of the extension `format` (e.g. `csv`,
     `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
-  - `POST /api/series/import`: `{"filename", "data", "delta"?, "dropna"?}` read a time
+  - `POST /api/series/import`: `{"filename", "data", "delta"?, "dropna"?,
+    "range"?, "start"?, "end"?}` read a time
     series of case values from a file (`data`: its contents in base64; see
     `ppedit._tableio.read_series`) and replace the case series with it
     (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
@@ -82,7 +85,11 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `columns` is then the series total). `dropna` (`rows`, `columns`,
     `empty-rows`, `empty-columns`; see `ppedit._tableio.read_rows`) drops
     missing values when the file is read, the label column aside, and
-    `imported` then has `dropped` (`{"rows", "columns"}`)
+    `imported` then has `dropped` (`{"rows", "columns"}`). `range` keeps
+    the data rows counted from 1 (`N`, `A-B`, `A-`, `-B`); `start` and
+    `end` keep the steps whose time label lies between them (dates and
+    times, inclusive; an `end` date alone takes in that whole day); then
+    `imported` has `selected` (`{"rows", "of"}`)
   - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
     true}` remove the series (both undoable)
   - `GET  /api/series/export?format=csv`: download the series as a data
@@ -735,7 +742,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
         dropped = {}
-        columns,rows = read_rows(str(data["filename"]),content,data.get("dropna") or None,dropped)
+        columns,rows = read_rows(str(data["filename"]),content,data.get("dropna") or None,dropped,
+            data.get("range"))
         replace = data.get("rows")
         with editor.lock:
             result = editor.edit(lambda: editor.case.import_rows(data["table"],columns,rows,
@@ -811,7 +819,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
         dropped = {}
-        index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped)
+        index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped,
+            data.get("range"),data.get("start"),data.get("end"))
         panel = data.get("panel")
         with editor.lock:
             old = editor.case.series

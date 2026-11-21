@@ -451,14 +451,14 @@ function renderSeries() {
     ...(ser.values.length > SERIES_SHOW ? [h("div", { class: "hint" }, `First ${SERIES_SHOW} of ${ser.values.length} steps shown; export the series to see them all.`)] : []));
 }
 async function importSeries(file) {
-  const data = await fileBase64(file), panel = S.seriesPanel;
-  S.seriesPanel = null;
-  const req = { filename: file.name, data, dropna: S.dropna };
+  const data = await fileBase64(file), opt = S.importReq || {}, panel = opt.panel;
+  S.importReq = null;
+  const req = { filename: file.name, data, dropna: S.dropna, range: opt.range || "", start: opt.start || "", end: opt.end || "" };
   if (panel) req.panel = panel;
   const st = await act("/api/series/import", req);
   const im = st.imported;
-  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${droppedText(im.dropped)} (Ctrl+Z to undo)`);
-  const extra = droppedText(im.dropped) + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
+  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${selectedText(im.selected)}${droppedText(im.dropped)} (Ctrl+Z to undo)`);
+  const extra = selectedText(im.selected) + droppedText(im.dropped) + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
     + (im.unlocated ? `; ${im.unlocated} ${panel.table} row(s) without geodata left out` : "");
   toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
 }
@@ -474,11 +474,16 @@ const TABLE_FORMAT_NAMES = {
   ".h5": "HDF5", ".hdf5": "HDF5", ".hdf": "HDF5", ".dta": "Stata", ".sas7bdat": "SAS", ".xpt": "SAS transport", ".sav": "SPSS",
 };
 
-// Panel import (Import ▾ › Panel…): steps in rows, one column per row number
-// or geohash cell, all giving the chosen table value (Case.set_series_panel).
-// The choices are kept in S.seriesPanel until the file is picked.
-function openPanelDialog() {
-  const d = $("#panel-dialog"), ser = S.state.case.series, prev = S.panelChoice || {};
+// Import dialog for table rows ("table"), series files ("series") and panels
+// ("panel"; Case.set_series_panel: steps in rows, one column per row number
+// or geohash cell, all giving the chosen table value). Shared choices: file
+// format (the file chooser's filter), missing values (S.dropna) and a row
+// range; series and panels also take a date range of the time column. The
+// choices are kept in S.importChoice; S.importReq holds them until the file
+// is picked.
+const IMPORT_TITLES = { table: "Import table rows", series: "Import a series file", panel: "Import a panel" };
+function openImportDialog(mode) {
+  const d = $("#panel-dialog"), ser = S.state.case.series, prev = S.importChoice || {};
   const tables = { bus: ["Pd", "Qd"], gen: ["Pmin", "Pmax"], dcline: ["Pmin", "Pmax"] };
   const sel = (id, opts, value) => h("select", { id }, opts.map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
   const table = sel("panel-table", Object.keys(tables).map(t => [t, TABLE_TITLES[t]]), prev.table || "bus");
@@ -499,29 +504,45 @@ function openPanelDialog() {
   };
   const format = sel("panel-format", [["", "Any supported format"], ...listed.map(x => [x, named(x)])],
     listed.includes(prev.format) ? prev.format : "");
-  const label = (text, el, hint) => h("label", { class: "panel-row" }, h("span", {}, text), el, hint ? h("span", { class: "hint" }, hint) : null);
+  const text = (id, value, placeholder) => h("input", { id, class: "text", value: value || "", placeholder, spellcheck: "false" });
+  const range = text("import-range", prev.range, "all, or e.g. 1-24, 25-, -100");
+  const start = text("import-start", prev.start, "e.g. 2026-07-01 or 2026-07-01 06:00");
+  const end = text("import-end", prev.end, "e.g. 2026-07-07 (whole day)");
+  const label = (txt, el, hint) => h("label", { class: "panel-row" }, h("span", {}, txt), el, hint ? h("span", { class: "hint" }, hint) : null);
   const go = h("button", { class: "primary", onclick: () => {
-    S.seriesPanel = S.panelChoice = { table: table.value, column: column.value, keys: keys.value, split: split.value, merge: merge.checked };
-    S.panelChoice.format = format.value;
+    const c = S.importChoice = { ...prev, format: format.value, range: range.value.trim() };
+    if (mode !== "table") Object.assign(c, { start: start.value.trim(), end: end.value.trim() });
+    if (mode === "panel") Object.assign(c, { table: table.value, column: column.value, keys: keys.value, split: split.value });
+    S.importReq = { mode, range: c.range, start: mode === "table" ? "" : c.start, end: mode === "table" ? "" : c.end,
+      panel: mode === "panel" ? { table: c.table, column: c.column, keys: c.keys, split: c.split, merge: merge.checked } : null };
     d.close();
-    const input = $("#series-input");
+    const input = $(mode === "table" ? "#table-input" : "#series-input");
     // a base format admits its compressed forms too; a compressed choice only itself
     input.accept = (format.value ? readFormats().filter(x => x === format.value
       || (format.value.split(".").length === 2 && x.startsWith(format.value + ".")))
       : readFormats()).join(",");
     input.click();
   } }, "Choose file…");
-  d.replaceChildren(h("h2", { id: "panel-title" }, "Import a panel"),
-    h("p", { class: "summary" }, "A panel file has one row per time step (an optional time column first) and one column per ",
-      "table row number (counted from 1; for buses the row, not the bus number) or geohash cell. Every column gives the value chosen here."),
-    label("Table", table), label("Value", column), label("Columns are", keys),
-    label("Share a geohash cell", split, "among the elements located in it (by bus geodata)"),
+  const what = mode === "table" ? (S.selected[S.view]?.size
+      ? `The rows read replace the ${S.selected[S.view].size} selected ${TABLE_TITLES[S.view]} row(s) (same number of rows).`
+      : `The rows read are appended to the ${TABLE_TITLES[S.view]} table; columns are named as in its header.`)
+    : mode === "series" ? "A series file has one row per time step (an optional time column first) and one column per value named table.column.key (e.g. bus.Pd.5). It replaces the current series."
+    : "A panel file has one row per time step (an optional time column first) and one column per table row number (counted from 1; for buses the row, not the bus number) or geohash cell. Every column gives the value chosen here.";
+  d.replaceChildren(h("h2", { id: "panel-title" }, IMPORT_TITLES[mode]), h("p", { class: "summary" }, what),
+    ...(mode === "panel" ? [label("Table", table), label("Value", column), label("Columns are", keys),
+      label("Share a geohash cell", split, "among the elements located in it (by bus geodata)")] : []),
     label("File format", format, "the formats the server can read; the file chooser shows only the one chosen"),
+    label("Rows", range, "data rows to read, counted from 1 after the header (blank: all)"),
+    ...(mode !== "table" ? [label("From", start), label("To", end, "steps whose time lies in this range, inclusive (blank: no limit); needs a time column of dates")] : []),
     label("Missing values", dropnaSelect("panel-dropna"), "dropped when the file is read (also on the Settings tab)"),
-    label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet"),
+    ...(mode === "panel" ? [label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet")] : []),
     h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));
   d.showModal();
   go.focus();
+}
+// "; rows 1-24 of 8760 read" style note, or ""
+function selectedText(sel) {
+  return sel ? `; ${sel.rows} of ${sel.of} row(s) selected` : "";
 }
 async function exportSeries(ext) {
   const id = busyStart("/api/series/export");
@@ -782,10 +803,12 @@ async function importRows(file) {
   const table = S.view;
   const rows = [...S.selected[table]].sort((a, b) => a - b);
   const data = await fileBase64(file);
-  const st = await act("/api/table/import", { table, filename: file.name, data, rows, dropna: S.dropna });
+  const opt = S.importReq || {};
+  S.importReq = null;
+  const st = await act("/api/table/import", { table, filename: file.name, data, rows, dropna: S.dropna, range: opt.range || "" });
   const r = st.imported, what = TABLE_TITLES[table];
   // solution columns written by export (decision #56) are not case data
-  const ign = (r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "") + droppedText(r.dropped);
+  const ign = (r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "") + selectedText(r.selected) + droppedText(r.dropped);
   if (r.added) {
     toast(`Appended ${r.added} ${what} row(s) from ${file.name}${ign} (Ctrl+Z to undo)`);
     flashRow(S.state.case.tables[table].length - 1);
@@ -3245,7 +3268,7 @@ async function onAction(btn) {
     else if (a === "add-row") await addRow();
     else if (a === "dup-row") await duplicateRows();
     else if (a === "del-rows") await deleteRows();
-    else if (a === "import-rows") $("#table-input").click();
+    else if (a === "import-rows") openImportDialog("table");
     else if (a === "export-rows") await exportRows(btn.dataset.format);
     else if (a === "relayout") { if (S.style === "oneline") olCache = null; else layout(true); fitView(); renderNetwork(); }
     else if (a === "fit") { fitView(); renderNetwork(); }
@@ -3260,8 +3283,8 @@ async function onAction(btn) {
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
-    else if (a === "series-import") { S.seriesPanel = null; $("#series-input").accept = readFormats().join(","); $("#series-input").click(); }
-    else if (a === "series-panel") openPanelDialog();
+    else if (a === "series-import") openImportDialog("series");
+    else if (a === "series-panel") openImportDialog("panel");
     else if (a === "series-export") await exportSeries(btn.dataset.format);
     else if (a === "series-clear") {
       if (confirm("Remove the time series from this case? Undo restores it.")) await act("/api/series", { clear: true });

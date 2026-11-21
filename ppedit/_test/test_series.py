@@ -327,3 +327,19 @@ def test_server_dropna(post):
         "data":_b64("bus_i,type,Pd\n100,1,5\n,,\n"),"dropna":"empty-rows"})
     assert status == 200 and st["imported"]["added"] == 1
     assert st["imported"]["dropped"] == {"rows":1,"columns":[]}
+
+def test_server_ranges(post):
+    """Row and date ranges select what series, panel and table imports read"""
+    text = "time,bus.Pd.5\n2026-07-01 00:00,90\n2026-07-01 01:00,95\n2026-07-02 00:00,99\n"
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64(text),"end":"2026-07-01"})
+    assert status == 200 and len(st["case"]["series"]["values"]) == 2
+    assert st["imported"]["selected"] == {"rows":2,"of":3}
+    status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("time,5\na,1\nb,2\nc,3\n"),
+        "panel":{"table":"bus","column":"Pd","merge":False},"range":"2-3"})
+    assert st["case"]["series"]["index"] == ["b","c"]
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64(text),"range":"x"})
+    assert status == 400 and "row range" in st["error"]
+    status,st = post("/api/table/import",{"table":"bus","filename":"b.csv",
+        "data":_b64("bus_i,type,Pd\n100,1,5\n101,1,6\n102,1,7\n"),"range":"2"})
+    assert status == 200 and st["imported"]["added"] == 1
+    assert st["case"]["tables"]["bus"][-1][0] == 101

@@ -269,8 +269,33 @@ def _dropna(columns:list[str],rows:list[list],dropna:str|None,keep:tuple=(),
         report["dropped"] = {"rows":gone_rows,"columns":gone_cols}
     return columns,rows
 
+_RANGE = re.compile(r"^\s*(\d*)\s*(?:-|:|\.\.)\s*(\d*)\s*$")
+
+def _row_range(rows:list[list],spec:str|None,report:dict|None=None) -> list[list]:
+    """Keep the data rows `spec` names, counted from 1 (header aside):
+    `N`, `A-B`, `A-` or `-B` (also `A:B`, `A..B`), inclusive"""
+    if spec is None or not str(spec).strip():
+        return rows
+    text = str(spec).strip()
+    m = _RANGE.match(text)
+    if text.isdigit():
+        first = last = int(text)
+    elif m and (m[1] or m[2]):
+        first = int(m[1] or 1)
+        last = int(m[2]) if m[2] else max(first,len(rows))
+    else:
+        raise CaseError(f"row range '{spec}' is not N, A-B, A- or -B (rows counted from 1)")
+    if first < 1 or last < first:
+        raise CaseError(f"row range '{spec}' is empty (rows are counted from 1)")
+    if first > len(rows):
+        raise CaseError(f"row range '{spec}' starts after the last of the {len(rows)} data row(s)")
+    out = rows[first-1:last]
+    if report is not None:
+        report["selected"] = {"rows":len(out),"of":len(rows)}
+    return out
+
 def read_rows(filename:str,data:bytes,dropna:str|None=None,
-        report:dict|None=None) -> tuple[list[str],list[list]]:
+        report:dict|None=None,rows:str|None=None) -> tuple[list[str],list[list]]:
     """Read table data from file contents
 
     Arguments
@@ -286,7 +311,11 @@ def read_rows(filename:str,data:bytes,dropna:str|None=None,
         value at all; `None` (default) keeps them
 
       - `report`: a dict to fill with `dropped` (`{"rows": count,
-        "columns": [names]}`) when `dropna` is given
+        "columns": [names]}`) when `dropna` is given, and `selected`
+        (`{"rows": kept, "of": read}`) when `rows` is given
+
+      - `rows`: the data rows to keep, counted from 1 after the header:
+        `N`, `A-B`, `A-` or `-B` (inclusive); applied before `dropna`
 
     Returns
     -------
@@ -298,7 +327,8 @@ def read_rows(filename:str,data:bytes,dropna:str|None=None,
     ----------
 
       - `CaseError`: unsupported format, the file cannot be read, an
-        unknown `dropna`, or `dropna` dropping every row or column
+        unknown `dropna`, `dropna` dropping every row or column, or a bad
+        or empty `rows` range
     """
     fmt,compression = table_format(filename)
     try:
@@ -308,7 +338,8 @@ def read_rows(filename:str,data:bytes,dropna:str|None=None,
     except Exception as err: # pandas raises many kinds of errors
         raise CaseError(f"cannot read '{filename}': {err}") from err
     columns = [str(c).strip() for c in frame.columns]
-    rows = [[_value(v) for v in row] for row in frame.astype(object).itertuples(index=False,name=None)]
+    spec,rows = rows,[[_value(v) for v in row] for row in frame.astype(object).itertuples(index=False,name=None)]
+    rows = _row_range(rows,spec,report)
     return _dropna(columns,rows,dropna,report=report)
 
 def dump_rows(table:str,rows:list[list],filename:str,
@@ -379,14 +410,56 @@ def dump_rows(table:str,rows:list[list],filename:str,
 SERIES_LABELS = ("time","timestamp","datetime","date","step","index")
 """Names of the step label column of a time series file (any case)"""
 
+def _date_range(labels:list,rows:list[list],start:str|None,end:str|None,
+        report:dict|None=None) -> tuple[list,list[list]]:
+    """Keep the steps whose label, read as a date and time, lies between
+    `start` and `end` (inclusive; an `end` with no time of day takes in
+    the whole day)"""
+    import pandas as pd # pylint: disable=import-outside-toplevel
+    if not (start and str(start).strip()) and not (end and str(end).strip()):
+        return labels,rows
+    if labels is None:
+        raise CaseError("a date range needs a time column (time, timestamp, datetime, date, step or index)")
+    def when(text,what):
+        try:
+            return pd.Timestamp(str(text).strip())
+        except (ValueError,TypeError) as err:
+            raise CaseError(f"{what} '{text}' is not a date and time") from err
+    lo = when(start,"start") if start and str(start).strip() else None
+    hi = None
+    if end and str(end).strip():
+        hi = when(end,"end")
+        if re.fullmatch(r"\s*\d{4}-\d{1,2}-\d{1,2}\s*",str(end)) or re.fullmatch(r"\s*\d{1,2}/\d{1,2}/\d{4}\s*",str(end)):
+            hi = hi + pd.Timedelta(days=1) - pd.Timedelta(microseconds=1)
+    times = pd.to_datetime(pd.Series(labels,dtype=object),errors="coerce",format="mixed")
+    bad = [labels[k] for k in range(len(labels)) if pd.isna(times[k])]
+    if bad:
+        raise CaseError(f"{len(bad)} step label(s) are not dates and times (e.g. '{bad[0]}'); "
+            "use a row range instead")
+    tz = getattr(times.dt,"tz",None)
+    if tz is not None:
+        lo = lo.tz_localize(tz) if lo is not None and lo.tzinfo is None else lo
+        hi = hi.tz_localize(tz) if hi is not None and hi.tzinfo is None else hi
+    keep = [k for k in range(len(labels)) if (lo is None or times[k] >= lo) and (hi is None or times[k] <= hi)]
+    if not keep:
+        raise CaseError(f"no step lies between {start or 'the first'} and {end or 'the last'} "
+            f"(the file runs from {labels[0]} to {labels[-1]})")
+    if report is not None:
+        report["selected"] = {"rows":len(keep),"of":len(labels)}
+    return [labels[k] for k in keep],[rows[k] for k in keep]
+
 def read_series(filename:str,data:bytes,dropna:str|None=None,
-        report:dict|None=None) -> tuple[list[str]|None,list[str],list[list]]:
+        report:dict|None=None,rows:str|None=None,start:str|None=None,
+        end:str|None=None) -> tuple[list[str]|None,list[str],list[list]]:
     """Read a time series from file contents (see the module docstring)
 
-    `dropna` and `report` are as in `read_rows`, applied to the value
-    columns only: the label column is never dropped, and a missing label
-    does not make a step missing (`rows` drops steps, `columns` drops
-    value columns).
+    `dropna`, `report` and `rows` are as in `read_rows`; `dropna` applies
+    to the value columns only: the label column is never dropped, and a
+    missing label does not make a step missing (`rows` drops steps,
+    `columns` drops value columns). `start` and `end` keep the steps whose
+    label, read as a date and time, lies between them (inclusive; an `end`
+    date with no time of day takes in that whole day; needs a label column
+    of dates). The row range, then the date range, then `dropna` apply.
 
     Returns
     -------
@@ -400,23 +473,30 @@ def read_series(filename:str,data:bytes,dropna:str|None=None,
       - `CaseError`: unsupported format, the file cannot be read, or more
         than one label column
     """
-    columns,rows = read_rows(filename,data)
+    columns,rows = read_rows(filename,data,None,report,rows)
     label = [j for j,c in enumerate(columns) if c.lower() in SERIES_LABELS
         or (j == 0 and (c == "" or c.startswith("Unnamed:")))]
     if len(label) > 1:
         raise CaseError(f"'{filename}' has {len(label)} step label columns "
             f"({', '.join(columns[j] for j in label)}); keep one")
     if not label:
+        _date_range(None,rows,start,end)
         columns,rows = _dropna(columns,rows,dropna,report=report)
         return None,columns,rows
     j = label[0]  # move the label column first, then keep it out of dropna
     columns = [columns[j]] + columns[:j] + columns[j+1:]
     rows = [[row[j]] + row[:j] + row[j+1:] for row in rows]
-    columns,rows = _dropna(columns,rows,dropna,(0,),report)
     # a numeric label column with a blank cell is read as floats: 1.0 -> "1"
     index = ["" if row[0] is None else str(int(row[0]))
         if isinstance(row[0],float) and row[0].is_integer() else str(row[0]) for row in rows]
-    return index,columns[1:],[row[1:] for row in rows]
+    if (start and str(start).strip()) or (end and str(end).strip()):
+        read = (report or {}).get("selected",{}).get("of")
+        index,rows = _date_range(index,rows,start,end,report)
+        if read is not None:
+            report["selected"]["of"] = read
+    rows = [[label] + row[1:] for label,row in zip(index,rows)]  # labels travel with their rows
+    columns,rows = _dropna(columns,rows,dropna,(0,),report)
+    return [row[0] for row in rows],columns[1:],[row[1:] for row in rows]
 
 def dump_series(series:dict,filename:str) -> bytes:
     """Write a time series (`Case.series`) to file contents: a `time` column

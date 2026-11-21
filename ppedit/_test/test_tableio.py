@@ -314,3 +314,49 @@ def test_series_dropna_keeps_labels():
     assert report["dropped"] == {"rows":2,"columns":[]}
     assert read_series("s.csv",data,"empty-rows") == (["t1",""],["a","b"],[[1,None],[2,5]])
     assert read_series("s.csv",b"time,a\n,\n1,2\n","empty-rows") == (["1"],["a"],[[2]])
+
+# ----- row and date ranges -----
+
+_TS = (b"time,a\n2026-07-01 00:00,1\n2026-07-01 12:00,2\n2026-07-02 00:00,3\n"
+    b"2026-07-02 23:00,\n2026-07-03 00:00,5\n")
+
+@pytest.mark.parametrize("spec,expect",[
+    ("2-3",[[2],[3]]),("2:3",[[2],[3]]),("2..3",[[2],[3]]),("3",[[3]]),("-2",[[1],[2]]),
+    ("2-",[[2],[3]]),("2-99",[[2],[3]]),("",[[1],[2],[3]]),(None,[[1],[2],[3]]),
+])
+def test_row_range(spec,expect):
+    """Row ranges count data rows from 1, inclusive, either end open"""
+    report = {}
+    assert read_rows("x.csv",b"a\n1\n2\n3\n",rows=spec,report=report)[1] == expect
+    assert report.get("selected") == (None if not spec else {"rows":len(expect),"of":3})
+
+@pytest.mark.parametrize("spec,match",[("x","is not N"),("0-2","is empty"),("3-2","is empty"),("9-","starts after the last")])
+def test_row_range_bad(spec,match):
+    """Bad and empty row ranges are refused"""
+    with pytest.raises(CaseError,match=match):
+        read_rows("x.csv",b"a\n1\n2\n3\n",rows=spec)
+
+@pytest.mark.parametrize("kwargs,labels",[
+    ({"start":"2026-07-02"},["2026-07-02 00:00","2026-07-02 23:00","2026-07-03 00:00"]),
+    ({"end":"2026-07-02"},["2026-07-01 00:00","2026-07-01 12:00","2026-07-02 00:00","2026-07-02 23:00"]),
+    ({"end":"2026-07-02 00:00"},["2026-07-01 00:00","2026-07-01 12:00","2026-07-02 00:00"]),
+    ({"start":"2026-07-01 06:00","end":"2026-07-02 12:00"},["2026-07-01 12:00","2026-07-02 00:00"]),
+    ({"rows":"2-","end":"2026-07-02","dropna":"rows"},["2026-07-01 12:00","2026-07-02 00:00"]),
+])
+def test_date_range(kwargs,labels):
+    """Date ranges keep steps by their time label; an end date takes in its whole day"""
+    report = {}
+    index,_,rows = read_series("s.csv",_TS,report=report,**kwargs)
+    assert index == labels and len(rows) == len(labels)
+    assert report["selected"]["of"] == 5
+
+@pytest.mark.parametrize("data,kwargs,match",[
+    (_TS,{"start":"2027-01-01"},"no step lies between"),
+    (_TS,{"start":"nope"},"start 'nope' is not a date"),
+    (b"step,a\n1,2\nx,3\n",{"end":"2026-01-01"},"are not dates and times"),
+    (b"a\n1\n",{"start":"2026-01-01"},"needs a time column"),
+])
+def test_date_range_bad(data,kwargs,match):
+    """Date ranges need a time column of dates and must keep a step"""
+    with pytest.raises(CaseError,match=match):
+        read_series("s.csv",data,**kwargs)

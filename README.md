@@ -197,6 +197,13 @@ In the editor:
     drops missing (empty or NaN) cells when a file is read, for table,
     series and panel imports: rows (steps) or columns with any missing
     value, or only empty ones; a series time column is never dropped.
+    Every **Import…** (table rows, *Series file…*, *Panel…*) opens a
+    dialog with the file format, the missing values choice and a row
+    range (data rows counted from 1 after the header: `1-24`, `25-`,
+    `-100`, `7`); series and panels also take a *From*/*To* date range
+    matched against the time column (inclusive; a *To* date alone takes
+    in that whole day). The row range applies first, then the dates, then
+    the missing values.
     Columns are named as in the table header. With no rows
     selected, import appends the file's rows (missing columns take their
     defaults) and export writes every row; with rows selected, import

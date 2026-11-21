@@ -252,6 +252,9 @@ API key to start sessions; tests use a fake client).
   replaces an editable install: reinstall with `pip install -e .` after it.
   `dropna` (`_dropna` in `_tableio.py`; `S.dropna`, `dropnaSelect` in
   `app.js`) works on the plain rows after reading, with `None` as missing.
+  Row and date ranges (`_row_range`, `_date_range`) run before it; every
+  import goes through `openImportDialog(mode)` (`S.importChoice` keeps the
+  choices, `S.importReq` carries them to `importRows`/`importSeries`).
 
 - Extended result columns (decision #56, issue #108): `RESULT_COLUMNS` in
   `case.py` (PYPOWER array indexes), `extended` of `Case.solve`
