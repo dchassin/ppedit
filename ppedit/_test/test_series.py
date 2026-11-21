@@ -343,3 +343,15 @@ def test_server_ranges(post):
         "data":_b64("bus_i,type,Pd\n100,1,5\n101,1,6\n102,1,7\n"),"range":"2"})
     assert status == 200 and st["imported"]["added"] == 1
     assert st["case"]["tables"]["bus"][-1][0] == 101
+
+def test_server_scale(post):
+    """Scale and offset apply to series files and to panels before sharing"""
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64("time,bus.Pd.5\na,90000\nb,95000\n"),
+        "scale":0.001})
+    assert st["case"]["series"]["values"] == [[90.0],[95.0]]
+    assert st["imported"]["scaled"] == {"scale":0.001,"offset":0.0}
+    status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("time,5\na,10\nb,20\n"),
+        "panel":{"table":"bus","column":"Pd","merge":False},"scale":2,"offset":5})
+    assert st["case"]["series"]["values"] == [[25.0],[45.0]]
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64("bus.Pd.5\n1\n"),"offset":"x"})
+    assert status == 400 and "offset must be a finite number" in st["error"]

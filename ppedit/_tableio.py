@@ -448,9 +448,31 @@ def _date_range(labels:list,rows:list[list],start:str|None,end:str|None,
         report["selected"] = {"rows":len(keep),"of":len(labels)}
     return [labels[k] for k in keep],[rows[k] for k in keep]
 
+def _number(value,what:str,default:float) -> float:
+    """A finite number from `value` (`default` when blank)"""
+    if value is None or (isinstance(value,str) and not value.strip()):
+        return default
+    try:
+        x = float(value)
+    except (TypeError,ValueError):
+        x = math.nan
+    if not math.isfinite(x):
+        raise CaseError(f"{what} must be a finite number, not {value!r}")
+    return x
+
+def _scale(rows:list[list],scale,offset,report:dict|None=None) -> list[list]:
+    """Return `rows` with each number `x` as `x*scale + offset` (other cells unchanged)"""
+    a,b = _number(scale,"scale",1.0),_number(offset,"offset",0.0)
+    if a == 1 and b == 0:
+        return rows
+    if report is not None:
+        report["scaled"] = {"scale":a,"offset":b}
+    return [[v*a + b if isinstance(v,(int,float)) and not isinstance(v,bool) else v for v in r] for r in rows]
+
 def read_series(filename:str,data:bytes,dropna:str|None=None,
         report:dict|None=None,rows:str|None=None,start:str|None=None,
-        end:str|None=None) -> tuple[list[str]|None,list[str],list[list]]:
+        end:str|None=None,scale:float|None=None,
+        offset:float|None=None) -> tuple[list[str]|None,list[str],list[list]]:
     """Read a time series from file contents (see the module docstring)
 
     `dropna`, `report` and `rows` are as in `read_rows`; `dropna` applies
@@ -460,6 +482,9 @@ def read_series(filename:str,data:bytes,dropna:str|None=None,
     label, read as a date and time, lies between them (inclusive; an `end`
     date with no time of day takes in that whole day; needs a label column
     of dates). The row range, then the date range, then `dropna` apply.
+    Last, each value `x` becomes `x*scale + offset` (`scale` 1 and
+    `offset` 0 by default; e.g. `scale` 0.001 for kW to MW); `report` then
+    has `scaled` (`{"scale", "offset"}`).
 
     Returns
     -------
@@ -470,8 +495,9 @@ def read_series(filename:str,data:bytes,dropna:str|None=None,
     Exceptions
     ----------
 
-      - `CaseError`: unsupported format, the file cannot be read, or more
-        than one label column
+      - `CaseError`: unsupported format, the file cannot be read, more
+        than one label column, or a `scale` or `offset` that is not a
+        finite number
     """
     columns,rows = read_rows(filename,data,None,report,rows)
     label = [j for j,c in enumerate(columns) if c.lower() in SERIES_LABELS
@@ -482,7 +508,7 @@ def read_series(filename:str,data:bytes,dropna:str|None=None,
     if not label:
         _date_range(None,rows,start,end)
         columns,rows = _dropna(columns,rows,dropna,report=report)
-        return None,columns,rows
+        return None,columns,_scale(rows,scale,offset,report)
     j = label[0]  # move the label column first, then keep it out of dropna
     columns = [columns[j]] + columns[:j] + columns[j+1:]
     rows = [[row[j]] + row[:j] + row[j+1:] for row in rows]
@@ -496,7 +522,7 @@ def read_series(filename:str,data:bytes,dropna:str|None=None,
             report["selected"]["of"] = read
     rows = [[label] + row[1:] for label,row in zip(index,rows)]  # labels travel with their rows
     columns,rows = _dropna(columns,rows,dropna,(0,),report)
-    return [row[0] for row in rows],columns[1:],[row[1:] for row in rows]
+    return [row[0] for row in rows],columns[1:],_scale([row[1:] for row in rows],scale,offset,report)
 
 def dump_series(series:dict,filename:str) -> bytes:
     """Write a time series (`Case.series`) to file contents: a `time` column

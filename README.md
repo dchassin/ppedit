@@ -203,7 +203,9 @@ In the editor:
     `-100`, `7`); series and panels also take a *From*/*To* date range
     matched against the time column (inclusive; a *To* date alone takes
     in that whole day). The row range applies first, then the dates, then
-    the missing values.
+    the missing values. Series and panels also take *Scale* and *Offset*:
+    each value read becomes `value × scale + offset` (e.g. scale `0.001`
+    for kW to MW; for a panel before a geohash cell is shared).
     Columns are named as in the table header. With no rows
     selected, import appends the file's rows (missing columns take their
     defaults) and export writes every row; with rows selected, import

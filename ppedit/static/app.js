@@ -453,12 +453,14 @@ function renderSeries() {
 async function importSeries(file) {
   const data = await fileBase64(file), opt = S.importReq || {}, panel = opt.panel;
   S.importReq = null;
-  const req = { filename: file.name, data, dropna: S.dropna, range: opt.range || "", start: opt.start || "", end: opt.end || "" };
+  const req = { filename: file.name, data, dropna: S.dropna, range: opt.range || "", start: opt.start || "", end: opt.end || "",
+    scale: opt.scale || "", offset: opt.offset || "" };
   if (panel) req.panel = panel;
   const st = await act("/api/series/import", req);
   const im = st.imported;
-  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${selectedText(im.selected)}${droppedText(im.dropped)} (Ctrl+Z to undo)`);
-  const extra = selectedText(im.selected) + droppedText(im.dropped) + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
+  const scaled = im.scaled ? `; values × ${im.scaled.scale} + ${im.scaled.offset}` : "";
+  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${selectedText(im.selected)}${droppedText(im.dropped)}${scaled} (Ctrl+Z to undo)`);
+  const extra = selectedText(im.selected) + droppedText(im.dropped) + scaled + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
     + (im.unlocated ? `; ${im.unlocated} ${panel.table} row(s) without geodata left out` : "");
   toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
 }
@@ -508,12 +510,15 @@ function openImportDialog(mode) {
   const range = text("import-range", prev.range, "all, or e.g. 1-24, 25-, -100");
   const start = text("import-start", prev.start, "e.g. 2026-07-01 or 2026-07-01 06:00");
   const end = text("import-end", prev.end, "e.g. 2026-07-07 (whole day)");
+  const scale = h("input", { id: "import-scale", class: "num", value: prev.scale ?? "", placeholder: "1", size: 10, "aria-label": "Scale" });
+  const offset = h("input", { id: "import-offset", class: "num", value: prev.offset ?? "", placeholder: "0", size: 10, "aria-label": "Offset" });
   const label = (txt, el, hint) => h("label", { class: "panel-row" }, h("span", {}, txt), el, hint ? h("span", { class: "hint" }, hint) : null);
   const go = h("button", { class: "primary", onclick: () => {
     const c = S.importChoice = { ...prev, format: format.value, range: range.value.trim() };
-    if (mode !== "table") Object.assign(c, { start: start.value.trim(), end: end.value.trim() });
+    if (mode !== "table") Object.assign(c, { start: start.value.trim(), end: end.value.trim(), scale: scale.value.trim(), offset: offset.value.trim() });
     if (mode === "panel") Object.assign(c, { table: table.value, column: column.value, keys: keys.value, split: split.value });
     S.importReq = { mode, range: c.range, start: mode === "table" ? "" : c.start, end: mode === "table" ? "" : c.end,
+      scale: mode === "table" ? "" : c.scale, offset: mode === "table" ? "" : c.offset,
       panel: mode === "panel" ? { table: c.table, column: c.column, keys: c.keys, split: c.split, merge: merge.checked } : null };
     d.close();
     const input = $(mode === "table" ? "#table-input" : "#series-input");
@@ -533,7 +538,9 @@ function openImportDialog(mode) {
       label("Share a geohash cell", split, "among the elements located in it (by bus geodata)")] : []),
     label("File format", format, "the formats the server can read; the file chooser shows only the one chosen"),
     label("Rows", range, "data rows to read, counted from 1 after the header (blank: all)"),
-    ...(mode !== "table" ? [label("From", start), label("To", end, "steps whose time lies in this range, inclusive (blank: no limit); needs a time column of dates")] : []),
+    ...(mode !== "table" ? [label("From", start), label("To", end, "steps whose time lies in this range, inclusive (blank: no limit); needs a time column of dates"),
+      label("Scale", scale), label("Offset", offset, "each value read becomes value × scale + offset (e.g. scale 0.001 for kW to MW)"
+        + (mode === "panel" ? "; applied before a geohash cell is shared" : ""))] : []),
     label("Missing values", dropnaSelect("panel-dropna"), "dropped when the file is read (also on the Settings tab)"),
     ...(mode === "panel" ? [label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet")] : []),
     h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));

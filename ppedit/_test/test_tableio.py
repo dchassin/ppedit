@@ -360,3 +360,26 @@ def test_date_range_bad(data,kwargs,match):
     """Date ranges need a time column of dates and must keep a step"""
     with pytest.raises(CaseError,match=match):
         read_series("s.csv",data,**kwargs)
+
+# ----- scale and offset -----
+
+@pytest.mark.parametrize("scale,offset,expect,scaled",[
+    (None,None,[[1000,None],[2500,3]],None),
+    ("","",[[1000,None],[2500,3]],None),
+    (0.001,None,[[1.0,None],[2.5,0.003]],{"scale":0.001,"offset":0.0}),
+    ("2","-1",[[1999,None],[4999,5]],{"scale":2.0,"offset":-1.0}),
+    (None,10,[[1010,None],[2510,13]],{"scale":1.0,"offset":10.0}),
+])
+def test_series_scale(scale,offset,expect,scaled):
+    """Values become value*scale + offset; missing cells and labels stay"""
+    report = {}
+    index,_,rows = read_series("s.csv",b"time,a,b\nt1,1000,\nt2,2500,3\n",report=report,scale=scale,offset=offset)
+    assert index == ["t1","t2"]
+    assert [[None if v is None else pytest.approx(v) for v in r] for r in rows] == expect
+    assert report.get("scaled") == scaled
+
+@pytest.mark.parametrize("kw",[{"scale":"x"},{"offset":"inf"},{"scale":float("nan")}])
+def test_series_scale_bad(kw):
+    """Scale and offset must be finite numbers"""
+    with pytest.raises(CaseError,match="must be a finite number"):
+        read_series("s.csv",b"a\n1\n",**kw)

@@ -71,7 +71,7 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
   - `POST /api/series/import`: `{"filename", "data", "delta"?, "dropna"?,
-    "range"?, "start"?, "end"?}` read a time
+    "range"?, "start"?, "end"?, "scale"?, "offset"?}` read a time
     series of case values from a file (`data`: its contents in base64; see
     `ppedit._tableio.read_series`) and replace the case series with it
     (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
@@ -89,7 +89,9 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     the data rows counted from 1 (`N`, `A-B`, `A-`, `-B`); `start` and
     `end` keep the steps whose time label lies between them (dates and
     times, inclusive; an `end` date alone takes in that whole day); then
-    `imported` has `selected` (`{"rows", "of"}`)
+    `imported` has `selected` (`{"rows", "of"}`). Each value `x` read becomes
+    `x*scale + offset` (default 1 and 0; for a panel before a geohash cell
+    is shared), and `imported` then has `scaled` (`{"scale", "offset"}`)
   - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
     true}` remove the series (both undoable)
   - `GET  /api/series/export?format=csv`: download the series as a data
@@ -820,7 +822,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             raise CaseError("data must be the file contents in base64") from err
         dropped = {}
         index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped,
-            data.get("range"),data.get("start"),data.get("end"))
+            data.get("range"),data.get("start"),data.get("end"),data.get("scale"),data.get("offset"))
         panel = data.get("panel")
         with editor.lock:
             old = editor.case.series
