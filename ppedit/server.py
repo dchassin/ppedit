@@ -70,13 +70,16 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
-  - `POST /api/series/import`: `{"filename", "data", "delta"?, "dropna"?,
-    "range"?, "start"?, "end"?, "scale"?, "offset"?}` read a time
-    series of case values from a file (`data`: its contents in base64; see
-    `ppedit._tableio.read_series`) and replace the case series with it
-    (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
-    the series replaced, else 1); the state has `imported` (`{"steps",
-    "columns"}`). With `"panel": {"table", "column", "keys"?, "split"?,
+  - `POST /api/series/import`: `{"filename", "data", "name"?, "delta"?,
+    "dropna"?, "range"?, "start"?, "end"?, "scale"?, "offset"?}` read a
+    time series of case values from a file (`data`: its contents in
+    base64; see `ppedit._tableio.read_series`) into the series `name`
+    (default: the file name without extensions), added or replaced
+    (`ppedit.Case.set_series`; a case holds several, combined for
+    multistep OPF by `ppedit.Case.combined_series`; `delta`, hours per
+    step, defaults to that of the series replaced, else of the first
+    series, else 1); the state has `imported` (`{"name", "replaced",
+    "steps", "columns"}`). With `"panel": {"table", "column", "keys"?, "split"?,
     "merge"?}` the file is a panel instead: steps in rows and one column per
     table row number or geohash, all giving `table.column`
     (`ppedit.Case.set_series_panel`; `keys` `auto`|`row`|`geohash`,
@@ -92,11 +95,13 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `imported` has `selected` (`{"rows", "of"}`). Each value `x` read becomes
     `x*scale + offset` (default 1 and 0; for a panel before a geohash cell
     is shared), and `imported` then has `scaled` (`{"scale", "offset"}`)
-  - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
-    true}` remove the series (both undoable)
-  - `GET  /api/series/export?format=csv`: download the series as a data
-    file (a `time` column, then the series columns), named
-    `<case>_series.<format>`
+  - `POST /api/series`: `{"delta", "name"?}` set the hours per step of a
+    series (`name` may be left out when there is one), or `{"clear": true,
+    "name"?}` remove the series `name`, or all of them (both undoable)
+  - `GET  /api/series/export?format=csv&name=...`: download the series
+    `name`, or without `name` the combined series, as a data file (a
+    `time` column, then the series columns), named
+    `<case>_<name>.<format>` (`<case>_series.<format>` combined)
   - `POST /api/undo`, `POST /api/redo`
   - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?,
     "multistep"?}`;
@@ -824,43 +829,57 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped,
             data.get("range"),data.get("start"),data.get("end"),data.get("scale"),data.get("offset"))
         panel = data.get("panel")
+        name = str(data.get("name") or "").strip() or \
+            re.sub(r"(\.[A-Za-z0-9]+)+$","",os.path.basename(str(data["filename"]))) or "series"
         with editor.lock:
-            old = editor.case.series
+            old = editor.case.get_series(name)
             if panel:
                 if not isinstance(panel,dict) or not panel.get("table") or not panel.get("column"):
                     raise CaseError("a panel import needs the table and column it sets")
                 report = editor.edit(lambda: editor.case.set_series_panel(panel["table"],
                     panel["column"],columns,rows,index,data.get("delta"),
                     panel.get("keys","auto"),panel.get("split","proportional"),
-                    bool(panel.get("merge",True))))
+                    bool(panel.get("merge",True)),name=name))
             else:
-                delta = data.get("delta") or (old["delta"] if old else 1.0)
-                editor.edit(lambda: editor.case.set_series(columns,rows,index,delta))
+                delta = data.get("delta") or (old["delta"] if old else
+                    editor.case.series[0]["delta"] if editor.case.series else 1.0)
+                editor.edit(lambda: editor.case.set_series(columns,rows,index,delta,name=name))
                 report = {}
-            series = editor.case.series
+            series = editor.case.get_series(name)
             out = editor.state()
-            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"]),
-                **report,**dropped}
+            out["imported"] = {"name":name,"replaced":bool(old),"steps":len(series["values"]),
+                "columns":len(series["columns"]),**report,**dropped}
             return jsonify(out)
 
     @app.post("/api/series")
     def set_series():
         data = body()
         with editor.lock:
+            name = data.get("name")
             if data.get("clear"):
-                editor.edit(lambda: editor.case.set_series(None))
+                if name is not None and not editor.case.get_series(name):
+                    raise CaseError(f"no series named '{name}'")
+                editor.edit(lambda: editor.case.set_series(None,name=name))
             else:
-                editor.edit(lambda: editor.case.set_series_delta(data.get("delta")))
+                editor.edit(lambda: editor.case.set_series_delta(data.get("delta"),name))
             return jsonify(editor.state())
 
     @app.get("/api/series/export")
     def export_series():
         fmt = request.args.get("format","csv").lstrip(".")
+        which = request.args.get("name")
         with editor.lock:
             if not editor.case.series:
                 raise CaseError("the case has no time series")
-            name = f"{editor.case.name or 'untitled'}_series.{fmt}"
-            content = dump_series(editor.case.series,name)
+            if which:
+                ser = editor.case.get_series(which)
+                if not ser:
+                    raise CaseError(f"no series named '{which}'")
+            else:
+                ser = editor.case.combined_series()
+            safe = re.sub(r"[^A-Za-z0-9_.-]+","_",ser["name"] if which else "series")
+            name = f"{editor.case.name or 'untitled'}_{safe}.{fmt}"
+            content = dump_series(ser,name)
         return Response(content,mimetype="application/octet-stream",headers={
             "Content-Disposition":f'attachment; filename="{name}"'})
 

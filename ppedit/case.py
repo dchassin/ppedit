@@ -50,7 +50,8 @@ bus `Pd` and `Qd`, generator and DC line `Pmin` and `Pmax` by time step,
 in columns named `table.column.key` (`bus.Pd.5` for bus 5, `gen.Pmax.2`
 for the second generator; `Case.set_series`). It is read from and written
 to the `series` key of `.py` and `.json` cases (not GLM), and `Case.solve`
-with `multistep=True` solves all steps as one cvxopf OPF.
+with `multistep=True` solves all steps as one cvxopf OPF. A case holds
+several named series, combined for the solve by `Case.combined_series`.
 `Case.set_series_panel` sets one value from a panel instead: steps in rows
 and one column per table row or geohash cell (located by bus geodata,
 `geohash`), sharing a cell's value among the elements in it.
@@ -149,6 +150,7 @@ References
 import ast
 import copy
 import csv
+import datetime
 import io
 import json
 import logging
@@ -570,11 +572,13 @@ class Case:
         """Bus locations: rows of `[BUS_I, LAT, LON, aux...]` (decimal degrees)"""
         self.geotags = []
         """Names of the auxiliary geodata values (columns after `LON`)"""
-        self.series = None
-        """Time series of case values for multistep OPF (issue #124), or
-        `None`: `index` (one label per step), `delta` (hours per step),
-        `columns` (names `table.column.key`, see `Case.set_series`) and
-        `values` (one row per step, one value per column)"""
+        self.series = []
+        """Time series of case values for multistep OPF (issue #124): a
+        list of named series, each `name`, `index` (one label per step),
+        `timed` (whether `index` came from a time column), `delta` (hours
+        per step), `columns` (names `table.column.key`, see
+        `Case.set_series`) and `values` (one row per step, one value per
+        column). Multistep OPF combines them (`Case.combined_series`)."""
         self.source = None
         """How `Case.load` read the case (`None` otherwise): `file` (base
         name), `format` (`py`, `json`, `glm` or `raw`), `revision` (PSS/E
@@ -621,13 +625,15 @@ class Case:
         self.geodata,self.geotags = _geo_from_ppc(data)
         series = data.get("series")
         if series:
-            if not isinstance(series,dict):
-                raise CaseError("series must be a dict with columns and values")
-            try:
-                self.set_series(series.get("columns"),series.get("values"),
-                    series.get("index"),series.get("delta",1.0))
-            except CaseError as err:
-                raise CaseError(f"series: {err}") from err
+            for n,ser in enumerate([series] if isinstance(series,dict) else series):
+                if not isinstance(ser,dict):
+                    raise CaseError("series must be a list of dicts with columns and values")
+                name = ser.get("name") or ("series" if n == 0 else f"series{n+1}")
+                try:
+                    self.set_series(ser.get("columns"),ser.get("values"),ser.get("index"),
+                        ser.get("delta",1.0),name=name,timed=ser.get("timed"))
+                except CaseError as err:
+                    raise CaseError(f"series '{name}': {err}") from err
 
     def _default_areas(self):
         """Areas rows rebuilt from the bus areas (see `_price_ref`)"""
@@ -776,6 +782,7 @@ class Case:
             "geodata": _jsonsafe(self.geodata),
             "geotags": list(self.geotags),
             "series": _jsonsafe(self.series),
+            "series_combined": self._combined_info(),
         }
 
     def dumps(self,fmt:str) -> str:
@@ -838,14 +845,18 @@ def {name}():
             out.write(",\n".join(f"        [{r}]" for r in rows))
             out.write(f"\n    ]\n    ppc[\"geotags\"] = {json.dumps(self.geotags)}\n")
         if self.series:
-            ser = self.series
             out.write("\n    ## time series of case values (multistep OPF; ppedit)\n"
-                f"    ppc[\"series\"] = {{\n        \"delta\": {_fmt(ser['delta'])},\n"
-                f"        \"index\": {json.dumps(ser['index'])},\n"
-                f"        \"columns\": {json.dumps(ser['columns'])},\n        \"values\": [\n")
-            out.write(",\n".join("            [" + ", ".join(_fmt(v) for v in row) + "]"
-                for row in ser["values"]))
-            out.write("\n        ],\n    }\n")
+                "    ppc[\"series\"] = [\n")
+            for ser in self.series:
+                out.write(f"        {{\n            \"name\": {json.dumps(ser['name'])},\n"
+                    f"            \"delta\": {_fmt(ser['delta'])},\n"
+                    f"            \"timed\": {'True' if ser['timed'] else 'False'},\n"
+                    f"            \"index\": {json.dumps(ser['index'])},\n"
+                    f"            \"columns\": {json.dumps(ser['columns'])},\n            \"values\": [\n")
+                out.write(",\n".join("                [" + ", ".join(_fmt(v) for v in row) + "]"
+                    for row in ser["values"]))
+                out.write("\n            ],\n        },\n")
+            out.write("    ]\n")
         out.write("\n    return ppc\n")
         return out.getvalue()
 
@@ -910,9 +921,10 @@ def {name}():
                 "reading this file rebuilds the rows with default price reference buses "
                 "and no names)\n")
         if self.series:
-            out.write(f"\n// time series ({len(self.series['values'])} steps, "
-                f"{len(self.series['columns'])} columns) not written: save as .py or .json "
-                "to keep it\n")
+            out.write(f"\n// {len(self.series)} time series ("
+                + ", ".join(f"{ser['name']}: {len(ser['values'])} steps, {len(ser['columns'])} columns"
+                    for ser in self.series)
+                + ") not written: save as .py or .json to keep them\n")
         return out.getvalue()
 
     def _dump_glm_dclinecost(self,out):
@@ -1426,14 +1438,17 @@ def {name}():
     # ----- time series (issue #124) -----
 
     def set_series(self,columns:list[str]|None,values:list[list]|None=None,
-            index:list|None=None,delta:float=1.0) -> dict|None:
-        """Set the time series of case values used by multistep OPF
+            index:list|None=None,delta:float=1.0,name:str|None=None,
+            timed:bool|None=None) -> dict|None:
+        """Add, replace or remove a time series of case values used by
+        multistep OPF
 
         Arguments
         ---------
 
           - `columns`: column names `table.column.key` (`None` or empty
-            clears the series): `table` and `column` as in `SERIES_COLUMNS`
+            removes the series `name`, or every series when `name` is
+            `None`): `table` and `column` as in `SERIES_COLUMNS`
             (`bus.Pd`, `bus.Qd`, `gen.Pmin`, `gen.Pmax`, `dcline.Pmin`,
             `dcline.Pmax`; case is ignored) and `key` the bus number
             (`bus_i`) for `bus`, else the row number counted from 1, as in
@@ -1447,6 +1462,14 @@ def {name}():
 
           - `delta`: hours per step (positive)
 
+          - `name`: the series to add or replace (default `series`); a case
+            holds several, which multistep OPF combines
+            (`Case.combined_series`)
+
+          - `timed`: whether `index` came from a time column (default: an
+            `index` was given); series with time labels are lined up by
+            time when combined
+
         Values not in the series keep their case values at every step. The
         series moves with the case: renumbering a bus renames its columns,
         deleting a bus, generator or DC line drops its columns, and adding
@@ -1456,7 +1479,7 @@ def {name}():
         Returns
         -------
 
-          - `dict`: the series as stored (`Case.series`), or `None`
+          - `dict`: the series as stored (an entry of `Case.series`), or `None`
 
         Exceptions
         ----------
@@ -1464,14 +1487,18 @@ def {name}():
           - `CaseError`: an unknown or repeated column, a bus or row that
             does not exist, a missing or non-finite value, rows of
             different lengths, more than `SERIES_STEPS` steps, labels that
-            do not match the steps, or `delta` not positive
+            do not match the steps, `delta` not positive, or a bad `name`
         """
         if not columns:
-            self.series = None
+            if name is None:
+                self.series = []
+            else:
+                self.series = [x for x in self.series if x["name"] != name]
             return None
+        name = self._series_name("series" if name is None else name)
         names = []
-        for name in columns:
-            table,column,key = self._series_part(name)
+        for col in columns:
+            table,column,key = self._series_part(col)
             names.append(f"{table}.{column}.{key}")
         dup = sorted({x for x in names if names.count(x) > 1})
         if dup:
@@ -1486,26 +1513,46 @@ def {name}():
                 raise CaseError(f"series step {t+1} has "
                     f"{len(row) if isinstance(row,(list,tuple)) else 'no'} values, expected {len(names)}")
             out = []
-            for name,v in zip(names,row):
+            for col,v in zip(names,row):
                 try:
                     x = float(v)
                 except (TypeError,ValueError):
                     x = math.nan
                 if not math.isfinite(x):
-                    raise CaseError(f"series step {t+1}, {name}: {v!r} is not a finite number")
+                    raise CaseError(f"series step {t+1}, {col}: {v!r} is not a finite number")
                 out.append(x)
             rows.append(out)
+        given = index is not None
         if index is None:
             index = [str(t+1) for t in range(len(rows))]
         if len(index) != len(rows):
             raise CaseError(f"the series has {len(index)} step labels for {len(rows)} steps")
-        self.series = {"index":[str(x) for x in index],"delta":self._series_delta(delta),
-            "columns":names,"values":rows}
-        return self.series
+        ser = {"name":name,"index":[str(x) for x in index],"timed":bool(given if timed is None else timed),
+            "delta":self._series_delta(delta),"columns":names,"values":rows}
+        old = [n for n,x in enumerate(self.series) if x["name"] == name]
+        if old:
+            self.series[old[0]] = ser
+        else:
+            self.series.append(ser)
+        return ser
+
+    @staticmethod
+    def _series_name(name) -> str:
+        text = str(name).strip()
+        if not text or len(text) > 64 or any(ord(c) < 32 for c in text):
+            raise CaseError(f"series name {name!r} must be 1 to 64 printable characters")
+        return text
+
+    def get_series(self,name:str|None=None) -> dict|None:
+        """Return the series `name` (the only one when `name` is `None` and
+        there is one), or `None`"""
+        if name is None:
+            return self.series[0] if len(self.series) == 1 else None
+        return next((x for x in self.series if x["name"] == name),None)
 
     def set_series_panel(self,table:str,column:str,keys:list,values:list[list],
             index:list|None=None,delta:float|None=None,keys_are:str="auto",
-            split:str="proportional",merge:bool=True) -> dict:
+            split:str="proportional",merge:bool=True,name:str|None=None) -> dict:
         """Set one case value by step from a panel: steps in rows, one
         column per table row or geohash cell
 
@@ -1533,9 +1580,11 @@ def {name}():
             their case values of `column` (equal shares when those are all
             zero), `equal`, or `copy` (the whole value to each)
 
-          - `merge`: add the panel to the current series (same number of
-            steps), replacing that value's columns for the elements the
-            panel covers; `False` replaces the series
+          - `merge`: add the panel to the series `name` if it exists (same
+            number of steps), replacing that value's columns for the
+            elements the panel covers; `False` replaces that series
+
+          - `name`: the series written (default `series`)
 
         Elements are located by their bus's geodata (the first row of the
         bus; a generator by its bus, a DC line by its from bus). Geohash
@@ -1647,25 +1696,30 @@ def {name}():
                 + ("located " if keys_are == "geohash" else "") + f"{table} element")
         new = [f"{table}.{column}.{key}" for _,key,_ in parts]
         new_values = [[r[j]*share for j,_,share in parts] for r in rows]
-        if merge and self.series:
-            ser = self.series
+        name = self._series_name("series" if name is None else name)
+        ser = self.get_series(name)
+        if merge and ser:
             if len(ser["values"]) != len(rows):
-                raise CaseError(f"the panel has {len(rows)} steps but the series has "
+                raise CaseError(f"the panel has {len(rows)} steps but series '{name}' has "
                     f"{len(ser['values'])}; replace the series instead")
             keep = [j for j,c in enumerate(ser["columns"]) if c not in new]
             columns = [ser["columns"][j] for j in keep] + new
             merged = [[old[j] for j in keep] + add for old,add in zip(ser["values"],new_values)]
-            self.set_series(columns,merged,ser["index"],ser["delta"] if delta is None else delta)
+            self.set_series(columns,merged,ser["index"],ser["delta"] if delta is None else delta,
+                name=name,timed=ser["timed"])
         else:
-            self.set_series(new,new_values,index,1.0 if delta is None else delta)
+            self.set_series(new,new_values,index,1.0 if delta is None else delta,name=name)
         return {"columns":len(new),"keys":len({j for j,_,_ in parts}),"ignored":ignored,
             "unlocated":unlocated}
 
-    def set_series_delta(self,delta:float):
-        """Set the hours per step of the series (`CaseError` if there is none)"""
-        if not self.series:
-            raise CaseError("the case has no time series")
-        self.series["delta"] = self._series_delta(delta)
+    def set_series_delta(self,delta:float,name:str|None=None):
+        """Set the hours per step of the series `name` (`None`: the only
+        one); `CaseError` if there is no such series"""
+        ser = self.get_series(name)
+        if not ser:
+            raise CaseError("the case has no time series" if not self.series else
+                f"no series named '{name}'" if name is not None else "name the series (the case has several)")
+        ser["delta"] = self._series_delta(delta)
 
     @staticmethod
     def _series_delta(delta):
@@ -1700,25 +1754,112 @@ def {name}():
     def _series_rekey(self,table,func) -> bool:
         """Change the keys of the `table` series columns by `func(key)`
         (`None` drops the column); return whether any changed"""
-        if not self.series:
-            return False
-        keep,names,changed = [],[],False
-        for j,name in enumerate(self.series["columns"]):
-            t,column,key = name.split(".")
-            new = func(int(key)) if t == table else int(key)
-            if new is None:
+        changed = False
+        for ser in list(self.series):
+            keep,names,this = [],[],False
+            for j,name in enumerate(ser["columns"]):
+                t,column,key = name.split(".")
+                new = func(int(key)) if t == table else int(key)
+                if new is None:
+                    this = True
+                    continue
+                this |= new != int(key)
+                keep.append(j)
+                names.append(f"{t}.{column}.{new}")
+            if this:
                 changed = True
-                continue
-            changed |= new != int(key)
-            keep.append(j)
-            names.append(f"{t}.{column}.{new}")
-        if changed:
-            if not names:
-                self.series = None
-            else:
-                self.series["columns"] = names
-                self.series["values"] = [[row[j] for j in keep] for row in self.series["values"]]
+                if not names:
+                    self.series.remove(ser)
+                else:
+                    ser["columns"] = names
+                    ser["values"] = [[row[j] for j in keep] for row in ser["values"]]
         return changed
+
+    def combined_series(self) -> dict|None:
+        """Return the series combined into one horizon for multistep OPF, or
+        `None` when there is none
+
+        When every series has time labels (`timed`), steps are lined up by
+        time: the labels are read as ISO dates and times when they all are
+        (else compared as text), and only the times present in every series
+        are kept, in the order of the first series. When no series has time
+        labels, steps are lined up by number, and all series must have the
+        same number of steps. The result has the first series' labels and
+        the `delta` all series share, `columns` and `values` of all series
+        side by side, `aligned` (`single`, `time` or `step`) and `used`
+        (steps kept from each series, by name).
+
+        Exceptions
+        ----------
+
+          - `CaseError`: some series have time labels and others do not,
+            different step counts (by number) or step lengths, no time
+            common to all series, or two series giving the same column
+        """
+        if not self.series:
+            return None
+        first = self.series[0]
+        owner = {}
+        for ser in self.series:
+            for c in ser["columns"]:
+                if c in owner:
+                    raise CaseError(f"series '{owner[c]}' and '{ser['name']}' both give {c}; "
+                        "remove it from one of them")
+                owner[c] = ser["name"]
+        deltas = {ser["delta"] for ser in self.series}
+        if len(deltas) > 1:
+            raise CaseError("the series have different step lengths ("
+                + ", ".join(f"{ser['name']}: {ser['delta']:g} h" for ser in self.series) + ")")
+        if len(self.series) == 1:
+            return {**copy.deepcopy(first),"aligned":"single",
+                "used":{first["name"]:len(first["values"])}}
+        timed = [ser["timed"] for ser in self.series]
+        if any(timed) and not all(timed):
+            raise CaseError("series " + ", ".join(f"'{ser['name']}'" for ser in self.series if ser["timed"])
+                + " have time labels but " + ", ".join(f"'{ser['name']}'" for ser in self.series
+                if not ser["timed"]) + " do not: import all with a time column or none")
+        columns = [c for ser in self.series for c in ser["columns"]]
+        if not any(timed):
+            counts = {len(ser["values"]) for ser in self.series}
+            if len(counts) > 1:
+                raise CaseError("series without time labels are combined step by step and need the "
+                    "same number of steps (" + ", ".join(f"{ser['name']}: {len(ser['values'])}"
+                    for ser in self.series) + ")")
+            values = [sum((ser["values"][t] for ser in self.series),[]) for t in range(len(first["values"]))]
+            return {"name":first["name"],"index":list(first["index"]),"timed":False,"delta":first["delta"],
+                "columns":columns,"values":values,"aligned":"step",
+                "used":{ser["name"]:len(ser["values"]) for ser in self.series}}
+        def parse(label):
+            try:
+                return datetime.datetime.fromisoformat(label.strip())
+            except ValueError:
+                return None
+        parsed = [[parse(x) for x in ser["index"]] for ser in self.series]
+        dates = all(x is not None for p in parsed for x in p)
+        if dates and len({x.tzinfo is None for p in parsed for x in p}) > 1:
+            dates = False  # mixed zone-aware and naive times compare as text
+        keys = [p if dates else [x.strip() for x in ser["index"]] for p,ser in zip(parsed,self.series)]
+        where = [{k:t for t,k in enumerate(ks)} for ks in keys]
+        common = [t for t,k in enumerate(keys[0]) if all(k in w for w in where[1:])]
+        if not common:
+            raise CaseError("the series have no time in common (" + ", ".join(
+                f"{ser['name']}: {ser['index'][0]} to {ser['index'][-1]}" for ser in self.series) + ")")
+        values = [sum((ser["values"][w[keys[0][t]]] for ser,w in zip(self.series,where)),[]) for t in common]
+        return {"name":first["name"],"index":[first["index"][t] for t in common],"timed":True,
+            "delta":first["delta"],"columns":columns,"values":values,"aligned":"time",
+            "used":{ser["name"]:len(common) for ser in self.series}}
+
+    def _combined_info(self) -> dict|None:
+        """Summary of `combined_series` for the browser: `steps`, `columns`,
+        `aligned`, `index` (first and last label) or `error`"""
+        if not self.series:
+            return None
+        try:
+            ser = self.combined_series()
+        except CaseError as err:
+            return {"error":str(err)}
+        return {"steps":len(ser["values"]),"columns":len(ser["columns"]),"aligned":ser["aligned"],
+            "delta":ser["delta"],"first":ser["index"][0],"last":ser["index"][-1]}
 
     def series_values(self,table:str,column:str) -> list[list[float]]:
         """Return the values of `table.column` at every step of the series:
@@ -1727,30 +1868,32 @@ def {name}():
         names = [c["name"] for c in COLUMNS[table]]
         k = names.index(column)
         base = [r[k] for r in self.tables[table]]
-        if not self.series:
+        ser = self.combined_series()
+        if not ser:
             return [base]
-        rows = [list(base) for _ in self.series["values"]]
+        rows = [list(base) for _ in ser["values"]]
         where = {r[0]:n for n,r in enumerate(self.tables["bus"])}
-        for j,name in enumerate(self.series["columns"]):
+        for j,name in enumerate(ser["columns"]):
             t,c,key = name.split(".")
             if t != table or c != column:
                 continue
             n = where[int(key)] if t == "bus" else int(key) - 1
-            for row,values in zip(rows,self.series["values"]):
+            for row,values in zip(rows,ser["values"]):
                 row[n] = values[j]
         return rows
 
     def at_step(self,step:int) -> "Case":
         """Return a copy of the case with the series values of `step`
         (counted from 0); the copy has no series"""
-        if not self.series or not 0 <= step < len(self.series["values"]):
+        ser = self.combined_series()
+        if not ser or not 0 <= step < len(ser["values"]):
             raise CaseError(f"the case has no series step {step+1}")
         case = Case(name=self.name)
         case.version,case.baseMVA = self.version,self.baseMVA
         case.tables = copy.deepcopy(self.tables)
         case.geodata,case.geotags = copy.deepcopy(self.geodata),list(self.geotags)
         where = {r[0]:n for n,r in enumerate(self.tables["bus"])}
-        for name,value in zip(self.series["columns"],self.series["values"][step]):
+        for name,value in zip(ser["columns"],ser["values"][step]):
             table,column,key = name.split(".")
             n = where[int(key)] if table == "bus" else int(key) - 1
             k = [c["name"] for c in COLUMNS[table]].index(column)
@@ -1760,7 +1903,8 @@ def {name}():
     def _series_input(self) -> dict:
         """Per-step case values for `ppedit._cvxopf.runopf` (`series` argument);
         `CaseError` when a step has `Pmin > Pmax`"""
-        out = {"T":len(self.series["values"]),"delta":self.series["delta"]}
+        ser = self.combined_series()
+        out = {"T":len(ser["values"]),"delta":ser["delta"],"index":list(ser["index"])}
         for table,column in (("bus","Pd"),("bus","Qd"),("gen","Pmin"),("gen","Pmax"),
                 ("dcline","Pmin"),("dcline","Pmax")):
             key = column if table == "bus" else f"{table}_{column}"
@@ -1769,9 +1913,9 @@ def {name}():
             for n in range(len(self.tables[table])):
                 for t,(lo,hi) in enumerate(zip(out[f"{table}_Pmin"],out[f"{table}_Pmax"])):
                     if lo[n] > hi[n]:
-                        raise CaseError(f"series step {t+1} ({self.series['index'][t]}): "
+                        raise CaseError(f"series step {t+1} ({ser['index'][t]}): "
                             f"{table} {n+1} has Pmin {lo[n]:g} > Pmax {hi[n]:g}")
-        out["gen_limited"] = sorted({int(x.split(".")[2]) - 1 for x in self.series["columns"]
+        out["gen_limited"] = sorted({int(x.split(".")[2]) - 1 for x in ser["columns"]
             if x.startswith("gen.")})
         return out
 
@@ -2127,7 +2271,8 @@ def {name}():
             opt = ppoption(OPF_ALG=OPF_SOLVERS[algorithm][2],VERBOSE=0,OUT_ALL=0)
         info = {"kind":kind,"algorithm":algorithm,"solver":algs[algorithm][0],"dc":dc,
             "options":cvx_options,"multistep":None if series is None else
-                {"steps":series["T"],"delta":series["delta"],"index":list(self.series["index"])}}
+                {"steps":series["T"],"delta":series["delta"],"index":series["index"],
+                 "series":[x["name"] for x in self.series]}}
         log = io.StringIO()
         messages = []
         def message(level,text,detail=None):
@@ -2192,7 +2337,7 @@ def {name}():
         common = log.getvalue()
         steps = []
         for t,step in enumerate(res["steps"]):
-            label = self.series["index"][t]
+            label = series["index"][t]
             slog = io.StringIO()
             slog.write(f"Step {t+1} of {len(res['steps'])} ({label})\n")
             out = self.at_step(t)._solution(step,kind,cvx,info,opt,slog,dead) # pylint: disable=protected-access

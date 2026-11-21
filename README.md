@@ -237,8 +237,18 @@ In the editor:
     `Case.solve(kind,algorithm,options)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
-  - **Series**: a time series of case values for multistep OPF (issue
-    #124), read with **Import…** from a data file (same formats as the
+  - **Series**: time series of case values for multistep OPF (issue
+    #124). A case holds several named series: each import adds one,
+    named after the file unless the dialog names it (an existing name is
+    replaced, or for a panel added to). The *Series* picker shows one
+    series, or *All combined* lists them; step length, Export and Remove
+    act on the series shown. Multistep OPF combines all series: by time
+    when every series was imported with a time column (only the times
+    common to all are solved; ISO dates and times are compared as times,
+    other labels as text), else step by step (all must have the same
+    number of steps). Two series may not give the same value (e.g. both
+    `bus.Pd.5`), and all must have the same step length; the tab says why
+    when they cannot be combined. Each series is read with **Import…** from a data file (same formats as the
     tables) with one row per time step: an optional label column (`time`,
     `timestamp`, `date`, `step` or `index`) and one column per value,
     named `bus.Pd.N` or `bus.Qd.N` (bus number `N`), `gen.Pmin.N` or

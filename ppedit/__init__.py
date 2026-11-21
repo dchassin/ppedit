@@ -99,7 +99,11 @@ Given a case file, `ppedit.Case` is expected to satisfy:
      (`Case.set_series_panel`): steps in rows and one column per table row
      number or geohash cell, a cell's value shared among the elements whose
      bus geodata lies in it (in proportion to their case values, equally,
-     or whole to each).
+     or whole to each). A case holds several named series (one per import,
+     e.g. a load profile and a generator limit profile); multistep OPF
+     combines them (`Case.combined_series`): by time when every series has
+     a time column (the times common to all), else step by step (same
+     number of steps), and two series may not give the same value.
 
 The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
 read and edit the case through the same checked, undoable edits as the

@@ -13,6 +13,7 @@ const S = {
   tableSort: {},       // case table -> {col, dir} (see tableOrder)
   claude: null,        // Claude sessions from /api/claude
   step: 0,             // step of a multistep solution shown (issue #124, stepView)
+  seriesName: null,    // series shown on the Series tab ("" = all combined; currentSeries)
   issueOpen: null,     // message of the solver warning whose detail is open (Issues tab)
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
@@ -285,11 +286,13 @@ function renderChrome() {
     if (document.activeElement !== el) el.value = el.id === "baseMVA" ? c.baseMVA : c.version;
   }
   for (const t of S.meta.tables) $(`[data-count="${t}"]`).textContent = c.tables[t].length;
-  $("#series-count").textContent = c.series ? c.series.values.length : "";
+  const comb = c.series_combined;
+  $("#series-count").textContent = c.series.length ? (comb && comb.steps ? comb.steps : "!") : "";
   $$("#opf-menu [data-multistep]").forEach(b => {
-    b.disabled = !c.series;
-    b.title = c.series ? `Solve the ${c.series.values.length} steps of the time series as one OPF`
-      : "Import a time series on the Series tab first";
+    b.disabled = !comb || !!comb.error;
+    b.title = !comb ? "Import a time series on the Series tab first"
+      : comb.error ? `The series cannot be combined: ${comb.error}`
+      : `Solve the ${comb.steps} steps of the ${c.series.length > 1 ? `${c.series.length} combined series` : "time series"} as one OPF`;
   });
   // Issues tab: case issues plus the last solve's messages (issue #89); red
   // dot for errors, yellow for warnings only
@@ -418,28 +421,54 @@ function seriesTitle(name) {
   const row = c.tables[table][+key - 1];
   return `${TABLE_TITLES[table]} ${key}` + (row ? (table === "gen" ? ` at bus ${row[0]}` : ` ${row[0]}–${row[1]}`) : "") + ` ${column} (${unit})`;
 }
+// The case holds several named series (state.case.series), combined for
+// multistep OPF (state.case.series_combined: steps, aligned or error). The
+// tab shows one (S.seriesName) or, with "", the combined summary.
+function currentSeries() {
+  const all = S.state.case.series;
+  if ((S.seriesName === "" && all.length < 2) || (S.seriesName !== "" && !all.some(x => x.name === S.seriesName)))
+    S.seriesName = all.length ? all[0].name : null;
+  return all.find(x => x.name === S.seriesName) || null;
+}
 function renderSeries() {
-  const ser = S.state.case.series, exts = S.meta.table_formats || [];
+  const all = S.state.case.series, comb = S.state.case.series_combined, exts = S.meta.table_formats || [];
+  const ser = currentSeries();
+  const pick = $("#series-pick");
+  pick.replaceChildren(...all.map(x => h("option", { value: x.name, selected: x === ser }, `${x.name} (${x.values.length})`)),
+    ...(all.length > 1 ? [h("option", { value: "", selected: S.seriesName === "" }, "All combined")] : []));
+  pick.disabled = !all.length;
   const item = x => h("button", { "data-action": "series-export", "data-format": x, role: "menuitem" }, x.slice(1));
-  $("#series-export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"), ...exts.map(item));
+  $("#series-export-menu").replaceChildren(h("div", { class: "sep" }, ser ? `Export ${ser.name} as` : "Export combined as"), ...exts.map(item));
   $("#series-input").accept = readFormats().join(",");
-  $("#series-export-btn").disabled = $("#series-clear").disabled = !ser;
+  $("#series-export-btn").disabled = !all.length || (!ser && comb && !!comb.error);
+  $("#series-clear").disabled = !all.length;
+  $("#series-clear").textContent = ser ? "Remove series" : "Remove all";
   const d = $("#series-delta");
   d.disabled = !ser;
   if (document.activeElement !== d) d.value = ser ? ser.delta : "";
-  $("#series-hint").textContent = ser
-    ? `${ser.values.length} step(s) × ${ser.columns.length} value(s), ${fmt(ser.values.length * ser.delta, 6).replace(/\.?0+$/, "")} h in all`
-    : "";
+  $("#series-hint").replaceChildren(...(!all.length ? [] : [
+    ser ? `${ser.values.length} step(s) × ${ser.columns.length} value(s)${ser.timed ? "" : ", no time labels"}. ` : "",
+    comb.error ? h("span", { class: "err-text" }, `Multistep OPF: ${comb.error}`)
+      : `Multistep OPF uses ${comb.steps} step(s) × ${comb.columns} value(s)` + (all.length > 1 ? ` from ${all.length} series, aligned by ${comb.aligned === "time" ? "time" : "step number"}` : "")
+        + `, ${comb.first} to ${comb.last}.`]));
   const format = h("div", { class: "hint series-format" },
     "A series file has one row per time step: an optional label column (named time, timestamp, date, step or index) ",
     "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
     "for generator row N, dcline.Pmin.N and dcline.Pmax.N for DC line row N (rows counted from 1). Values not in the file keep ",
     "their case values at every step. Import ▾ › Panel… reads instead a file with one column per table row number or geohash cell, ",
     "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
-    "The series is saved with .py and .json cases (not .glm).");
-  if (!ser) {
+    "A case holds several series (one per import, named after the file unless named in the dialog); multistep OPF combines them: by time when all have a time column, ",
+    "else step by step (same number of steps). Two series may not give the same value. The series are saved with .py and .json cases (not .glm).");
+  if (!all.length) {
     $("#series-body").replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No time series"),
       exts.length ? "Import a CSV, Excel or other data file with the values by step." : TABLE_IO_NONE), format);
+    return;
+  }
+  if (!ser) {
+    $("#series-body").replaceChildren(format, h("div", { class: "table-wrap" }, h("table", { class: "series-table" },
+      h("thead", {}, h("tr", {}, ...["series", "steps", "values", "time labels", "first", "last", "h per step"].map(x => h("th", {}, x)))),
+      h("tbody", {}, all.map(x => h("tr", {}, h("td", {}, x.name), h("td", {}, x.values.length), h("td", {}, x.columns.length),
+        h("td", {}, x.timed ? "yes" : "no"), h("td", {}, x.index[0]), h("td", {}, x.index[x.index.length - 1]), h("td", {}, x.delta)))))));
     return;
   }
   const rows = ser.values.slice(0, SERIES_SHOW).map((v, t) => h("tr", {}, h("td", { class: "rowhead" }, t + 1),
@@ -454,15 +483,17 @@ async function importSeries(file) {
   const data = await fileBase64(file), opt = S.importReq || {}, panel = opt.panel;
   S.importReq = null;
   const req = { filename: file.name, data, dropna: S.dropna, range: opt.range || "", start: opt.start || "", end: opt.end || "",
-    scale: opt.scale || "", offset: opt.offset || "" };
+    scale: opt.scale || "", offset: opt.offset || "", name: opt.name || "" };
   if (panel) req.panel = panel;
   const st = await act("/api/series/import", req);
   const im = st.imported;
+  S.seriesName = im.name;
+  renderSeries();
   const scaled = im.scaled ? `; values × ${im.scaled.scale} + ${im.scaled.offset}` : "";
-  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${selectedText(im.selected)}${droppedText(im.dropped)}${scaled} (Ctrl+Z to undo)`);
+  if (!panel) return toast(`${im.replaced ? "Replaced" : "Added"} series ${im.name}: ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${selectedText(im.selected)}${droppedText(im.dropped)}${scaled} (Ctrl+Z to undo)`);
   const extra = selectedText(im.selected) + droppedText(im.dropped) + scaled + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
     + (im.unlocated ? `; ${im.unlocated} ${panel.table} row(s) without geodata left out` : "");
-  toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
+  toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name} into series ${im.name} (${im.columns} value(s))${extra} (Ctrl+Z to undo)`);
 }
 
 // file extensions the server reads (table and series import), compressed forms included
@@ -494,7 +525,7 @@ function openImportDialog(mode) {
   table.addEventListener("change", fill); fill();
   const keys = sel("panel-keys", [["auto", "Automatic (digits: rows)"], ["row", "Row numbers (from 1)"], ["geohash", "Geohashes"]], prev.keys || "auto");
   const split = sel("panel-split", [["proportional", "In proportion to case values"], ["equal", "Equally"], ["copy", "Whole value to each"]], prev.split || "proportional");
-  const merge = h("input", { type: "checkbox", id: "panel-merge", checked: !!ser, disabled: !ser });
+  const merge = h("input", { type: "checkbox", id: "panel-merge", checked: prev.merge ?? true });
   // file format: limits the file chooser to one format (and its compressed forms)
   // csv and tsv also list each compressed form (csv.gz, tsv.zip, ...) as a choice of its own
   const ZIP = { ".gz": "gzip", ".bz2": "bzip2", ".xz": "xz", ".zip": "zip", ".zst": "zstd" };
@@ -510,15 +541,17 @@ function openImportDialog(mode) {
   const range = text("import-range", prev.range, "all, or e.g. 1-24, 25-, -100");
   const start = text("import-start", prev.start, "e.g. 2026-07-01 or 2026-07-01 06:00");
   const end = text("import-end", prev.end, "e.g. 2026-07-07 (whole day)");
+  const sname = text("import-name", mode === "panel" ? (S.seriesName || prev.panelName || "") : "", "the file name");
   const scale = h("input", { id: "import-scale", class: "num", value: prev.scale ?? "", placeholder: "1", size: 10, "aria-label": "Scale" });
   const offset = h("input", { id: "import-offset", class: "num", value: prev.offset ?? "", placeholder: "0", size: 10, "aria-label": "Offset" });
   const label = (txt, el, hint) => h("label", { class: "panel-row" }, h("span", {}, txt), el, hint ? h("span", { class: "hint" }, hint) : null);
   const go = h("button", { class: "primary", onclick: () => {
     const c = S.importChoice = { ...prev, format: format.value, range: range.value.trim() };
     if (mode !== "table") Object.assign(c, { start: start.value.trim(), end: end.value.trim(), scale: scale.value.trim(), offset: offset.value.trim() });
-    if (mode === "panel") Object.assign(c, { table: table.value, column: column.value, keys: keys.value, split: split.value });
+    if (mode === "panel") Object.assign(c, { table: table.value, column: column.value, keys: keys.value, split: split.value, panelName: sname.value.trim() });
+    c.merge = merge.checked;
     S.importReq = { mode, range: c.range, start: mode === "table" ? "" : c.start, end: mode === "table" ? "" : c.end,
-      scale: mode === "table" ? "" : c.scale, offset: mode === "table" ? "" : c.offset,
+      scale: mode === "table" ? "" : c.scale, offset: mode === "table" ? "" : c.offset, name: mode === "table" ? "" : sname.value.trim(),
       panel: mode === "panel" ? { table: c.table, column: c.column, keys: c.keys, split: c.split, merge: merge.checked } : null };
     d.close();
     const input = $(mode === "table" ? "#table-input" : "#series-input");
@@ -534,6 +567,8 @@ function openImportDialog(mode) {
     : mode === "series" ? "A series file has one row per time step (an optional time column first) and one column per value named table.column.key (e.g. bus.Pd.5). It replaces the current series."
     : "A panel file has one row per time step (an optional time column first) and one column per table row number (counted from 1; for buses the row, not the bus number) or geohash cell. Every column gives the value chosen here.";
   d.replaceChildren(h("h2", { id: "panel-title" }, IMPORT_TITLES[mode]), h("p", { class: "summary" }, what),
+    ...(mode !== "table" ? [label("Series name", sname, mode === "panel" ? "the series written (blank: the file name); with the box below checked, the panel is added to it if it exists"
+      : "added, or replacing the series of that name (blank: the file name)")] : []),
     ...(mode === "panel" ? [label("Table", table), label("Value", column), label("Columns are", keys),
       label("Share a geohash cell", split, "among the elements located in it (by bus geodata)")] : []),
     label("File format", format, "the formats the server can read; the file chooser shows only the one chosen"),
@@ -542,7 +577,7 @@ function openImportDialog(mode) {
       label("Scale", scale), label("Offset", offset, "each value read becomes value × scale + offset (e.g. scale 0.001 for kW to MW)"
         + (mode === "panel" ? "; applied before a geohash cell is shared" : ""))] : []),
     label("Missing values", dropnaSelect("panel-dropna"), "dropped when the file is read (also on the Settings tab)"),
-    ...(mode === "panel" ? [label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet")] : []),
+    ...(mode === "panel" ? [label("Add to the series if it exists", merge, "same number of steps; replaces this value for the elements in the panel")] : []),
     h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));
   d.showModal();
   go.focus();
@@ -554,7 +589,9 @@ function selectedText(sel) {
 async function exportSeries(ext) {
   const id = busyStart("/api/series/export");
   try {
-    const res = await fetch("/api/series/export?" + new URLSearchParams({ format: ext.replace(/^\./, "") }));
+    const q = { format: ext.replace(/^\./, "") };
+    if (S.seriesName) q.name = S.seriesName;
+    const res = await fetch("/api/series/export?" + new URLSearchParams(q));
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
     const name = ((res.headers.get("Content-Disposition") || "").match(/filename="([^"]+)"/) || [])[1] || "series" + ext;
     const url = URL.createObjectURL(await res.blob());
@@ -3294,7 +3331,9 @@ async function onAction(btn) {
     else if (a === "series-panel") openImportDialog("panel");
     else if (a === "series-export") await exportSeries(btn.dataset.format);
     else if (a === "series-clear") {
-      if (confirm("Remove the time series from this case? Undo restores it.")) await act("/api/series", { clear: true });
+      const one = currentSeries();
+      if (confirm(one ? `Remove series ${one.name} from this case? Undo restores it.` : "Remove every time series from this case? Undo restores them."))
+        await act("/api/series", one ? { clear: true, name: one.name } : { clear: true });
     }
     else if (a === "claude-new") await newClaudeSession();
     else if (a === "exit") await exitServer();
@@ -3622,7 +3661,8 @@ async function init() {
     if (f) importSeries(f).catch(() => { /* toast already shown */ });
   });
   const delta = $("#series-delta");
-  delta.addEventListener("change", () => act("/api/series", { delta: delta.value }).catch(() => renderSeries()));
+  delta.addEventListener("change", () => act("/api/series", { delta: delta.value, name: S.seriesName }).catch(() => renderSeries()));
+  $("#series-pick").addEventListener("change", e => { S.seriesName = e.target.value; renderSeries(); });
   delta.addEventListener("keydown", e => { if (e.key === "Enter") delta.blur(); });
   $("#geodata-input").addEventListener("change", e => {
     const f = e.target.files[0]; e.target.value = "";

@@ -275,7 +275,11 @@ API key to start sessions; tests use a fake client).
   time-varying generator limits as of cvxopf fd4d279 (2026-11-18); they
   only work with the default preparation (the prepared solve rebuilds the
   problem). Switch to cvxopf's own input if it adds one. The diagram still
-  draws case loads for a multistep step. Panels (decision #60,
+  draws case loads for a multistep step. `Case.series` is a list of named
+  series combined by `Case.combined_series` (used by `series_values`,
+  `at_step`, `_series_input`); state `series_combined` carries its summary
+  or error, and `currentSeries()`/`S.seriesName` pick the one shown.
+  Panels (decision #60,
   `Case.set_series_panel`, `geohash` in `case.py`, `panel` of
   `/api/series/import`, `openPanelDialog` in `app.js`) locate elements by
   the first geodata row of their bus and match geohash cells by prefix of a
