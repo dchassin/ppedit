@@ -185,7 +185,7 @@ In the editor:
     rows as one; the format comes from the file extension: `.csv`,
     `.tsv`, `.json` (each optionally compressed as `.gz`, `.bz2`, `.xz`,
     `.zip`), `.parquet` and `.feather` (need `pyarrow`), `.xlsx` (needs
-    `openpyxl`). **Import…** (here and on the Series tab) also reads the
+    `openpyxl`). **Import…** (here and on the Multistep tab) also reads the
     other formats pandas reads, when their engine is installed: `.jsonl`
     and `.ndjson`, `.xml`, `.html` (first table; `lxml`), `.fwf`
     (fixed-width text), `.xlsm`, `.xls`, `.xlsb` and `.ods`
@@ -237,7 +237,7 @@ In the editor:
     `Case.solve(kind,algorithm,options)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
-  - **Series**: time series of case values for multistep OPF (issue
+  - **Multistep**: time series of case values for multistep OPF (issue
     #124). A case holds several named series: each import adds one,
     named after the file unless the dialog names it (an existing name is
     replaced, or for a panel added to). The *Series* picker shows one

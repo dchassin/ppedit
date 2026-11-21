@@ -89,7 +89,7 @@ Given a case file, `ppedit.Case` is expected to satisfy:
   6. **Time series.** A case may carry a time series of bus `Pd`/`Qd`,
      generator `Pmin`/`Pmax` and DC line `Pmin`/`Pmax` by step
      (`Case.series`, set with `Case.set_series` or read from a data file on
-     the *Series* tab; issue #124). It is saved in `.py` and `.json` cases
+     the *Multistep* tab; issue #124). It is saved in `.py` and `.json` cases
      (not GLM) and follows the case as references do: renumbering a bus
      renames its columns, and deleting buses, generators or DC lines drops
      their columns and renumbers the rows after them. *Run OPF ▾ ›
@@ -130,9 +130,9 @@ The page takes optional URL parameters, so another tool can open it ready to
 show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver
 when the page loads (`&algorithm=NAME` picks a PF algorithm or OPF solver as
 in `POST /api/solve`, else the default), and `?view=NAME` opens the tab
-`NAME` (`network`, `case`, `series`, `results`, `issues`, `claude`,
-`settings`, or a table name such as `bus`; `tables`, the Case tab's former
-name, also opens it).
+`NAME` (`network`, `case`, `multistep`, `results`, `issues`, `claude`,
+`settings`, or a table name such as `bus`; the former tab names `tables`
+and `series` open the Case and Multistep tabs).
 Unknown values are ignored, and a solver error is shown as usual.
 
 Each case table can be imported from and exported to a data file

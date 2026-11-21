@@ -9,7 +9,7 @@ the generator rows of `wecc240_2020.py`:
     timestamp,1,2,...
     2018-01-01 00:00:00+00:00,...
 
-one column per generator row (counted from 1), to be read on the Series tab
+one column per generator row (counted from 1), to be read on the Multistep tab
 with *Import ▾ › Panel…* (table gen, value Pmax, columns are row numbers).
 
 Method
