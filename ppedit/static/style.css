@@ -515,3 +515,20 @@ dialog.server-down .command code {
   border-radius: 5px; overflow-wrap: anywhere; user-select: all;
 }
 dialog.server-down .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; margin-top: 12px; }
+
+/* Series tab and multistep results (issue #124) */
+.table-tools label.inline { display: flex; gap: 4px; align-items: center; margin-left: 8px; }
+.series-body { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.series-format { margin: 8px 14px; max-width: 900px; }
+.series-table td { padding: 3px 8px; text-align: right; font-family: var(--mono); font-size: 12px; white-space: nowrap; }
+.series-table td.rowhead { padding: 0 8px; }
+.step-picker { display: flex; gap: 6px; align-items: center; margin-bottom: 10px; }
+.step-picker .hint { margin-left: 4px; }
+.res-block td.current { background: var(--sel); }
+dialog.panel-dialog { width: 520px; }
+.panel-dialog .panel-row { display: grid; grid-template-columns: 170px 1fr; gap: 4px 10px; align-items: center; margin: 8px 0; }
+.panel-dialog .panel-row .hint { grid-column: 2; font-size: 12px; }
+.panel-dialog .close-row { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.panel-dialog .panel-row input[type="checkbox"] { justify-self: start; }
+.panel-dialog .panel-row select, .panel-dialog .panel-row input.text { width: 100%; min-width: 0; box-sizing: border-box; }
+.panel-dialog .panel-row input.num { justify-self: start; width: 10em; }

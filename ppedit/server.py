@@ -35,7 +35,10 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     the read-only extended columns a solution adds to the tables), tables,
     built-in case names, formats (written),
     input formats (read), table data formats (`table_formats`: file
-    extensions `POST /api/table/import` and `GET /api/table/export` accept),
+    extensions `GET /api/table/export` and `GET /api/series/export` write;
+    `table_read_formats`: those and the other pandas formats
+    `POST /api/table/import` and `POST /api/series/import` read, see
+    `ppedit._tableio`),
     solvers (`ppedit.case.solvers`: the PF algorithms,
     the installed OPF solvers and the cvxopf solve option choices), version,
     `about` (package metadata shown when the page's "ppedit" title is
@@ -63,27 +66,67 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `loads_off` lists the loads switched off as `[bus, Pd, Qd]`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
-  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?}`
+  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?, "dropna"?, "range"?}`
     read table data from a file (`data`: its contents in base64; the
     format comes from the `filename` extension, see
     `ppedit._tableio.table_format`) and append the rows, or replace the
     rows listed in `rows` (see `ppedit.Case.import_rows`); the state has
-    `imported` (`{"added"|"replaced": n, "cascade"}`)
+    `imported` (`{"added"|"replaced": n, "cascade"}`). `dropna` drops
+    missing values when the file is read (see `ppedit._tableio.read_rows`),
+    and `imported` then has `dropped` (`{"rows", "columns"}`); `range`
+    keeps only those data rows of the file, counted from 1 (`N`, `A-B`,
+    `A-`, `-B`), and `imported` then has `selected` (`{"rows", "of"}`)
   - `GET  /api/table/export?table=...&format=csv&rows=1,2`: download the
     rows of a table (`rows`: comma-separated row indexes, default all) as
     a data file in the format of the extension `format` (e.g. `csv`,
     `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
+  - `POST /api/series/import`: `{"filename", "data", "name"?, "delta"?,
+    "dropna"?, "range"?, "start"?, "end"?, "scale"?, "offset"?}` read a
+    time series of case values from a file (`data`: its contents in
+    base64; see `ppedit._tableio.read_series`) into the series `name`
+    (default: the file name without extensions), added or replaced
+    (`ppedit.Case.set_series`; a case holds several, combined for
+    multistep OPF by `ppedit.Case.combined_series`; `delta`, hours per
+    step, defaults to that of the series replaced, else of the first
+    series, else 1); the state has `imported` (`{"name", "replaced",
+    "steps", "columns"}`). With `"panel": {"table", "column", "keys"?, "split"?,
+    "merge"?}` the file is a panel instead: steps in rows and one column per
+    table row number or geohash, all giving `table.column`
+    (`ppedit.Case.set_series_panel`; `keys` `auto`|`row`|`geohash`,
+    `split` `proportional`|`equal`|`copy`, `merge` default true), and
+    `imported` adds that method's report (`keys`, `ignored`, `unlocated`;
+    `columns` is then the series total). `dropna` (`rows`, `columns`,
+    `empty-rows`, `empty-columns`; see `ppedit._tableio.read_rows`) drops
+    missing values when the file is read, the label column aside, and
+    `imported` then has `dropped` (`{"rows", "columns"}`). `range` keeps
+    the data rows counted from 1 (`N`, `A-B`, `A-`, `-B`); `start` and
+    `end` keep the steps whose time label lies between them (dates and
+    times, inclusive; an `end` date alone takes in that whole day); then
+    `imported` has `selected` (`{"rows", "of"}`). Each value `x` read becomes
+    `x*scale + offset` (default 1 and 0; for a panel before a geohash cell
+    is shared), and `imported` then has `scaled` (`{"scale", "offset"}`)
+  - `POST /api/series`: `{"delta", "name"?}` set the hours per step of a
+    series (`name` may be left out when there is one), or `{"clear": true,
+    "name"?}` remove the series `name`, or all of them (both undoable)
+  - `GET  /api/series/export?format=csv&name=...`: download the series
+    `name`, or without `name` the combined series, as a data file (a
+    `time` column, then the series columns), named
+    `<case>_<name>.<format>` (`<case>_series.<format>` combined)
   - `POST /api/undo`, `POST /api/redo`
-  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?}`;
+  - `POST /api/solve`: `{"kind": "pf"|"opf", "algorithm"?, "options"?,
+    "multistep"?}`;
     `algorithm` is a PF algorithm (`NR`, the default, `FDXB`, `FDBX`, `GS`)
     or an OPF solver (`PIPS`, the default, `PIPS-SC`, `DC-PIPS`, ...; see
     `ppedit.case.OPF_SOLVERS`); `options` are the `CVXOPF-*` solve options
-    (see `ppedit.Case.solve`). The result's `messages` (solver errors and
+    (see `ppedit.Case.solve`); `multistep` true solves the case time
+    series as one multistep OPF with a `CVXOPF-*` solver (the result has
+    `steps`). The result's `messages` (solver errors and
     warnings, with an optional `detail`: physical meaning and constraints
     involved) are listed on the page's Issues tab
-  - `POST /api/apply`: copy the last solution into the case
+  - `POST /api/apply`: `{"step"?}` copy the last solution into the case
+    (`step`: the step of a multistep solution, counted from 0; default 0)
   - `POST /api/geodata`: `{"filename": ..., "text": ...}` (CSV upload),
     `{"path": ...}` (server CSV file), or `{"clear": true}`; replaces the
     case geodata (see `ppedit.Case.load_geodata`) as one undoable edit
@@ -142,7 +185,8 @@ from flask import Flask, jsonify, request, send_from_directory, Response, redire
 from ppedit.case import Case, CaseError, COLUMNS, RESULT_COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
 from ppedit.claude import Sessions
-from ppedit._tableio import table_formats, read_rows, dump_rows
+from ppedit._tableio import table_formats, table_read_formats, read_rows, dump_rows, \
+    read_series, dump_series
 
 _logger = logging.getLogger(__file__)
 
@@ -415,14 +459,15 @@ class Editor:
         return (copy.deepcopy(self.case.tables),self.case.baseMVA,
             self.case.version,self.case.name,
             copy.deepcopy(self.case.geodata),list(self.case.geotags),
-            copy.deepcopy(self.loads_off))
+            copy.deepcopy(self.loads_off),copy.deepcopy(self.case.series))
 
     def _restore(self,snap):
-        tables,base,version,name,geodata,geotags,loads_off = snap
+        tables,base,version,name,geodata,geotags,loads_off,series = snap
         self.case.tables = copy.deepcopy(tables)
         self.case.baseMVA,self.case.version,self.case.name = base,version,name
         self.case.geodata,self.case.geotags = copy.deepcopy(geodata),list(geotags)
         self.loads_off = copy.deepcopy(loads_off)
+        self.case.series = copy.deepcopy(series)
 
     def _prune_loads_off(self):
         # a switched-off load stays off only while its bus exists with Pd = Qd = 0
@@ -674,7 +719,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         return jsonify(columns=COLUMNS,result_columns=RESULT_COLUMNS,tables=TABLES,
             builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
-            table_formats=table_formats(),solvers=solvers(),version=__version__,about=about(),
+            table_formats=table_formats(),table_read_formats=table_read_formats(),solvers=solvers(),version=__version__,about=about(),
             instance=instance,token=token)
 
     @app.get("/api/ping")
@@ -766,13 +811,15 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             content = base64.b64decode(data["data"],validate=True)
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
-        columns,rows = read_rows(str(data["filename"]),content)
+        dropped = {}
+        columns,rows = read_rows(str(data["filename"]),content,data.get("dropna") or None,dropped,
+            data.get("range"))
         replace = data.get("rows")
         with editor.lock:
             result = editor.edit(lambda: editor.case.import_rows(data["table"],columns,rows,
                 None if not replace else [int(x) for x in replace]))
             out = editor.state(result["cascade"])
-            out["imported"] = result
+            out["imported"] = {**result,**dropped}
             return jsonify(out)
 
     @app.get("/api/table/export")
@@ -816,17 +863,88 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         data = body()
         with editor.lock:
             editor.result = editor.case.solve(data.get("kind","pf"),
-                data.get("algorithm"),data.get("options"))
+                data.get("algorithm"),data.get("options"),bool(data.get("multistep")))
             return jsonify(editor.state())
 
     @app.post("/api/apply")
     def apply():
+        data = body()
         with editor.lock:
             if not editor.result:
                 raise CaseError("no solution to apply")
             result = editor.result
+            if result.get("steps"):
+                step = int(data.get("step") or 0)
+                if not 0 <= step < len(result["steps"]):
+                    raise CaseError(f"the solution has no step {step+1}")
+                result = result["steps"][step]
             editor.edit(lambda: editor.case.apply_result(result))
             return jsonify(editor.state(True))
+
+    @app.post("/api/series/import")
+    def import_series():
+        data = body()
+        try:
+            content = base64.b64decode(data["data"],validate=True)
+        except (binascii.Error,TypeError) as err:
+            raise CaseError("data must be the file contents in base64") from err
+        dropped = {}
+        index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped,
+            data.get("range"),data.get("start"),data.get("end"),data.get("scale"),data.get("offset"))
+        panel = data.get("panel")
+        name = str(data.get("name") or "").strip() or \
+            re.sub(r"(\.[A-Za-z0-9]+)+$","",os.path.basename(str(data["filename"]))) or "series"
+        with editor.lock:
+            old = editor.case.get_series(name)
+            if panel:
+                if not isinstance(panel,dict) or not panel.get("table") or not panel.get("column"):
+                    raise CaseError("a panel import needs the table and column it sets")
+                report = editor.edit(lambda: editor.case.set_series_panel(panel["table"],
+                    panel["column"],columns,rows,index,data.get("delta"),
+                    panel.get("keys","auto"),panel.get("split","proportional"),
+                    bool(panel.get("merge",True)),name=name))
+            else:
+                delta = data.get("delta") or (old["delta"] if old else
+                    editor.case.series[0]["delta"] if editor.case.series else 1.0)
+                editor.edit(lambda: editor.case.set_series(columns,rows,index,delta,name=name))
+                report = {}
+            series = editor.case.get_series(name)
+            out = editor.state()
+            out["imported"] = {"name":name,"replaced":bool(old),"steps":len(series["values"]),
+                "columns":len(series["columns"]),**report,**dropped}
+            return jsonify(out)
+
+    @app.post("/api/series")
+    def set_series():
+        data = body()
+        with editor.lock:
+            name = data.get("name")
+            if data.get("clear"):
+                if name is not None and not editor.case.get_series(name):
+                    raise CaseError(f"no series named '{name}'")
+                editor.edit(lambda: editor.case.set_series(None,name=name))
+            else:
+                editor.edit(lambda: editor.case.set_series_delta(data.get("delta"),name))
+            return jsonify(editor.state())
+
+    @app.get("/api/series/export")
+    def export_series():
+        fmt = request.args.get("format","csv").lstrip(".")
+        which = request.args.get("name")
+        with editor.lock:
+            if not editor.case.series:
+                raise CaseError("the case has no time series")
+            if which:
+                ser = editor.case.get_series(which)
+                if not ser:
+                    raise CaseError(f"no series named '{which}'")
+            else:
+                ser = editor.case.combined_series()
+            safe = re.sub(r"[^A-Za-z0-9_.-]+","_",ser["name"] if which else "series")
+            name = f"{editor.case.name or 'untitled'}_{safe}.{fmt}"
+            content = dump_series(ser,name)
+        return Response(content,mimetype="application/octet-stream",headers={
+            "Content-Disposition":f'attachment; filename="{name}"'})
 
     @app.post("/api/geodata")
     def geodata():

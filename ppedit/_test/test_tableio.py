@@ -18,9 +18,11 @@ def test_formats():
     assert table_format("Bus.CSV") == ("csv",None)
     assert table_format("/tmp/gen.csv.gz") == ("csv","gzip")
     assert table_format("x.json.xz") == ("json","xz")
-    for bad in ["bus.txt","bus","bus.gz","bus.pickle"]:
+    for bad in ["bus.txt","bus","bus.gz"]:
         with pytest.raises(CaseError,match="not a supported"):
             table_format(bad)
+    with pytest.raises(CaseError,match="pickle files are not read"):
+        table_format("bus.pickle")
     if ".parquet" in FORMATS:
         with pytest.raises(CaseError,match="cannot be compressed"):
             table_format("bus.parquet.gz")
@@ -169,3 +171,215 @@ def test_replace_costs_ncost():
     row[3],row[4] = 7,"0.1,2,3,4"
     case.import_rows("gencost",NAMES["gencost"],[row],replace=[0])
     assert case.tables["gencost"][0][3:] == [4,"0.1,2,3,4"]
+
+# ----- read-only pandas formats -----
+
+import importlib.util as _util
+import os as _os
+import tempfile as _tempfile
+
+from ppedit._tableio import table_read_formats, read_series
+
+def _has(*modules):
+    return all(_util.find_spec(m) is not None for m in modules)
+
+def _frame():
+    import pandas as pd
+    return pd.DataFrame({"bus_i":[1,2,3],"Pd":[10.5,0.0,-3.25]})
+
+def _via_file(ext,write):
+    """Return the bytes of a file of extension `ext` written by `write(frame, path)`"""
+    with _tempfile.TemporaryDirectory() as tmp:
+        path = _os.path.join(tmp,"t"+ext)
+        write(_frame(),path)
+        with open(path,"rb") as fh:
+            return fh.read()
+
+def _write_xls(frame,path):
+    import xlwt
+    book = xlwt.Workbook()
+    sheet = book.add_sheet("bus")
+    for j,col in enumerate(frame.columns):
+        sheet.write(0,j,col)
+        for i,v in enumerate(frame[col]):
+            sheet.write(i+1,j,float(v))
+    book.save(path)
+
+def _write_sav(frame,path):
+    import pyreadstat
+    pyreadstat.write_sav(frame,path)
+
+def _write_xpt(frame,path):
+    import pyreadstat
+    pyreadstat.write_xport(frame,path,file_format_version=5)  # pandas reads version 5
+
+READERS = [
+    (".jsonl",(),lambda f,p: f.to_json(p,orient="records",lines=True)),
+    (".ndjson",(),lambda f,p: f.to_json(p,orient="records",lines=True)),
+    (".jsonl.gz",(),lambda f,p: f.to_json(p,orient="records",lines=True,compression="gzip")),
+    (".xml",("lxml",),lambda f,p: f.to_xml(p,index=False)),
+    (".html",("lxml",),lambda f,p: f.to_html(p,index=False)),
+    (".fwf",(),lambda f,p: open(p,"w").write(f.to_string(index=False))),
+    (".xlsm",("openpyxl",),lambda f,p: f.to_excel(p,index=False,engine="openpyxl")),
+    (".xls",("xlwt",),_write_xls),
+    (".ods",("odf",),lambda f,p: f.to_excel(p,index=False,engine="odf")),
+    (".orc",("pyarrow",),lambda f,p: f.to_orc(p,index=False)),
+    (".h5",("tables",),lambda f,p: f.to_hdf(p,key="bus",format="table",index=False)),
+    (".dta",(),lambda f,p: f.to_stata(p,write_index=False)),
+    (".sav",("pyreadstat",),_write_sav),
+    (".xpt",("pyreadstat",),_write_xpt),
+]
+
+@pytest.mark.parametrize("ext,modules,write",READERS,ids=[r[0] for r in READERS])
+def test_read_only_formats(ext,modules,write):
+    """Each pandas format reads back the same columns and values"""
+    if not _has(*modules):
+        pytest.skip(f"needs {', '.join(modules)}")
+    columns,rows = read_rows("bus"+ext,_via_file(ext,write))
+    assert columns == ["bus_i","Pd"]
+    # abs: pyreadstat's XPORT zero reads back in pandas as about 5e-79
+    assert [float(v) for r in rows for v in r] == pytest.approx([1,10.5,2,0.0,3,-3.25],abs=1e-12)
+    assert ext in table_read_formats() and ext not in table_formats()
+
+def test_read_only_not_written():
+    """Read-only formats are refused for export"""
+    if not _has("lxml"):
+        pytest.skip("needs lxml")
+    with pytest.raises(CaseError,match="imported but not exported"):
+        dump_rows("bus",[],"bus.xml")
+
+def test_pickle_refused():
+    """Pickle files are never read"""
+    with pytest.raises(CaseError,match="pickle files are not read"):
+        read_rows("bus.pkl",b"")
+
+def test_hdf_one_data_set():
+    """An HDF5 file must hold one data set"""
+    if not _has("tables"):
+        pytest.skip("needs tables")
+    def write(frame,path):
+        frame.to_hdf(path,key="a")
+        frame.to_hdf(path,key="b")
+    with pytest.raises(CaseError,match="holds 2 data sets"):
+        read_rows("x.h5",_via_file(".h5",write))
+
+def test_series_from_read_only_format():
+    """Time series files may use any readable format"""
+    if not _has("odf"):
+        pytest.skip("needs odfpy")
+    import pandas as pd
+    def write(_,path):
+        pd.DataFrame({"time":["a","b"],"bus.Pd.5":[90,95]}).to_excel(path,index=False,engine="odf")
+    assert read_series("s.ods",_via_file(".ods",write)) == (["a","b"],["bus.Pd.5"],[[90],[95]])
+
+# ----- dropna -----
+
+_NA = b"a,b,c\n1,,3\n,,\n4,,6\n7,8,9\n"
+
+@pytest.mark.parametrize("mode,columns,rows,dropped",[
+    (None,["a","b","c"],[[1,None,3],[None,None,None],[4,None,6],[7,8,9]],None),
+    ("rows",["a","b","c"],[[7,8,9]],{"rows":3,"columns":[]}),
+    ("empty-rows",["a","b","c"],[[1,None,3],[4,None,6],[7,8,9]],{"rows":1,"columns":[]}),
+    ("empty-columns",["a","b","c"],[[1,None,3],[None,None,None],[4,None,6],[7,8,9]],{"rows":0,"columns":[]}),
+])
+def test_read_dropna(mode,columns,rows,dropped):
+    """Missing values are dropped by row or column, any or all"""
+    report = {}
+    got = read_rows("x.csv",_NA,mode,report)
+    assert got == (columns,rows)
+    assert report.get("dropped") == dropped
+
+def test_read_dropna_empty_column():
+    """An all-empty column is dropped by empty-columns, a partly empty one is kept"""
+    report = {}
+    assert read_rows("x.csv",b"a,b,c\n1,,\n2,,5\n","empty-columns",report) == (["a","c"],[[1,None],[2,5]])
+    assert report["dropped"] == {"rows":0,"columns":["b"]}
+
+def test_read_dropna_bad():
+    """An unknown dropna is refused, and so is dropping everything"""
+    with pytest.raises(CaseError,match="dropna must be one of"):
+        read_rows("x.csv",_NA,"some")
+    with pytest.raises(CaseError,match="every column has a missing value"):
+        read_rows("x.csv",_NA,"columns")
+    with pytest.raises(CaseError,match="every row has a missing value"):
+        read_rows("x.csv",b"a,b\n1,\n,2\n","rows")
+    with pytest.raises(CaseError,match="every value column has no value"):
+        read_series("s.csv",b"time,a\nt1,\n","empty-columns")
+
+def test_series_dropna_keeps_labels():
+    """The label column is never dropped and a missing label does not drop a step"""
+    data = b"a,time,b\n1,t1,\n2,,5\n,t3,\n"
+    report = {}
+    assert read_series("s.csv",data,"rows",report) == ([""],["a","b"],[[2,5]])
+    assert report["dropped"] == {"rows":2,"columns":[]}
+    assert read_series("s.csv",data,"empty-rows") == (["t1",""],["a","b"],[[1,None],[2,5]])
+    assert read_series("s.csv",b"time,a\n,\n1,2\n","empty-rows") == (["1"],["a"],[[2]])
+
+# ----- row and date ranges -----
+
+_TS = (b"time,a\n2026-07-01 00:00,1\n2026-07-01 12:00,2\n2026-07-02 00:00,3\n"
+    b"2026-07-02 23:00,\n2026-07-03 00:00,5\n")
+
+@pytest.mark.parametrize("spec,expect",[
+    ("2-3",[[2],[3]]),("2:3",[[2],[3]]),("2..3",[[2],[3]]),("3",[[3]]),("-2",[[1],[2]]),
+    ("2-",[[2],[3]]),("2-99",[[2],[3]]),("",[[1],[2],[3]]),(None,[[1],[2],[3]]),
+])
+def test_row_range(spec,expect):
+    """Row ranges count data rows from 1, inclusive, either end open"""
+    report = {}
+    assert read_rows("x.csv",b"a\n1\n2\n3\n",rows=spec,report=report)[1] == expect
+    assert report.get("selected") == (None if not spec else {"rows":len(expect),"of":3})
+
+@pytest.mark.parametrize("spec,match",[("x","is not N"),("0-2","is empty"),("3-2","is empty"),("9-","starts after the last")])
+def test_row_range_bad(spec,match):
+    """Bad and empty row ranges are refused"""
+    with pytest.raises(CaseError,match=match):
+        read_rows("x.csv",b"a\n1\n2\n3\n",rows=spec)
+
+@pytest.mark.parametrize("kwargs,labels",[
+    ({"start":"2026-07-02"},["2026-07-02 00:00","2026-07-02 23:00","2026-07-03 00:00"]),
+    ({"end":"2026-07-02"},["2026-07-01 00:00","2026-07-01 12:00","2026-07-02 00:00","2026-07-02 23:00"]),
+    ({"end":"2026-07-02 00:00"},["2026-07-01 00:00","2026-07-01 12:00","2026-07-02 00:00"]),
+    ({"start":"2026-07-01 06:00","end":"2026-07-02 12:00"},["2026-07-01 12:00","2026-07-02 00:00"]),
+    ({"rows":"2-","end":"2026-07-02","dropna":"rows"},["2026-07-01 12:00","2026-07-02 00:00"]),
+])
+def test_date_range(kwargs,labels):
+    """Date ranges keep steps by their time label; an end date takes in its whole day"""
+    report = {}
+    index,_,rows = read_series("s.csv",_TS,report=report,**kwargs)
+    assert index == labels and len(rows) == len(labels)
+    assert report["selected"]["of"] == 5
+
+@pytest.mark.parametrize("data,kwargs,match",[
+    (_TS,{"start":"2027-01-01"},"no step lies between"),
+    (_TS,{"start":"nope"},"start 'nope' is not a date"),
+    (b"step,a\n1,2\nx,3\n",{"end":"2026-01-01"},"are not dates and times"),
+    (b"a\n1\n",{"start":"2026-01-01"},"needs a time column"),
+])
+def test_date_range_bad(data,kwargs,match):
+    """Date ranges need a time column of dates and must keep a step"""
+    with pytest.raises(CaseError,match=match):
+        read_series("s.csv",data,**kwargs)
+
+# ----- scale and offset -----
+
+@pytest.mark.parametrize("scale,offset,expect,scaled",[
+    (None,None,[[1000,None],[2500,3]],None),
+    ("","",[[1000,None],[2500,3]],None),
+    (0.001,None,[[1.0,None],[2.5,0.003]],{"scale":0.001,"offset":0.0}),
+    ("2","-1",[[1999,None],[4999,5]],{"scale":2.0,"offset":-1.0}),
+    (None,10,[[1010,None],[2510,13]],{"scale":1.0,"offset":10.0}),
+])
+def test_series_scale(scale,offset,expect,scaled):
+    """Values become value*scale + offset; missing cells and labels stay"""
+    report = {}
+    index,_,rows = read_series("s.csv",b"time,a,b\nt1,1000,\nt2,2500,3\n",report=report,scale=scale,offset=offset)
+    assert index == ["t1","t2"]
+    assert [[None if v is None else pytest.approx(v) for v in r] for r in rows] == expect
+    assert report.get("scaled") == scaled
+
+@pytest.mark.parametrize("kw",[{"scale":"x"},{"offset":"inf"},{"scale":float("nan")}])
+def test_series_scale_bad(kw):
+    """Scale and offset must be finite numbers"""
+    with pytest.raises(CaseError,match="must be a finite number"):
+        read_series("s.csv",b"a\n1\n",**kw)

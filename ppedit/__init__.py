@@ -94,6 +94,28 @@ Given a case file, `ppedit.Case` is expected to satisfy:
      written back the same way. Renumbering a bus renumbers its geodata and deleting a
      bus deletes its geodata.
 
+  6. **Time series.** A case may carry a time series of bus `Pd`/`Qd`,
+     generator `Pmin`/`Pmax` and DC line `Pmin`/`Pmax` by step
+     (`Case.series`, set with `Case.set_series` or read from a data file on
+     the *Multistep* tab; issue #124). It is saved in `.py` and `.json` cases
+     (not GLM) and follows the case as references do: renumbering a bus
+     renames its columns, and deleting buses, generators or DC lines drops
+     their columns and renumbers the rows after them. *Run OPF ▾ ›
+     Multistep* (`Case.solve(..., multistep=True)`) solves every step as
+     one cvxopf problem and returns one result per step; the step's values
+     replace the case values in that step only. A *panel* sets one value
+     (`Case.set_series_panel`): steps in rows and one column per table row
+     number or geohash cell, a cell's value shared among the elements whose
+     bus geodata lies in it (in proportion to their case values, equally,
+     or whole to each). A case holds several named series (one per import,
+     e.g. a load profile and a generator limit profile); multistep OPF
+     combines them (`Case.combined_series`): by time when every series has
+     a time column (the times common to all), else step by step (same
+     number of steps); a value given by several series is their sum.
+     Multistep builder options (`multistep` of the cvxopf solve options,
+     `ppedit._cvxopf.MULTISTEP_OPTIONS`) choose the temporal assembly and
+     cvxopf `OPFOptions` such as branch limits and the lossy DC loss weight.
+
 The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
 read and edit the case through the same checked, undoable edits as the
 browser, optionally using web data or local files, when an Anthropic API
@@ -119,8 +141,9 @@ The page takes optional URL parameters, so another tool can open it ready to
 show (pptools `pprun` does): `?solve=pf` or `?solve=opf` runs that solver
 when the page loads (`&algorithm=NAME` picks a PF algorithm or OPF solver as
 in `POST /api/solve`, else the default), and `?view=NAME` opens the tab
-`NAME` (`network`, `tables`, `results`, `issues`, `claude`, `settings`, or a
-table name such as `bus`).
+`NAME` (`network`, `case`, `multistep`, `results`, `issues`, `claude`,
+`settings`, or a table name such as `bus`; the former tab names `tables`
+and `series` open the Case and Multistep tabs).
 Unknown values are ignored, and a solver error is shown as usual.
 
 Each case table can be imported from and exported to a data file
@@ -228,8 +251,20 @@ What is not promised
     (the log says whether they are). The cvxopf DC network-flow model has no
     voltage angles. The cvxopf solve options (Settings tab, `options` of
     `ppedit.Case.solve`) cover numerical preparation, solver choice,
-    solver output and solver options for one snapshot; cvxopf's
-    multi-period horizons and device models are not offered.
+    solver output and solver options; cvxopf's device models (storage,
+    nondispatchable units, curtailable loads) are not offered.
+
+  - Multistep OPF (issue #124) needs a `CVXOPF-*` solver and a time series.
+    The steps share one problem but nothing couples them: there are no ramp
+    limits, unit commitment or storage. Per-step generator limits are
+    constraints ppedit adds to cvxopf's problem (cvxopf has none), so they
+    need the default preparation. The diagram draws the case loads, not the
+    step's; the Results tab, solution columns and dispatch show the step.
+    Series columns name generators and DC lines by row number, which is
+    kept up to date only by edits made in ppedit. Full AC (`CVXOPF-AC`)
+    multistep problems need memory in proportion to the number of steps
+    in cvxopf (about 0.5 GB per step for `case118`); the DC models need
+    far less.
 
   - The extended (result) columns shown in the tables after a solve
     (`ppedit.case.RESULT_COLUMNS`, the `extended` rows of

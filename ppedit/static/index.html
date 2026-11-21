@@ -70,7 +70,8 @@
 
 <nav class="tabs" id="tabs">
   <button data-view="network">Network</button>
-  <button data-view="tables" title="Case data tables">Tables</button>
+  <button data-view="case" title="Case data tables">Case</button>
+  <button data-view="multistep" title="Time series of case values for multistep OPF">Multistep <span class="count" id="series-count"></span></button>
   <button data-view="results">Results <span class="status-dot" id="result-dot"></span></button>
   <button data-view="issues">Issues <span class="count issues" id="issue-count"></span><span class="status-dot" id="issue-dot"></span></button>
   <button data-view="claude" title="Claude sessions that edit the case">Claude <span class="status-dot" id="claude-dot"></span></button>
@@ -157,6 +158,27 @@
     </div>
     <div class="table-wrap"><table id="grid"></table></div>
   </section>
+  <section id="view-series" class="view">
+    <div class="table-tools">
+      <label class="inline" title="The series shown; multistep OPF combines them all">Series <select id="series-pick" aria-label="Series shown"></select></label>
+      <div class="menu">
+        <button data-menu="series-import-menu" title="Read a time series from a data file">Import ▾</button>
+        <div id="series-import-menu" class="dropdown left" role="menu">
+          <button data-action="series-import" role="menuitem" title="Replace the series with a file whose columns are named table.column.key">Series file…</button>
+          <button data-action="series-panel" role="menuitem" title="Steps in rows, table row numbers or geohashes in columns, all for one table value">Panel…</button>
+        </div>
+      </div>
+      <div class="menu">
+        <button data-menu="series-export-menu" id="series-export-btn">Export ▾</button>
+        <div id="series-export-menu" class="dropdown left" role="menu"></div>
+      </div>
+      <label class="inline" title="Length of each time step (hours)">Step <input id="series-delta" class="num" size="5" aria-label="Hours per time step"> h</label>
+      <button data-action="series-clear" id="series-clear" class="danger">Remove series</button>
+      <input type="file" id="series-input" hidden>
+      <span class="hint" id="series-hint"></span>
+    </div>
+    <div id="series-body" class="series-body"></div>
+  </section>
   <section id="view-results" class="view"></section>
   <section id="view-issues" class="view"></section>
   <section id="view-settings" class="view">
@@ -166,8 +188,12 @@
       <label><span>version</span> <input id="version" class="num" size="8" title="PYPOWER case format version"></label>
       <h2>Display precision</h2>
       <div id="precision-settings" class="settings-group"></div>
+      <h2>Data import</h2>
+      <div id="import-settings" class="settings-group"></div>
       <h2 id="cvxopf-title" hidden>CVXOPF solve options</h2>
       <div id="cvxopf-settings" class="settings-group" hidden></div>
+      <h2 id="multistep-title" hidden>CVXOPF multistep options</h2>
+      <div id="multistep-settings" class="settings-group" hidden></div>
     </div>
   </section>
   <section id="view-claude" class="view">
@@ -188,6 +214,7 @@
 <div id="busy" class="busy" role="status" aria-live="polite"><div class="busy-bar"></div><span class="busy-text">Loading…</span></div>
 <div id="toast" class="toast" hidden></div>
 <dialog id="about" class="about" aria-labelledby="about-title"></dialog>
+<dialog id="panel-dialog" class="about panel-dialog" aria-labelledby="panel-title"></dialog>
 <dialog id="server-down" class="server-down" aria-labelledby="server-down-title"></dialog>
 <script src="/static/app.js"></script>
 </body>

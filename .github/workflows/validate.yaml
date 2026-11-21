@@ -43,15 +43,17 @@ jobs:
         pip install --upgrade pip
         pip install . pytest pytest-cov pylint   # non-editable: catches missing package-data
 
-    - name: Install table data engines (optional Parquet, Feather and Excel formats)
+    - name: Install table data engines (optional Parquet, Feather, Excel and read-only formats)
       run: |
-        pip install pyarrow openpyxl
+        pip install pyarrow openpyxl python-calamine lxml tables pyreadstat odfpy xlwt  # xlwt: tests only
 
     - name: Install cvxopf (optional OPF solvers)
       run: |
         sudo apt-get update
         sudo apt-get install -y coinor-libipopt-dev liblapack-dev libblas-dev gfortran
-        pip install git+https://github.com/cvxgrp/cvxopf
+        # cvxopf PR 32 (DC-line import fix, not yet merged): ppedit needs its
+        # hvdc_from_dcline; return to the main branch once PR 32 is merged
+        pip install git+https://github.com/cvxgrp/cvxopf@8c40598f4bddc0e28e6f3245b2b5f7c4f9b2dd18
 
     - name: Analyse code
       run: |

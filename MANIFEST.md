@@ -20,6 +20,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 - Support another GLM object: `_parse_glm`/`_dump_glm` in `ppedit/case.py`; add it to `ppedit/_test/data/case3.glm` and its README
 - Change area handling: `COLUMNS["areas"]`, `Case.validate` and `Case._area_summary` in `ppedit/case.py`; `areaRegions`/`convexHull`/`traceOutline`, area grouping in `layout`/`onelineLayout` in `ppedit/static/app.js`; `ppedit/_test/test_areas.py`
 - Change the cvxopf solvers: `OPF_SOLVERS` and `Case.solve` in `ppedit/case.py`; `ppedit/_cvxopf.py`; `ppedit/_test/test_cvxopf.py`
+- Change time series or multistep OPF: `Case.set_series`/`set_series_panel`/`series_values`/`at_step`/`_series_input` and `Case.solve` in `ppedit/case.py`; `runopf(series=...)` in `ppedit/_cvxopf.py`; `read_series`/`dump_series` in `ppedit/_tableio.py`; `/api/series*` in `ppedit/server.py`; `renderSeries`, `stepView` in `ppedit/static/app.js`; `ppedit/_test/test_series.py`
 - Change DC line handling: `COLUMNS["dcline"]`, `COST_TABLES` and `Case.solve` in `ppedit/case.py`; solver callbacks in `ppedit/_dcline.py`; `ppedit/_test/test_dcline.py`
 - Change WECC 240 2020 areas (EIA-930 balancing authorities): `examples/wecc240_ba.csv`, then `python3 examples/wecc240_areas.py`; see `examples/README.md`
 - Change WECC 240 generator costs: `examples/wecc240_gentypes.csv` (or rederive it with `examples/wecc240_gentypes.py`), then `python3 examples/build_wecc240_2018.py`; see `examples/README.md`
@@ -43,7 +44,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/case.py` | `Case`: tables, `.py`/`.json`/`.glm` I/O (and `.raw` input), edits, validation, PF/OPF | tested by `_test/test_case.py` and its doctest |
 | `ppedit/_psse.py` | PSS/E RAW reader (revisions 23–35), after MATPOWER `psse2mpc` | private; read only; tested by `_test/test_psse.py` |
 | `ppedit/_cvxopf.py` | cvxopf OPF backend for `Case.solve` (`CVXOPF-*` solvers): case in, `runopf`-layout results out | private; optional dependency; tested by `_test/test_cvxopf.py` (skipped without cvxopf) |
-| `ppedit/_tableio.py` | table data import/export with pandas (`read_rows`, `dump_rows`, `table_formats`) | private; tested by `_test/test_tableio.py` |
+| `ppedit/_tableio.py` | table and time series data import/export with pandas (`read_rows`, `dump_rows`, `read_series`, `dump_series`, `table_formats`) | private; tested by `_test/test_tableio.py` |
 | `ppedit/_dcline.py` | DC line model for the PYPOWER solver (`userfcn` callbacks, as `pypower.toggle_dcline`) | private; tested by `_test/test_dcline.py` |
 | `ppedit/claude.py` | `Sessions`: Claude API conversations with tools that edit the case, web and local data sources | tested by `_test/test_claude.py` with a fake client |
 | `ppedit/server.py` | `create_app()`, `Editor` (undo/redo), JSON API, `about()` package metadata | tested by `_test/test_server.py` |
@@ -61,6 +62,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/_test/test_*.py` | tests | all fast, no network |
 | `ppedit/_test/data/README.md` | test data provenance | |
 | `ppedit/_test/test_examples.py` | checks `examples/pypower/` | each `.glm` matches its `.py` |
+| `ppedit/_test/data/case9_dcline.py` | PYPOWER `t_case9_dcline` from cvxopf's test cases (4 DC lines, PWL costs) | curated, written by ppedit from cvxopf; used by `test_cvxopf.py` |
 | `ppedit/_test/data/case3.glm` | 3-bus GLM test model | curated, hand-written |
 | `ppedit/_test/data/psse_v33.raw` | 4-bus PSS/E revision 33 test case (loads, shunts, 2- and 3-winding transformers, DC line) | curated, hand-written; used by `test_psse.py` |
 | `ppedit/_test/data/psse_v35.raw` | 3-bus PSS/E revision 35 test case (system-wide data, `@!` headers, switching devices) | curated, hand-written; used by `test_psse.py` |
@@ -88,6 +90,11 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/build_wecc240_2018.py` | builds `wecc240_2018.py` from `wecc240_2011.py`, `wecc240_gentypes.csv`, `wecc240_cost.csv` (generator types) and `wecc240_bus.csv` | maintenance script |
 | `examples/wecc240_2020.py` | the 2020 WECC 240-bus case with geodata; areas are the EIA-930 balancing authorities (set by `wecc240_areas.py`) | written by ppedit, areas set by `wecc240_areas.py`; ~165 kB, use `head` |
 | `examples/wecc240_ba.csv` | EIA-930 balancing authority of each WECC 240 bus (`BUS_I,NAME,BA,NOTE`) | curated by hand (issue #90) |
+| `examples/wecc240_2020_real_load.csv` | series file of bus `Pd` by hour for August 2020 (`bus.Pd.N` columns), the `real_load` series of `wecc240_2020.py` | data; ~745 lines, use `head` |
+| `examples/wecc240_2020_reactive_load.csv` | series file of bus `Qd` by hour for August 2020 (`bus.Qd.N` columns), the `reactive_load` series of `wecc240_2020.py` | data; ~745 lines, use `head` |
+| `examples/wecc240_netload.csv.gz` | hourly net load by WECC 240 node geohash, 2018-2022 (113 node columns) | data; ~20 MB, don't read |
+| `examples/wecc240_generation.csv.gz` | hourly generator `Pmax` panel for 2020 for the `wecc240_2020.py` generator rows (columns are gen rows from 1) | written by `build_wecc240_generation.py`; ~11 MB, don't read |
+| `examples/build_wecc240_generation.py` | builds `wecc240_generation.csv.gz` from the eudoxys/generation WECC 240 node files and the wecc240 county-node map | maintenance script; needs a checkout of `eudoxys/generation` `data/wecc` |
 | `examples/wecc240_areas.py` | sets the areas of a WECC 240 case (default `wecc240_2020.py`) from `wecc240_ba.csv`, in place | maintenance script |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~70 kB, use `head` |
 | `examples/wecc240_geodata.csv` | bus locations for the WECC 240-bus case (`BUS_I,LAT,LON` plus `GEOHASH,NAME,GEN,LOAD,BA,COUNTY`) | for `--geodata` or **Map ▸ Load CSV…** |
