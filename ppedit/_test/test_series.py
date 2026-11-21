@@ -2,6 +2,7 @@
 the solves are skipped when cvxopf is not installed; fast, no network)"""
 
 import base64
+import os
 import importlib.util
 import json
 
@@ -506,3 +507,14 @@ def test_server_several_series(client,post):
     assert [x["name"] for x in st["case"]["series"]] == ["cap"]
     status,st = post("/api/series",{"clear":True,"name":"nope"})
     assert status == 400 and "no series named" in st["error"]
+
+@needs_cvxopf
+def test_multistep_exception_has_empty_steps():
+    """A multistep solve that fails before solving still has multistep and an empty steps list"""
+    case = Case.load(os.path.join(os.path.dirname(__file__),"data","case9_dcline.py"))
+    case.tables["dcline"][3][9] = -10  # two-way lossy DC line: refused by cvxopf
+    case.set_series(["bus.Pd.5"],[[90],[95]],["2026-07-01 00:00","2026-07-01 01:00"],name="load")
+    r = case.solve("opf","CVXOPF-DC",multistep=True)
+    assert not r["success"] and r["multistep"]["steps"] == 2
+    assert r["steps"] == [] and r["horizon_objective"] is None
+    assert any("DC line 4" in m["message"] for m in r["messages"])

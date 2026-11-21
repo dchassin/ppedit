@@ -2330,8 +2330,11 @@ def {name}():
         if failed is not None:
             log.write("\n")
             message("error",f"{what} failed: {failed}")
-            return {"success":False,**info,"log":log.getvalue(),"messages":messages,
+            out = {"success":False,**info,"log":log.getvalue(),"messages":messages,
                 "bus":[],"gen":[],"branch":[],"dcline":[],"areas":[],"extended":{}}
+            if series is not None:  # a failed multistep solve has no steps
+                out.update(steps=[],horizon_objective=None)
+            return out
         dead = {r[0] for r in self.tables["bus"] if r[1] == 4} | set(isolated)
         for w in res.get("warnings",[]): # cvxopf notes and warnings (already in log)
             messages.append({"level":"warning","message":w["message"]}

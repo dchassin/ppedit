@@ -2906,8 +2906,12 @@ function sourceReport() {
 // A multistep solution (result.steps, issue #124) is shown one step at a time:
 // the step's rows replace the first step's, so the diagram, tables and
 // Results tab all show S.step. `base` keeps the whole solution.
+// a multistep result with steps to show (a failed multistep solve has none)
+function hasSteps(r) {
+  return !!(r && r.multistep && r.steps && r.steps.length);
+}
 function stepView(r) {
-  if (!r || !(r.base || r).steps) return r;
+  if (!r || !hasSteps(r.base || r)) return r;
   const base = r.base || r, n = base.steps.length;
   const k = S.step = Math.max(0, Math.min(n - 1, S.step));
   return { ...base, ...base.steps[k], base, step: k, stepLog: base.steps[k].log, log: base.log };
@@ -2951,7 +2955,8 @@ function renderResults() {
     + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
   const totalPg = r.gen.reduce((s, g) => s + g.Pg, 0);
   // a multistep step has its own loads: sum them from its area rows
-  const totalPd = r.multistep ? (r.areas || []).reduce((s, a) => s + a.Pd, 0) : c.tables.bus.reduce((s, b) => s + b[2], 0);
+  const multi = hasSteps(r);
+  const totalPd = multi ? (r.areas || []).reduce((s, a) => s + a.Pd, 0) : c.tables.bus.reduce((s, b) => s + b[2], 0);
   const cards = h("div", { class: "cards" },
     card(kind, r.success ? "Converged" : "Failed", r.success ? "ok" : "fail"),
     r.success ? card("Generation", `${fmt(totalPg, 1)} MW`) : null,
@@ -2959,13 +2964,13 @@ function renderResults() {
     r.success ? card("Losses", `${fmt(r.losses_MW, 2)} MW` + (r.dcline && r.dcline.length ? ` (DC ${fmt(r.dcline_losses_MW, 2)})` : "")) : null,
     r.objective !== null && r.success ? card("Cost", `${fmt(r.objective, 2)} $/h`) : null,
     r.success ? card("Vm range", `${fmt(Math.min(...r.bus.map(b => b.Vm)), 3)} – ${fmt(Math.max(...r.bus.map(b => b.Vm)), 3)}`) : null,
-    r.multistep && r.success && r.horizon_objective !== null ? card("Horizon cost", `${fmt(r.horizon_objective, 2)} $ over ${r.steps.length} step(s)`) : null);
-  const kids = r.multistep ? [stepPicker(r), cards] : [cards];
+    multi && r.success && r.horizon_objective !== null ? card("Horizon cost", `${fmt(r.horizon_objective, 2)} $ over ${r.steps.length} step(s)`) : null);
+  const kids = multi ? [stepPicker(r), cards] : [cards];
   if (r.success) {
     kids.push(h("div", { style: "margin-bottom:12px" },
-      h("button", { onclick: () => act("/api/apply", r.multistep ? { step: r.step } : {})
-        .then(() => toast("Solution copied into bus Vm/Va, generator Pg/Qg and DC line flows" + (r.multistep ? ` (step ${r.step + 1})` : ""))) },
-        r.multistep ? `Apply step ${r.step + 1} to case` : "Apply solution to case"),
+      h("button", { onclick: () => act("/api/apply", multi ? { step: r.step } : {})
+        .then(() => toast("Solution copied into bus Vm/Va, generator Pg/Qg and DC line flows" + (multi ? ` (step ${r.step + 1})` : ""))) },
+        multi ? `Apply step ${r.step + 1} to case` : "Apply solution to case"),
       h("span", { class: "hint", style: "margin-left:10px" }, "copies Vm, Va, Pg, Qg and DC line Pf, Pt, Qf, Qt into the case (undoable)")));
     const busRows = r.bus.map(b => [b.bus_i, fmt(b.Vm, 4), fmt(b.Va, 3)].concat(r.kind === "opf" ? [fmt(b.lam_P, 3)] : []));
     const busCls = r.bus.map((b, i) => {
@@ -2989,7 +2994,7 @@ function renderResults() {
         .concat(r.kind === "opf" ? ["price $/MWh"] : []),
         r.areas.map(a => [a.area, a.name || "–", a.buses, fmt(a.Pg, 2), fmt(a.Pd, 2), fmt(a.shunt_MW, 2), fmt(a.losses_MW, 2), fmt(a.export_MW, 2), a.price_ref_bus ?? "–"]
           .concat(r.kind === "opf" ? [fmt(a.lam_P, 3)] : [])), [], "wide") : null,
-      r.multistep ? stepTable(r) : null));
+      multi ? stepTable(r) : null));
   }
   kids.push(h("details", { open: !r.success }, h("summary", {}, "Solver report"),
     h("pre", { class: "log" }, (r.log || "(no output)") + (r.stepLog ? "\n" + r.stepLog : ""))));
@@ -3299,7 +3304,7 @@ async function onAction(btn) {
       try {
         await act("/api/solve", solveRequest(btn.dataset.kind, btn.dataset.algorithm, !!btn.dataset.multistep));
         const r = S.state.result;
-        const what = (r.multistep ? `${r.steps ? r.steps.length : ""}-step ` : "") + (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
+        const what = (r.multistep ? `${r.multistep.steps}-step ` : "") + (r.dc ? "DC " : "") + r.kind.toUpperCase() + (r.solver ? ` (${r.solver.replace(/^(AC|DC): /, "")})` : "");
         const nwarn = (r.messages || []).filter(m => m.level === "warning").length;
         toast(r.success ? `${what} converged` + (nwarn ? ` with ${nwarn} warning(s) — see Issues` : "")
           : `${what} did not converge — see Issues and Results`, !r.success);
