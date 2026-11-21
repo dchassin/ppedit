@@ -89,7 +89,10 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `examples/build_wecc240_2018.py` | builds `wecc240_2018.py` from `wecc240_2011.py`, `wecc240_gentypes.csv`, `wecc240_cost.csv` (generator types) and `wecc240_bus.csv` | maintenance script |
 | `examples/wecc240_2020.py` | the 2020 WECC 240-bus case with geodata; areas are the EIA-930 balancing authorities (set by `wecc240_areas.py`) | written by ppedit, areas set by `wecc240_areas.py`; ~165 kB, use `head` |
 | `examples/wecc240_ba.csv` | EIA-930 balancing authority of each WECC 240 bus (`BUS_I,NAME,BA,NOTE`) | curated by hand (issue #90) |
-| `examples/wecc240_generation.csv.gz` | hourly generator `Pmax` panel 2018-2022 for the `wecc240_2018.py` generator rows (columns are gen rows from 1) | written by `build_wecc240_generation.py`; ~16 MB, don't read |
+| `examples/wecc240_2020_real_load.csv` | series file of bus `Pd` by hour for August 2020 (`bus.Pd.N` columns), the `real_load` series of `wecc240_2020.py` | data; ~745 lines, use `head` |
+| `examples/wecc240_2020_reactive_load.csv` | series file of bus `Qd` by hour for August 2020 (`bus.Qd.N` columns), the `reactive_load` series of `wecc240_2020.py` | data; ~745 lines, use `head` |
+| `examples/wecc240_netload.csv.gz` | hourly net load by WECC 240 node geohash, 2018-2022 (113 node columns) | data; ~20 MB, don't read |
+| `examples/wecc240_generation.csv.gz` | hourly generator `Pmax` panel for 2020 for the `wecc240_2020.py` generator rows (columns are gen rows from 1) | written by `build_wecc240_generation.py`; ~11 MB, don't read |
 | `examples/build_wecc240_generation.py` | builds `wecc240_generation.csv.gz` from the eudoxys/generation WECC 240 node files and the wecc240 county-node map | maintenance script; needs a checkout of `eudoxys/generation` `data/wecc` |
 | `examples/wecc240_areas.py` | sets the areas of a WECC 240 case (default `wecc240_2020.py`) from `wecc240_ba.csv`, in place | maintenance script |
 | `examples/wecc240_case.py` | WECC 240-bus case without geodata | written by ppedit; ~70 kB, use `head` |

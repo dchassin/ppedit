@@ -3,8 +3,8 @@
 Reads the WECC 240 node files of `eudoxys/generation` (`data/wecc`:
 `node_capacity_{category}.csv.gz` and `node_actual_{category}.csv.gz`, hourly
 from 2018 to 2022, one column per generation node geohash) and writes a
-panel of generator `Pmax` by hour for `wecc240_2018.py` (the same generator
-rows as `wecc240_2011.py` and `wecc240_map.py`):
+panel of generator `Pmax` by hour (default 2020, the year of the case) for
+the generator rows of `wecc240_2020.py`:
 
     timestamp,1,2,...
     2018-01-01 00:00:00+00:00,...
@@ -34,12 +34,14 @@ Syntax
 ------
 
     python3 examples/build_wecc240_generation.py DATA [--wecc240 FOLDER]
-        [--case CASE] [--output CSV]
+        [--case CASE] [--output CSV] [--start TIME] [--end TIME]
 
 `DATA` is the `data/wecc` folder of a checkout of eudoxys/generation (a
 sparse checkout of that folder is enough). `--wecc240` is the
 `wecc240/data` folder of eudoxys/wecc240 holding `counties.csv` and
-`county_node_map.csv` (default: read from GitHub).
+`county_node_map.csv` (default: read from GitHub). `--start` and `--end`
+limit the hours (inclusive, UTC; default all of 2020; a series holds at
+most 8,784 hours).
 """
 
 import argparse
@@ -81,7 +83,8 @@ def _decode(code):
             even = not even
     return (lat[0]+lat[1])/2,(lon[0]+lon[1])/2
 
-def build(data,case_path,output,wecc240=WECC240,verbose=True):
+def build(data,case_path,output,wecc240=WECC240,start="2020-01-01 00:00:00+00:00",
+        end="2020-12-31 23:00:00+00:00",verbose=True):
     """Build the panel; return the report lines"""
     report = []
     sep = "/" if "://" in wecc240 else os.sep
@@ -94,6 +97,7 @@ def build(data,case_path,output,wecc240=WECC240,verbose=True):
     negative = int(sum((a < 0).to_numpy().sum() for a in act))
     act = sum(a.clip(lower=0) for a in act)
     node = cap + act
+    node = node.loc[(start or node.index[0]):(end or node.index[-1])]
     report.append(f"{len(node)} hours, {len(node.columns)} nodes; {negative} negative solar/wind "
         "node-hours set to 0")
 
@@ -156,10 +160,12 @@ def main(argv=None):
     parser.add_argument("data",help="data/wecc folder of eudoxys/generation")
     parser.add_argument("--wecc240",default=WECC240,help="wecc240/data folder of eudoxys/wecc240")
     here = os.path.dirname(os.path.abspath(__file__))
-    parser.add_argument("--case",default=os.path.join(here,"wecc240_2018.py"))
+    parser.add_argument("--case",default=os.path.join(here,"wecc240_2020.py"))
     parser.add_argument("--output",default=os.path.join(here,"wecc240_generation.csv.gz"))
+    parser.add_argument("--start",default="2020-01-01 00:00:00+00:00",help="first hour (UTC)")
+    parser.add_argument("--end",default="2020-12-31 23:00:00+00:00",help="last hour (UTC)")
     args = parser.parse_args(argv)
-    build(args.data,args.case,args.output,args.wecc240)
+    build(args.data,args.case,args.output,args.wecc240,args.start,args.end)
 
 if __name__ == "__main__":
     main()
