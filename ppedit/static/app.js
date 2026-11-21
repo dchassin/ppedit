@@ -395,7 +395,7 @@ function renderSeries() {
   const ser = S.state.case.series, exts = S.meta.table_formats || [];
   const item = x => h("button", { "data-action": "series-export", "data-format": x, role: "menuitem" }, x.slice(1));
   $("#series-export-menu").replaceChildren(h("div", { class: "sep" }, "Export as"), ...exts.map(item));
-  $("#series-input").accept = (S.meta.table_read_formats || exts).join(",");
+  $("#series-input").accept = readFormats().join(",");
   $("#series-export-btn").disabled = $("#series-clear").disabled = !ser;
   const d = $("#series-delta");
   d.disabled = !ser;
@@ -434,6 +434,17 @@ async function importSeries(file) {
   toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
 }
 
+// file extensions the server reads (table and series import), compressed forms included
+function readFormats() {
+  return S.meta.table_read_formats || S.meta.table_formats || [];
+}
+const TABLE_FORMAT_NAMES = {
+  ".csv": "comma-separated", ".tsv": "tab-separated", ".json": "JSON records", ".jsonl": "JSON lines", ".ndjson": "JSON lines",
+  ".parquet": "Parquet", ".feather": "Feather", ".orc": "ORC", ".xlsx": "Excel", ".xlsm": "Excel with macros", ".xls": "Excel 97-2003",
+  ".xlsb": "Excel binary", ".ods": "OpenDocument", ".xml": "XML", ".html": "HTML table", ".htm": "HTML table", ".fwf": "fixed-width text",
+  ".h5": "HDF5", ".hdf5": "HDF5", ".hdf": "HDF5", ".dta": "Stata", ".sas7bdat": "SAS", ".xpt": "SAS transport", ".sav": "SPSS",
+};
+
 // Panel import (Import ▾ › Panel…): steps in rows, one column per row number
 // or geohash cell, all giving the chosen table value (Case.set_series_panel).
 // The choices are kept in S.seriesPanel until the file is picked.
@@ -448,17 +459,26 @@ function openPanelDialog() {
   const keys = sel("panel-keys", [["auto", "Automatic (digits: rows)"], ["row", "Row numbers (from 1)"], ["geohash", "Geohashes"]], prev.keys || "auto");
   const split = sel("panel-split", [["proportional", "In proportion to case values"], ["equal", "Equally"], ["copy", "Whole value to each"]], prev.split || "proportional");
   const merge = h("input", { type: "checkbox", id: "panel-merge", checked: !!ser, disabled: !ser });
+  // file format: limits the file chooser to one format (and its compressed forms)
+  const bases = readFormats().filter(x => x.split(".").length === 2);
+  const format = sel("panel-format", [["", "Any supported format"], ...bases.map(x => [x, `${x.slice(1)}${TABLE_FORMAT_NAMES[x] ? ` (${TABLE_FORMAT_NAMES[x]})` : ""}`])],
+    bases.includes(prev.format) ? prev.format : "");
   const label = (text, el, hint) => h("label", { class: "panel-row" }, h("span", {}, text), el, hint ? h("span", { class: "hint" }, hint) : null);
   const go = h("button", { class: "primary", onclick: () => {
     S.seriesPanel = S.panelChoice = { table: table.value, column: column.value, keys: keys.value, split: split.value, merge: merge.checked };
+    S.panelChoice.format = format.value;
     d.close();
-    $("#series-input").click();
+    const input = $("#series-input");
+    input.accept = (format.value ? readFormats().filter(x => x === format.value || x.startsWith(format.value + "."))
+      : readFormats()).join(",");
+    input.click();
   } }, "Choose file…");
   d.replaceChildren(h("h2", { id: "panel-title" }, "Import a panel"),
     h("p", { class: "summary" }, "A panel file has one row per time step (an optional time column first) and one column per ",
       "table row number (counted from 1; for buses the row, not the bus number) or geohash cell. Every column gives the value chosen here."),
     label("Table", table), label("Value", column), label("Columns are", keys),
     label("Share a geohash cell", split, "among the elements located in it (by bus geodata)"),
+    label("File format", format, "the formats the server can read; the file chooser shows only the one chosen"),
     label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet"),
     h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));
   d.showModal();
@@ -3201,7 +3221,7 @@ async function onAction(btn) {
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
-    else if (a === "series-import") { S.seriesPanel = null; $("#series-input").click(); }
+    else if (a === "series-import") { S.seriesPanel = null; $("#series-input").accept = readFormats().join(","); $("#series-input").click(); }
     else if (a === "series-panel") openPanelDialog();
     else if (a === "series-export") await exportSeries(btn.dataset.format);
     else if (a === "series-clear") {

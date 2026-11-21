@@ -234,7 +234,9 @@ In the editor:
     case values. **Import ▾ › Panel…** reads instead a file with one row
     per step and one column per table row number (from 1; for buses the
     row, not the bus number) or geohash cell, all giving one value chosen
-    in its dialog (e.g. bus `Pd`). A geohash cell's value is shared among
+    in its dialog (e.g. bus `Pd`); the dialog's *File format* limits the
+    file chooser to one of the readable formats (or any of them). A
+    geohash cell's value is shared among
     the elements located in it by bus geodata (generators by their bus, DC
     lines by their from bus): in proportion to their case values (equally
     when those are all zero), equally, or the whole value to each; cells
