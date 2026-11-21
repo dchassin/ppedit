@@ -51,6 +51,9 @@ in columns named `table.column.key` (`bus.Pd.5` for bus 5, `gen.Pmax.2`
 for the second generator; `Case.set_series`). It is read from and written
 to the `series` key of `.py` and `.json` cases (not GLM), and `Case.solve`
 with `multistep=True` solves all steps as one cvxopf OPF.
+`Case.set_series_panel` sets one value from a panel instead: steps in rows
+and one column per table row or geohash cell (located by bus geodata,
+`geohash`), sharing a cell's value among the elements in it.
 
 Examples
 --------
@@ -415,6 +418,38 @@ SERIES_COLUMNS = {"bus":("Pd","Qd"),"gen":("Pmin","Pmax"),"dcline":("Pmin","Pmax
 
 SERIES_STEPS = 8784
 """Most time steps in a series (one leap year of hours)"""
+
+SERIES_SPLITS = ("proportional","equal","copy")
+"""How `Case.set_series_panel` shares a geohash cell's value among the
+elements in it: in proportion to their case values (equal shares when
+those are all zero), in equal shares, or the whole value to each"""
+
+GEOHASH_BASE32 = "0123456789bcdefghjkmnpqrstuvwxyz"
+"""Geohash digits"""
+
+def geohash(lat:float,lon:float,precision:int=12) -> str:
+    """Return the geohash of a location (WGS84 degrees) with `precision` digits
+
+    >>> geohash(36.670897,-108.581419,6)
+    '9wdb95'
+    """
+    bounds = [[-90.0,90.0],[-180.0,180.0]]
+    bits,out,even,n = 0,[],True,0
+    while len(out) < precision:
+        b = bounds[1] if even else bounds[0]
+        x = lon if even else lat
+        mid = (b[0] + b[1])/2
+        bits <<= 1
+        if x >= mid:
+            bits |= 1
+            b[0] = mid
+        else:
+            b[1] = mid
+        even,n = not even,n + 1
+        if n == 5:
+            out.append(GEOHASH_BASE32[bits])
+            bits,n = 0,0
+    return "".join(out)
 
 _SERIES_NAME = re.compile(r"^\s*(bus|gen|dcline)\.(\w+)\.(\d+)\s*$",re.I)
 
@@ -1467,6 +1502,164 @@ def {name}():
         self.series = {"index":[str(x) for x in index],"delta":self._series_delta(delta),
             "columns":names,"values":rows}
         return self.series
+
+    def set_series_panel(self,table:str,column:str,keys:list,values:list[list],
+            index:list|None=None,delta:float|None=None,keys_are:str="auto",
+            split:str="proportional",merge:bool=True) -> dict:
+        """Set one case value by step from a panel: steps in rows, one
+        column per table row or geohash cell
+
+        Arguments
+        ---------
+
+          - `table`, `column`: the case value the panel gives, as in
+            `SERIES_COLUMNS` (e.g. `bus`, `Pd`; case is ignored)
+
+          - `keys`: one key per panel column: a row number of `table`
+            counted from 1 (for `bus` the row, not the bus number), or a
+            geohash (any length, e.g. `9q8yy`)
+
+          - `values`: one row per step, one finite number per key
+
+          - `index`, `delta`: step labels and hours per step for a new
+            series (see `set_series`); a merged panel keeps those of the
+            current series (`delta` replaces it when given)
+
+          - `keys_are`: `row`, `geohash`, or `auto` (all digits: rows,
+            else geohashes)
+
+          - `split`: for geohashes, how a cell's value is shared among the
+            elements located in it (`SERIES_SPLITS`): `proportional` to
+            their case values of `column` (equal shares when those are all
+            zero), `equal`, or `copy` (the whole value to each)
+
+          - `merge`: add the panel to the current series (same number of
+            steps), replacing that value's columns for the elements the
+            panel covers; `False` replaces the series
+
+        Elements are located by their bus's geodata (the first row of the
+        bus; a generator by its bus, a DC line by its from bus). Geohash
+        cells with no element in them are ignored and reported; elements
+        without geodata or outside every cell are left out.
+
+        Returns
+        -------
+
+          - `dict`: `columns` (series columns written), `keys` (panel
+            columns used), `ignored` (geohashes with no element), and
+            `unlocated` (elements without geodata, for geohashes)
+
+        Exceptions
+        ----------
+
+          - `CaseError`: an unknown table or column, keys of the wrong
+            kind, repeated or nested geohashes that put one element in two
+            cells, a row that does not exist, no geodata for geohashes, no
+            element matched, a non-finite value, or a merge with a
+            different number of steps (and the errors of `set_series`)
+        """
+        if table not in SERIES_COLUMNS:
+            raise CaseError(f"a panel can set {', '.join(SERIES_COLUMNS)} values, not '{table}'")
+        known = {c.lower():c for c in SERIES_COLUMNS[table]}
+        if str(column).lower() not in known:
+            raise CaseError(f"{table} values by step can be {', '.join(SERIES_COLUMNS[table])}, "
+                f"not '{column}'")
+        column = known[str(column).lower()]
+        if split not in SERIES_SPLITS:
+            raise CaseError(f"split must be one of {', '.join(SERIES_SPLITS)}, not '{split}'")
+        keys = [re.sub(r"\.0+$","",str(k).strip()) for k in keys]
+        if not keys:
+            raise CaseError("the panel has no columns")
+        dup = sorted({k for k in keys if keys.count(k) > 1})
+        if dup:
+            raise CaseError(f"repeated panel column(s): {', '.join(dup)}")
+        digits = [k.isdigit() for k in keys]
+        if keys_are == "auto":
+            keys_are = "row" if all(digits) else "geohash"
+        if keys_are == "row":
+            bad = [k for k,d in zip(keys,digits) if not d]
+        elif keys_are == "geohash":
+            keys = [k.lower() for k in keys]
+            bad = [k for k in keys if not k or any(c not in GEOHASH_BASE32 for c in k)]
+        else:
+            raise CaseError(f"keys_are must be row, geohash or auto, not '{keys_are}'")
+        if bad:
+            raise CaseError(f"panel column(s) {', '.join(bad[:5])} are not "
+                + ("row numbers" if keys_are == "row" else "geohashes"))
+        rows = []
+        for t,row in enumerate(values or []):
+            if not isinstance(row,(list,tuple)) or len(row) != len(keys):
+                raise CaseError(f"panel step {t+1} has "
+                    f"{len(row) if isinstance(row,(list,tuple)) else 'no'} values, expected {len(keys)}")
+            out = []
+            for k,v in zip(keys,row):
+                try:
+                    x = float(v)
+                except (TypeError,ValueError):
+                    x = math.nan
+                if not math.isfinite(x):
+                    raise CaseError(f"panel step {t+1}, column {k}: {v!r} is not a finite number")
+                out.append(x)
+            rows.append(out)
+        if not rows:
+            raise CaseError("the panel has no time steps")
+        names = [c["name"] for c in COLUMNS[table]]
+        k_col = names.index(column)
+        ids = lambda n: self.tables["bus"][n][0] if table == "bus" else n + 1
+        parts,ignored,unlocated = [],[],0  # parts: (panel column, element key, share)
+        if keys_are == "row":
+            for j,k in enumerate(keys):
+                n = int(k)
+                if not 1 <= n <= len(self.tables[table]):
+                    raise CaseError(f"panel column {k}: {table} row {n} does not exist "
+                        f"({len(self.tables[table])} rows)")
+                parts.append((j,ids(n-1),1.0))
+        else:
+            if not self.geodata:
+                raise CaseError("geohash panel columns need bus geodata (load it first)")
+            where = {}
+            for g in self.geodata:
+                where.setdefault(g[0],(g[1],g[2]))
+            bus_of = (lambda n: self.tables["bus"][n][0]) if table == "bus" else \
+                (lambda n: self.tables[table][n][0])
+            cells = {}
+            for n in range(len(self.tables[table])):
+                loc = where.get(bus_of(n))
+                if loc is None:
+                    unlocated += 1
+                    continue
+                code = geohash(loc[0],loc[1],12)
+                hits = [j for j,k in enumerate(keys) if code.startswith(k)]
+                if len(hits) > 1:
+                    raise CaseError(f"{table} {ids(n)} is in panel cells "
+                        f"{' and '.join(keys[j] for j in hits)}; keep one")
+                if hits:
+                    cells.setdefault(hits[0],[]).append(n)
+            ignored = [k for j,k in enumerate(keys) if j not in cells]
+            for j,members in sorted(cells.items()):
+                base = [abs(float(self.tables[table][n][k_col])) for n in members]
+                for n,b in zip(members,base):
+                    share = 1.0 if split == "copy" else \
+                        b/sum(base) if split == "proportional" and sum(base) > 0 else 1/len(members)
+                    parts.append((j,ids(n),share))
+        if not parts:
+            raise CaseError("no panel column matched a "
+                + ("located " if keys_are == "geohash" else "") + f"{table} element")
+        new = [f"{table}.{column}.{key}" for _,key,_ in parts]
+        new_values = [[r[j]*share for j,_,share in parts] for r in rows]
+        if merge and self.series:
+            ser = self.series
+            if len(ser["values"]) != len(rows):
+                raise CaseError(f"the panel has {len(rows)} steps but the series has "
+                    f"{len(ser['values'])}; replace the series instead")
+            keep = [j for j,c in enumerate(ser["columns"]) if c not in new]
+            columns = [ser["columns"][j] for j in keep] + new
+            merged = [[old[j] for j in keep] + add for old,add in zip(ser["values"],new_values)]
+            self.set_series(columns,merged,ser["index"],ser["delta"] if delta is None else delta)
+        else:
+            self.set_series(new,new_values,index,1.0 if delta is None else delta)
+        return {"columns":len(new),"keys":len({j for j,_,_ in parts}),"ignored":ignored,
+            "unlocated":unlocated}
 
     def set_series_delta(self,delta:float):
         """Set the hours per step of the series (`CaseError` if there is none)"""

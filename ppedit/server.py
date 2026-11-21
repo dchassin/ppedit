@@ -68,7 +68,13 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `ppedit._tableio.read_series`) and replace the case series with it
     (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
     the series replaced, else 1); the state has `imported` (`{"steps",
-    "columns"}`)
+    "columns"}`). With `"panel": {"table", "column", "keys"?, "split"?,
+    "merge"?}` the file is a panel instead: steps in rows and one column per
+    table row number or geohash, all giving `table.column`
+    (`ppedit.Case.set_series_panel`; `keys` `auto`|`row`|`geohash`,
+    `split` `proportional`|`equal`|`copy`, `merge` default true), and
+    `imported` adds that method's report (`keys`, `ignored`, `unlocated`;
+    `columns` is then the series total)
   - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
     true}` remove the series (both undoable)
   - `GET  /api/series/export?format=csv`: download the series as a data
@@ -795,12 +801,23 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
         index,columns,rows = read_series(str(data["filename"]),content)
+        panel = data.get("panel")
         with editor.lock:
             old = editor.case.series
-            delta = data.get("delta") or (old["delta"] if old else 1.0)
-            series = editor.edit(lambda: editor.case.set_series(columns,rows,index,delta))
+            if panel:
+                if not isinstance(panel,dict) or not panel.get("table") or not panel.get("column"):
+                    raise CaseError("a panel import needs the table and column it sets")
+                report = editor.edit(lambda: editor.case.set_series_panel(panel["table"],
+                    panel["column"],columns,rows,index,data.get("delta"),
+                    panel.get("keys","auto"),panel.get("split","proportional"),
+                    bool(panel.get("merge",True))))
+            else:
+                delta = data.get("delta") or (old["delta"] if old else 1.0)
+                editor.edit(lambda: editor.case.set_series(columns,rows,index,delta))
+                report = {}
+            series = editor.case.series
             out = editor.state()
-            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"])}
+            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"]),**report}
             return jsonify(out)
 
     @app.post("/api/series")

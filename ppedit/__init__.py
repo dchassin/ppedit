@@ -95,7 +95,11 @@ Given a case file, `ppedit.Case` is expected to satisfy:
      their columns and renumbers the rows after them. *Run OPF ▾ ›
      Multistep* (`Case.solve(..., multistep=True)`) solves every step as
      one cvxopf problem and returns one result per step; the step's values
-     replace the case values in that step only.
+     replace the case values in that step only. A *panel* sets one value
+     (`Case.set_series_panel`): steps in rows and one column per table row
+     number or geohash cell, a cell's value shared among the elements whose
+     bus geodata lies in it (in proportion to their case values, equally,
+     or whole to each).
 
 The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
 read and edit the case through the same checked, undoable edits as the

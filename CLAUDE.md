@@ -263,7 +263,12 @@ API key to start sessions; tests use a fake client).
   time-varying generator limits as of cvxopf fd4d279 (2026-11-18); they
   only work with the default preparation (the prepared solve rebuilds the
   problem). Switch to cvxopf's own input if it adds one. The diagram still
-  draws case loads for a multistep step. Full AC multistep memory grows
+  draws case loads for a multistep step. Panels (decision #60,
+  `Case.set_series_panel`, `geohash` in `case.py`, `panel` of
+  `/api/series/import`, `openPanelDialog` in `app.js`) locate elements by
+  the first geodata row of their bus and match geohash cells by prefix of a
+  12-digit geohash computed from LAT/LON (not the `GEOHASH` geodata tag some
+  examples carry). Full AC multistep memory grows
   with the horizon inside cvxopf (case118: about 0.5 GB per step, the same
   with or without `automatic_sparse_dispatch`; 24 steps did not fit in
   7 GB), while the DC models are light (case118, 24 steps: about 1 s).

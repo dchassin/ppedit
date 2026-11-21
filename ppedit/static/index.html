@@ -160,7 +160,13 @@
   </section>
   <section id="view-series" class="view">
     <div class="table-tools">
-      <button data-action="series-import" title="Replace the time series with one read from a data file">Import…</button>
+      <div class="menu">
+        <button data-menu="series-import-menu" title="Read a time series from a data file">Import ▾</button>
+        <div id="series-import-menu" class="dropdown left" role="menu">
+          <button data-action="series-import" role="menuitem" title="Replace the series with a file whose columns are named table.column.key">Series file…</button>
+          <button data-action="series-panel" role="menuitem" title="Steps in rows, table row numbers or geohashes in columns, all for one table value">Panel…</button>
+        </div>
+      </div>
       <div class="menu">
         <button data-menu="series-export-menu" id="series-export-btn">Export ▾</button>
         <div id="series-export-menu" class="dropdown left" role="menu"></div>
@@ -203,6 +209,7 @@
 <div id="busy" class="busy" role="status" aria-live="polite"><div class="busy-bar"></div><span class="busy-text">Loading…</span></div>
 <div id="toast" class="toast" hidden></div>
 <dialog id="about" class="about" aria-labelledby="about-title"></dialog>
+<dialog id="panel-dialog" class="about panel-dialog" aria-labelledby="panel-title"></dialog>
 <dialog id="server-down" class="server-down" aria-labelledby="server-down-title"></dialog>
 <script src="/static/app.js"></script>
 </body>

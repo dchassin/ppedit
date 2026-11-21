@@ -223,7 +223,16 @@ In the editor:
     named `bus.Pd.N` or `bus.Qd.N` (bus number `N`), `gen.Pmin.N` or
     `gen.Pmax.N` (generator row `N`, from 1), `dcline.Pmin.N` or
     `dcline.Pmax.N` (DC line row `N`). Values not in the file keep their
-    case values. The step length (hours) is set beside it; **Export ▾**
+    case values. **Import ▾ › Panel…** reads instead a file with one row
+    per step and one column per table row number (from 1; for buses the
+    row, not the bus number) or geohash cell, all giving one value chosen
+    in its dialog (e.g. bus `Pd`). A geohash cell's value is shared among
+    the elements located in it by bus geodata (generators by their bus, DC
+    lines by their from bus): in proportion to their case values (equally
+    when those are all zero), equally, or the whole value to each; cells
+    with no element are ignored and reported. A panel can be added to the
+    current series (same number of steps), replacing that value for the
+    elements it covers. The step length (hours) is set beside it; **Export ▾**
     and **Remove series** are undoable like other edits. The series is
     saved in `.py` and `.json` cases (not `.glm`). With cvxopf installed,
     **Run OPF ▾ › Multistep** solves every step as one cvxopf problem with

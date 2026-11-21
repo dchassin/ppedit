@@ -407,7 +407,8 @@ function renderSeries() {
     "A series file has one row per time step: an optional label column (named time, timestamp, date, step or index) ",
     "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
     "for generator row N, dcline.Pmin.N and dcline.Pmax.N for DC line row N (rows counted from 1). Values not in the file keep ",
-    "their case values at every step. Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
+    "their case values at every step. Import ▾ › Panel… reads instead a file with one column per table row number or geohash cell, ",
+    "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
     "The series is saved with .py and .json cases (not .glm).");
   if (!ser) {
     $("#series-body").replaceChildren(h("div", { class: "empty" }, h("div", { class: "big" }, "No time series"),
@@ -423,9 +424,45 @@ function renderSeries() {
     ...(ser.values.length > SERIES_SHOW ? [h("div", { class: "hint" }, `First ${SERIES_SHOW} of ${ser.values.length} steps shown; export the series to see them all.`)] : []));
 }
 async function importSeries(file) {
-  const data = await fileBase64(file);
-  const st = await act("/api/series/import", { filename: file.name, data });
-  toast(`Read ${st.imported.steps} step(s) of ${st.imported.columns} value(s) from ${file.name} (Ctrl+Z to undo)`);
+  const data = await fileBase64(file), panel = S.seriesPanel;
+  S.seriesPanel = null;
+  const st = await act("/api/series/import", panel ? { filename: file.name, data, panel } : { filename: file.name, data });
+  const im = st.imported;
+  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name} (Ctrl+Z to undo)`);
+  const extra = (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
+    + (im.unlocated ? `; ${im.unlocated} ${panel.table} row(s) without geodata left out` : "");
+  toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
+}
+
+// Panel import (Import ▾ › Panel…): steps in rows, one column per row number
+// or geohash cell, all giving the chosen table value (Case.set_series_panel).
+// The choices are kept in S.seriesPanel until the file is picked.
+function openPanelDialog() {
+  const d = $("#panel-dialog"), ser = S.state.case.series, prev = S.panelChoice || {};
+  const tables = { bus: ["Pd", "Qd"], gen: ["Pmin", "Pmax"], dcline: ["Pmin", "Pmax"] };
+  const sel = (id, opts, value) => h("select", { id }, opts.map(([v, t]) => h("option", { value: v, selected: v === value }, t)));
+  const table = sel("panel-table", Object.keys(tables).map(t => [t, TABLE_TITLES[t]]), prev.table || "bus");
+  const column = h("select", { id: "panel-column" });
+  const fill = () => column.replaceChildren(...tables[table.value].map(c => h("option", { value: c, selected: c === prev.column }, c)));
+  table.addEventListener("change", fill); fill();
+  const keys = sel("panel-keys", [["auto", "Automatic (digits: rows)"], ["row", "Row numbers (from 1)"], ["geohash", "Geohashes"]], prev.keys || "auto");
+  const split = sel("panel-split", [["proportional", "In proportion to case values"], ["equal", "Equally"], ["copy", "Whole value to each"]], prev.split || "proportional");
+  const merge = h("input", { type: "checkbox", id: "panel-merge", checked: !!ser, disabled: !ser });
+  const label = (text, el, hint) => h("label", { class: "panel-row" }, h("span", {}, text), el, hint ? h("span", { class: "hint" }, hint) : null);
+  const go = h("button", { class: "primary", onclick: () => {
+    S.seriesPanel = S.panelChoice = { table: table.value, column: column.value, keys: keys.value, split: split.value, merge: merge.checked };
+    d.close();
+    $("#series-input").click();
+  } }, "Choose file…");
+  d.replaceChildren(h("h2", { id: "panel-title" }, "Import a panel"),
+    h("p", { class: "summary" }, "A panel file has one row per time step (an optional time column first) and one column per ",
+      "table row number (counted from 1; for buses the row, not the bus number) or geohash cell. Every column gives the value chosen here."),
+    label("Table", table), label("Value", column), label("Columns are", keys),
+    label("Share a geohash cell", split, "among the elements located in it (by bus geodata)"),
+    label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet"),
+    h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));
+  d.showModal();
+  go.focus();
 }
 async function exportSeries(ext) {
   const id = busyStart("/api/series/export");
@@ -3164,7 +3201,8 @@ async function onAction(btn) {
     else if (a === "geodata-clear") {
       if (confirm("Remove the geodata (bus locations) from this case? Undo restores it.")) { await act("/api/geodata", { clear: true }); needFit = true; renderNetwork(); }
     }
-    else if (a === "series-import") $("#series-input").click();
+    else if (a === "series-import") { S.seriesPanel = null; $("#series-input").click(); }
+    else if (a === "series-panel") openPanelDialog();
     else if (a === "series-export") await exportSeries(btn.dataset.format);
     else if (a === "series-clear") {
       if (confirm("Remove the time series from this case? Undo restores it.")) await act("/api/series", { clear: true });

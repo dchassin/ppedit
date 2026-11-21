@@ -215,3 +215,96 @@ def test_server_multistep_apply(post):
     status,st = post("/api/solve",{"kind":"opf","algorithm":"CVXOPF-DC","multistep":True})
     status,st = post("/api/apply",{"step":5})
     assert status == 400 and "no step 6" in st["error"]
+
+# ----- panels: steps in rows, row numbers or geohashes in columns -----
+
+def _geo_case():
+    """case9 with buses 5 and 7 in one geohash cell and bus 9 in another"""
+    case = Case.builtin("case9")
+    case.geodata = [[5,37.77,-122.42],[7,37.771,-122.421],[9,34.05,-118.24],[1,40.0,-100.0]]
+    case.geotags = []
+    return case
+
+def test_geohash():
+    """Geohashes match the standard encoding"""
+    from ppedit.case import geohash
+    assert geohash(36.670897,-108.581419,6) == "9wdb95"
+    assert geohash(57.64911,10.40744,11) == "u4pruydqqvj"
+    assert geohash(-25.382708,-49.265506,8) == "6gkzwgjz"
+
+def test_panel_rows():
+    """Row-number columns set the chosen value; for buses the row, not the bus number"""
+    case = Case.builtin("case9")
+    rep = case.set_series_panel("bus","pd",["5","7.0"],[[1,2],[3,4]],["a","b"],0.5)
+    assert rep == {"columns":2,"keys":2,"ignored":[],"unlocated":0}
+    assert case.series == {"index":["a","b"],"delta":0.5,"columns":["bus.Pd.5","bus.Pd.7"],
+        "values":[[1.0,2.0],[3.0,4.0]]}
+    case.set_series_panel("gen","Pmax",["3"],[[10],[20]])
+    assert case.series["columns"] == ["bus.Pd.5","bus.Pd.7","gen.Pmax.3"]
+    assert case.series["index"] == ["a","b"] and case.series["delta"] == 0.5
+    case.set_series_panel("bus","Pd",["5"],[[9],[9]])
+    assert case.series["columns"] == ["bus.Pd.7","gen.Pmax.3","bus.Pd.5"]
+    case.set_series_panel("bus","Qd",["5"],[[1],[1],[1]],merge=False)
+    assert case.series["columns"] == ["bus.Qd.5"] and len(case.series["values"]) == 3
+
+def test_panel_geohash_split():
+    """A geohash cell's value is shared among its buses as chosen"""
+    case = _geo_case()  # bus 5 Pd 90, bus 7 Pd 100, bus 9 Pd 125
+    rep = case.set_series_panel("bus","Pd",["9q8yy","9q5c","dr5r"],[[190,50,1],[380,100,2]])
+    assert rep == {"columns":3,"keys":2,"ignored":["dr5r"],"unlocated":5}
+    vals = dict(zip(case.series["columns"],case.series["values"][1]))
+    assert vals == pytest.approx({"bus.Pd.5":180,"bus.Pd.7":200,"bus.Pd.9":100})
+    case.set_series_panel("bus","Pd",["9q8yy"],[[190],[380]],split="equal",merge=False)
+    assert case.series["values"][0] == [95.0,95.0]
+    case.set_series_panel("bus","Pd",["9q8yy"],[[190],[380]],split="copy",merge=False)
+    assert case.series["values"][0] == [190.0,190.0]
+
+def test_panel_geohash_gen():
+    """Generators are located by their bus"""
+    case = Case.builtin("case9")
+    case.geodata,case.geotags = [[1,40.0,-100.0],[2,40.0,-100.0],[3,30.0,-90.0]],[]
+    case.set_series_panel("gen","Pmax",["9z","dj"],[[300,100]],split="proportional")
+    vals = dict(zip(case.series["columns"],case.series["values"][0]))
+    assert vals == pytest.approx({"gen.Pmax.1":300*250/550,"gen.Pmax.2":300*300/550,"gen.Pmax.3":100})
+
+@pytest.mark.parametrize("args,kwargs,match",[
+    (("load","Pd",["1"],[[1]]),{},"can set bus, gen, dcline"),
+    (("bus","Vm",["1"],[[1]]),{},"can be Pd, Qd"),
+    (("bus","Pd",["10"],[[1]]),{},"bus row 10 does not exist"),
+    (("bus","Pd",["1","x"],[[1,2]]),{"keys_are":"row"},"not row numbers"),
+    (("bus","Pd",["9q8!"],[[1]]),{},"not geohashes"),
+    (("bus","Pd",["9q8yy"],[[1]]),{},"need bus geodata"),
+    (("bus","Pd",["1","1"],[[1,2]]),{},"repeated"),
+    (("bus","Pd",["1"],[[None]]),{},"step 1, column 1"),
+    (("bus","Pd",["1"],[]),{},"no time steps"),
+    (("bus","Pd",["1"],[[1]]),{"split":"half"},"split must be"),
+])
+def test_panel_errors(args,kwargs,match):
+    """Bad tables, values, keys and options are refused"""
+    with pytest.raises(CaseError,match=match):
+        Case.builtin("case9").set_series_panel(*args,**kwargs)
+
+def test_panel_geohash_errors():
+    """Nested cells, no match and a merge with other steps are refused"""
+    case = _geo_case()
+    with pytest.raises(CaseError,match="in panel cells 9q8 and 9q8yy"):
+        case.set_series_panel("bus","Pd",["9q8","9q8yy"],[[1,2]])
+    with pytest.raises(CaseError,match="no panel column matched a located bus"):
+        case.set_series_panel("bus","Pd",["u4pr"],[[1]])
+    case.set_series_panel("bus","Pd",["9q8yy"],[[1],[2]])
+    with pytest.raises(CaseError,match="3 steps but the series has 2"):
+        case.set_series_panel("bus","Pd",["9q8yy"],[[1],[2],[3]])
+
+def test_server_panel(post):
+    """A panel imports through the API, merges, and is undoable"""
+    status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("time,5,7\nh1,90,100\nh2,95,105\n"),
+        "panel":{"table":"bus","column":"Pd"}})
+    assert status == 200 and st["imported"]["keys"] == 2 and st["imported"]["columns"] == 2
+    status,st = post("/api/series/import",{"filename":"g.csv","data":_b64("time,3\nh1,200\nh2,100\n"),
+        "panel":{"table":"gen","column":"Pmax","keys":"row","merge":True}})
+    assert st["case"]["series"]["columns"] == ["bus.Pd.5","bus.Pd.7","gen.Pmax.3"]
+    assert st["case"]["series"]["index"] == ["h1","h2"]
+    status,st = post("/api/undo")
+    assert st["case"]["series"]["columns"] == ["bus.Pd.5","bus.Pd.7"]
+    status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("5\n1\n"),"panel":{"table":"bus"}})
+    assert status == 400 and "table and column" in st["error"]
