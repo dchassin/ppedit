@@ -249,7 +249,10 @@ In the editor:
     number of steps). A value given by several series is their sum, e.g. a
     base load series and an EV load series for the same bus (the sum
     replaces the case value); all series must have the same step length,
-    and the tab says why when they cannot be combined. Each series is read with **Import…** from a data file (same formats as the
+    and the tab says why when they cannot be combined. The
+    multistep builder options (temporal assembly, branch limits, loss
+    weight and others, each for the network models it applies to) are on
+    the Settings tab under *CVXOPF multistep options*. Each series is read with **Import…** from a data file (same formats as the
     tables) with one row per time step: an optional label column (`time`,
     `timestamp`, `date`, `step` or `index`) and one column per value,
     named `bus.Pd.N` or `bus.Qd.N` (bus number `N`), `gen.Pmin.N` or

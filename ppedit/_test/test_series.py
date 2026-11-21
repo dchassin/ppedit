@@ -518,3 +518,36 @@ def test_multistep_exception_has_empty_steps():
     assert not r["success"] and r["multistep"]["steps"] == 2
     assert r["steps"] == [] and r["horizon_objective"] is None
     assert any("DC line 4" in m["message"] for m in r["messages"])
+
+@needs_cvxopf
+@pytest.mark.parametrize("algorithm",["CVXOPF-AC","CVXOPF-SOCP","CVXOPF-DC","CVXOPF-1NODE"])
+def test_multistep_stepwise_assembly(algorithm):
+    """Stepwise assembly gives the vectorized solution, per-step gen limits included"""
+    case = _case9_series()
+    vec = case.solve("opf",algorithm,multistep=True)
+    r = case.solve("opf",algorithm,{"multistep":{"temporal_assembly":"stepwise"}},multistep=True)
+    assert r["success"] and "temporal_assembly=stepwise" in r["log"]
+    assert r["horizon_objective"] == pytest.approx(vec["horizon_objective"],rel=1e-4)
+    assert r["steps"][2]["gen"][2]["Pg"] <= 60 + 1e-3
+
+@needs_cvxopf
+def test_multistep_builder_options():
+    """Builder options reach only the models they apply to; bad values are refused"""
+    case = _case9_series()
+    opts = {"multistep":{"enforce_branch_limits":False,"loss_weight":0.5,"sparse_dispatch":False}}
+    r = case.solve("opf","CVXOPF-DC",opts,multistep=True)
+    line = next(x for x in r["log"].splitlines() if "multistep horizon" in x)
+    assert "loss_weight=0.5" in line and "enforce_branch_limits" not in line and "automatic_sparse_dispatch" not in line
+    r = case.solve("opf","CVXOPF-SOCP",opts,multistep=True)
+    line = next(x for x in r["log"].splitlines() if "multistep horizon" in x)
+    assert r["success"] and "enforce_branch_limits=False" in line and "loss_weight" not in line
+    r = case.solve("opf","CVXOPF-AC",opts,multistep=True)
+    assert "automatic_sparse_dispatch=False" in r["log"]
+    for bad,match in [({"temporal_assembly":"x"},"temporal_assembly"),({"loss_weight":-1},"nonnegative"),
+({"nope":1},"unknown multistep"),
+            ({"init_flat":"yes"},"true or false"),({"branch_limit_sentinel":0},"positive")]:
+        with pytest.raises((CaseError,ValueError),match=match):
+            case.solve("opf","CVXOPF-DC",{"multistep":bad},multistep=True)
+    with pytest.raises((CaseError,ValueError),match="enforce_branch_limits off"):
+        case.solve("opf","CVXOPF-AC",{"multistep":{"sparsity_tol":1e-6}},multistep=True)
+    assert case.solve("opf","CVXOPF-DC",{"multistep":{"sparsity_tol":1e-6}},multistep=True)["success"]

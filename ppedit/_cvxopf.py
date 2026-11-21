@@ -57,6 +57,16 @@ Solve options (`solve_options`, issue #88; decision #48):
     and solver options such as IPOPT `tol` and `max_iter`, or CLARABEL
     `tol_gap_rel`), passed as given.
 
+  - `multistep`: builder options for multistep OPF only (`multistep_options`,
+    `MULTISTEP_OPTIONS`): `temporal_assembly` (`vectorized`, the default,
+    or `stepwise`), `sparse_dispatch` (AC; default on, issue #122), and the
+    `cvxopf.OPFOptions` fields `enforce_branch_limits` (AC, SOCP; default
+    on), `enforce_vset` (AC, SOCP), `init_flat` (AC; default on),
+    `sparsity_tol` (AC; above 0 only without branch limits), `sparse_pq`
+    and `vectorize_pq` (AC; default on), `loss_weight` (lossy DC; default
+    1) and `branch_limit_sentinel` (lossy DC; MW for branches with
+    `rateA` 0; default 1e6), each passed only to the models it applies to.
+
 Notes about data cvxopf does not model and the warnings cvxopf issues while
 building and solving are written to `log` and returned in `warnings`, each
 as `{"message", "detail"}`. `detail` (or `None`) says what the warning
@@ -79,6 +89,7 @@ constraints) are grouped into one message.
 """
 
 import contextlib
+import math
 import os
 import re
 import sys
@@ -105,6 +116,28 @@ formulation built with `build_opf` (from the cvxopf authors in issue #88;
 keeps the `hourly` objective assembly, since `component_first` applies to
 the time-vectorized builder)"""
 
+MULTISTEP_OPTIONS = {
+    "temporal_assembly":("vectorized",None),
+    "sparse_dispatch":(True,("ac",)),
+    "enforce_branch_limits":(True,("ac","socp")),
+    "enforce_vset":(False,("ac","socp")),
+    "init_flat":(True,("ac",)),
+    "sparsity_tol":(0.0,("ac",)),
+    "sparse_pq":(True,("ac",)),
+    "vectorize_pq":(True,("ac",)),
+    "loss_weight":(1.0,("lossy_dc",)),
+    "branch_limit_sentinel":(1e6,("lossy_dc",)),
+}
+"""Multistep builder options (`multistep` of the solve options): name ->
+(default, formulations it applies to, `None` for all). `temporal_assembly`
+(`vectorized` or `stepwise`) and `sparse_dispatch` (cvxopf's
+`automatic_sparse_dispatch`, issue #122) are `build_opf_multistep`
+arguments; the others are `cvxopf.OPFOptions` fields, passed only to the
+formulations they apply to (cvxopf rejects some elsewhere, e.g. a
+`loss_weight` other than 1 with SOCP)"""
+
+TEMPORAL_ASSEMBLIES = ("vectorized","stepwise")
+
 MAX_CONSTRAINTS = 20
 """Most constraints listed in a warning's `detail`"""
 
@@ -126,13 +159,17 @@ def solve_options(options:dict|None,formulation:str) -> dict:
     if formulation not in FORMULATIONS:
         raise ValueError(f"cvxopf formulation must be one of {', '.join(FORMULATIONS)}")
     options = dict(options or {})
-    unknown = set(options) - {"preparation","solver","verbose","solver_options"}
+    unknown = set(options) - {"preparation","solver","verbose","solver_options","multistep"}
     if unknown:
         raise ValueError(f"unknown cvxopf option(s): {', '.join(sorted(unknown))}")
     out = {"preparation":options.get("preparation") or "default",
         "solver":(options.get("solver") or "").strip().upper() or None,
         "verbose":bool(options.get("verbose",False)),
-        "solver_options":dict(options.get("solver_options") or {})}
+        "solver_options":dict(options.get("solver_options") or {}),
+        "multistep":multistep_options(options.get("multistep"))}
+    if formulation == "ac" and out["multistep"]["sparsity_tol"] > 0 and out["multistep"]["enforce_branch_limits"]:
+        raise ValueError("a multistep sparsity_tol above 0 needs enforce_branch_limits off "
+            "(cvxopf enforces branch limits only with exact sparsity)")
     if out["preparation"] not in PREPARATIONS:
         raise ValueError(f"cvxopf preparation must be one of {', '.join(PREPARATIONS)}")
     native = "IPOPT" if formulation == "ac" else "CLARABEL"
@@ -153,6 +190,43 @@ def solve_options(options:dict|None,formulation:str) -> dict:
         raise ValueError(f"solver option(s) {', '.join(map(str,bad))} cannot be set "
             f"(not names, or set by ppedit: {', '.join(RESERVED)})")
     return out
+
+def multistep_options(options:dict|None) -> dict:
+    """Check the multistep builder `options` (`MULTISTEP_OPTIONS`) and
+    return them complete; `ValueError` for an unknown option or a bad value"""
+    options = dict(options or {})
+    unknown = set(options) - set(MULTISTEP_OPTIONS)
+    if unknown:
+        raise ValueError(f"unknown multistep option(s): {', '.join(sorted(unknown))}")
+    out = {k:options.get(k,d) for k,(d,_) in MULTISTEP_OPTIONS.items()}
+    if out["temporal_assembly"] not in TEMPORAL_ASSEMBLIES:
+        raise ValueError(f"multistep temporal_assembly must be one of {', '.join(TEMPORAL_ASSEMBLIES)}")
+    for k,(d,_) in MULTISTEP_OPTIONS.items():
+        if isinstance(d,bool):
+            if not isinstance(out[k],bool):
+                raise ValueError(f"multistep option {k} must be true or false")
+        elif isinstance(d,float):
+            try:
+                out[k] = float(out[k])
+            except (TypeError,ValueError) as err:
+                raise ValueError(f"multistep option {k} must be a number") from err
+            if not math.isfinite(out[k]) or out[k] < 0 or (k == "branch_limit_sentinel" and out[k] == 0):
+                raise ValueError(f"multistep option {k} must be a finite "
+                    + ("positive" if k == "branch_limit_sentinel" else "nonnegative") + " number")
+    return out
+
+def _multistep_build(opts:dict,formulation:str) -> tuple[dict,dict]:
+    """`build_opf_multistep` keyword arguments and `OPFOptions` fields of the
+    multistep options `opts` that apply to `formulation`"""
+    build,fields = {"temporal_assembly":opts["temporal_assembly"]},{}
+    for k,(_,forms) in MULTISTEP_OPTIONS.items():
+        if k == "temporal_assembly" or (forms is not None and formulation not in forms):
+            continue
+        if k == "sparse_dispatch":
+            build["automatic_sparse_dispatch"] = opts[k]
+        else:
+            fields[k] = opts[k]
+    return build,fields
 
 @contextlib.contextmanager
 def _capture_output(log,enabled):
@@ -528,7 +602,12 @@ def _gen_limits(build,series,gen,gkeep,base):
     for n in series["gen_limited"]:
         if not gkeep[n] or gen[n,7] == 0:
             continue
-        x = pg[int(kept[n]),:] if pg.shape == (int(gkeep.sum()),T) else pg[:,int(kept[n])]
+        k = int(kept[n])
+        if isinstance(pg,(list,tuple)):  # stepwise assembly: one variable per step
+            for t in range(T):
+                extra += [pg[t][k] <= pmax[t,n]/base,pg[t][k] >= pmin[t,n]/base]
+            continue
+        x = pg[k,:] if pg.shape == (int(gkeep.sum()),T) else pg[:,k]
         extra += [x <= pmax[:,n]/base,x >= pmin[:,n]/base]
     if extra:
         build.prob = cp.Problem(build.prob.objective,list(build.prob.constraints) + extra)
@@ -624,6 +703,10 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None,series:dict|None=
     build_options = None
     if opts["preparation"] == "recommended":
         build_options = OPFOptions(numerical_preparation=NumericalPreparation(**RECOMMENDED[formulation]))
+    ms_build,ms_fields = _multistep_build(opts["multistep"],formulation) if series else ({},{})
+    if ms_fields:
+        prep = build_options.numerical_preparation if build_options else None
+        build_options = OPFOptions(**ms_fields,**({"numerical_preparation":prep} if prep else {}))
     kwargs = dict(opts["solver_options"])
     if opts["solver"]:
         kwargs["solver"] = opts["solver"]
@@ -635,12 +718,13 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None,series:dict|None=
         + f"; solver {opts['solver'] or ('IPOPT' if formulation == 'ac' else 'CLARABEL')}"
         + "".join(f", {k}={v!r}" for k,v in opts["solver_options"].items()) + "\n")
     if series:
-        log.write(f"cvxopf multistep horizon: {int(series['T'])} step(s) of {float(series['delta']):g} h\n")
+        log.write(f"cvxopf multistep horizon: {int(series['T'])} step(s) of {float(series['delta']):g} h; "
+            + ", ".join(f"{k}={v}" for k,v in {**ms_build,**ms_fields}.items()) + "\n")
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         if series:
             build = build_opf_multistep(case,formulation=formulation,hvdc=links or None,
-                options=build_options,automatic_sparse_dispatch=True, # issue #122
+                options=build_options,**{"automatic_sparse_dispatch":True,**ms_build}, # issue #122
                 **_series_frames(series,live,rows,formulation))
             if series.get("gen_limited"):
                 _gen_limits(build,series,gen,gkeep,float(ppc["baseMVA"]))

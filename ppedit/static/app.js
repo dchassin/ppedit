@@ -72,10 +72,19 @@ S.precision = loadPrecision();
 // installed): sent with every CVXOPF-* solve. Kept in localStorage
 // (ppedit.cvxopf), not in the case. solverOptions is the text typed, as
 // "name=value, ..." (parsed by parseSolverOptions).
-const CVXOPF_DEFAULTS = { preparation: "default", solver: "", verbose: false, solverOptions: "" };
+// multistep holds the multistep builder options (multistep of the solve
+// options, MULTISTEP_OPTIONS in _cvxopf.py), sent only with multistep solves.
+const MULTISTEP_DEFAULTS = { temporal_assembly: "vectorized", sparse_dispatch: true, enforce_branch_limits: true,
+  enforce_vset: false, init_flat: true, sparsity_tol: 0, sparse_pq: true, vectorize_pq: true, loss_weight: 1,
+  branch_limit_sentinel: 1e6 };
+const CVXOPF_DEFAULTS = { preparation: "default", solver: "", verbose: false, solverOptions: "", multistep: MULTISTEP_DEFAULTS };
 function loadCvxopf() {
-  try { return { ...CVXOPF_DEFAULTS, ...JSON.parse(localStorage.getItem("ppedit.cvxopf") || "{}") }; }
-  catch (_) { return { ...CVXOPF_DEFAULTS }; }
+  try {
+    const o = { ...CVXOPF_DEFAULTS, ...JSON.parse(localStorage.getItem("ppedit.cvxopf") || "{}") };
+    o.multistep = { ...MULTISTEP_DEFAULTS, ...(o.multistep || {}) };
+    return o;
+  }
+  catch (_) { return { ...CVXOPF_DEFAULTS, multistep: { ...MULTISTEP_DEFAULTS } }; }
 }
 S.cvxopf = loadCvxopf();
 // Missing values on import (dropna of /api/table/import and /api/series/import):
@@ -112,9 +121,11 @@ function parseSolverOptions(text) {
   }
   return out;
 }
-function cvxopfOptions() {
+function cvxopfOptions(multistep = false) {
   const o = S.cvxopf;
-  return { preparation: o.preparation, solver: o.solver || null, verbose: !!o.verbose, solver_options: parseSolverOptions(o.solverOptions || "") };
+  const out = { preparation: o.preparation, solver: o.solver || null, verbose: !!o.verbose, solver_options: parseSolverOptions(o.solverOptions || "") };
+  if (multistep) out.multistep = { ...MULTISTEP_DEFAULTS, ...o.multistep };
+  return out;
 }
 function precisionKey(spec) {
   if (spec.kind !== "float") return null;
@@ -406,7 +417,49 @@ function renderCvxopfSettings() {
       + "or IPOPT for full AC. Full AC always uses IPOPT. Solver options are name=value pairs passed "
       + "to the solver (e.g. IPOPT max_iter and tol, CLARABEL tol_gap_rel); tolerances are otherwise "
       + "the solver defaults."),
-    h("div", {}, h("button", { onclick: () => { S.cvxopf = { ...CVXOPF_DEFAULTS }; save(); renderCvxopfSettings(); } }, "Reset to defaults")));
+    h("div", {}, h("button", { onclick: () => { S.cvxopf = { ...CVXOPF_DEFAULTS, multistep: S.cvxopf.multistep }; save(); renderCvxopfSettings(); } }, "Reset to defaults")));
+  renderMultistepSettings(save);
+}
+
+// cvxopf multistep builder options (build_opf_multistep and OPFOptions;
+// MULTISTEP_OPTIONS in _cvxopf.py): used only by Run OPF ▾ > Multistep
+function renderMultistepSettings(save) {
+  const cvx = S.meta.solvers.cvxopf;
+  $("#multistep-title").hidden = $("#multistep-settings").hidden = !cvx;
+  if (!cvx) return;
+  const m = S.cvxopf.multistep;
+  const set = (key, value) => { m[key] = value; save(); renderMultistepSettings(save); };
+  const check = (key, label, models) => h("label", { title: `Applies to ${models}` },
+    h("span", {}, label), h("input", { type: "checkbox", checked: !!m[key], "aria-label": label, onchange: e => set(key, e.target.checked) }),
+    h("span", { class: "unit" }, models));
+  const num = (key, label, models, unit = "") => h("label", { title: `Applies to ${models}` },
+    h("span", {}, label),
+    h("input", { class: "num", value: String(m[key]), "aria-label": label,
+      onchange: e => { const v = Number(e.target.value); if (e.target.value.trim() !== "" && Number.isFinite(v) && v >= 0) set(key, v); else e.target.value = String(m[key]); } }),
+    h("span", { class: "unit" }, (unit ? unit + "; " : "") + models));
+  const assembly = h("select", { "aria-label": "Temporal assembly", onchange: e => set("temporal_assembly", e.target.value) },
+    h("option", { value: "vectorized", selected: m.temporal_assembly !== "stepwise" }, "Vectorized (default)"),
+    h("option", { value: "stepwise", selected: m.temporal_assembly === "stepwise" }, "Stepwise"));
+  const tolBad = m.sparsity_tol > 0 && m.enforce_branch_limits;
+  $("#multistep-settings").replaceChildren(
+    h("label", {}, h("span", {}, "Temporal assembly"), assembly, h("span", { class: "unit" }, "all models")),
+    check("sparse_dispatch", "Sparse derivatives", "AC"),
+    check("enforce_branch_limits", "Enforce branch limits", "AC, SOCP"),
+    check("enforce_vset", "Hold generator voltage setpoints", "AC, SOCP"),
+    check("init_flat", "Flat start", "AC"),
+    num("sparsity_tol", "Admittance sparsity tolerance", "AC"),
+    check("sparse_pq", "Sparse P/Q variables", "AC"),
+    check("vectorize_pq", "Batch P/Q flow definitions", "AC"),
+    num("loss_weight", "Loss weight", "DC"),
+    num("branch_limit_sentinel", "Limit for unrated branches", "DC", "MW"),
+    h("div", { class: "hint err-text" }, tolBad ? "A sparsity tolerance above 0 needs Enforce branch limits off; full AC multistep solves are refused otherwise." : ""),
+    h("div", { class: "hint" }, "Used only by the multistep CVXOPF solvers (Run OPF ▾ > Multistep), with the solve options above; "
+      + "each option goes only to the network models listed beside it. Vectorized assembly builds each constraint once for all steps; "
+      + "stepwise builds one set of variables and constraints per step (slower to build, the same solution). "
+      + "Sparse derivatives lets CVXPY use sparse Jacobians for full AC (much faster on large cases). "
+      + "Without branch limits, rateA is ignored. The loss weight scales the line loss term of the lossy DC objective; "
+      + "the unrated-branch limit replaces rateA 0 there."),
+    h("div", {}, h("button", { onclick: () => { S.cvxopf.multistep = { ...MULTISTEP_DEFAULTS }; save(); renderMultistepSettings(save); } }, "Reset to defaults")));
 }
 
 // ---------------------------------------------------------------- tables
@@ -3559,7 +3612,7 @@ function showRestart() {
 function solveRequest(kind, algorithm, multistep = false) {
   const req = { kind };
   if (algorithm) req.algorithm = algorithm;
-  if (kind === "opf" && algorithm && algorithm.startsWith("CVXOPF-")) req.options = cvxopfOptions();
+  if (kind === "opf" && algorithm && algorithm.startsWith("CVXOPF-")) req.options = cvxopfOptions(multistep);
   if (multistep) req.multistep = true;
   return req;
 }

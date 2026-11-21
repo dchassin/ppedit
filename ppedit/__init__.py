@@ -103,7 +103,10 @@ Given a case file, `ppedit.Case` is expected to satisfy:
      e.g. a load profile and a generator limit profile); multistep OPF
      combines them (`Case.combined_series`): by time when every series has
      a time column (the times common to all), else step by step (same
-     number of steps), and two series may not give the same value.
+     number of steps); a value given by several series is their sum.
+     Multistep builder options (`multistep` of the cvxopf solve options,
+     `ppedit._cvxopf.MULTISTEP_OPTIONS`) choose the temporal assembly and
+     cvxopf `OPFOptions` such as branch limits and the lossy DC loss weight.
 
 The *Claude* tab runs any number of Claude sessions (`ppedit.claude`) that
 read and edit the case through the same checked, undoable edits as the

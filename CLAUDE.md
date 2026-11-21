@@ -99,6 +99,9 @@ API key to start sessions; tests use a fake client).
   cvxopf authors (issue #88) and may need revising as cvxopf changes.
   `verbose` captures file descriptors 1 and 2 while solving, so other
   threads' output in that window lands in the log too.
+  Multistep builder options (`MULTISTEP_OPTIONS`, `multistep_options`,
+  `renderMultistepSettings` in `app.js`, `multistep` of `S.cvxopf`) go only
+  with multistep solves and only to the models they apply to.
   `build_opf` gets `automatic_sparse_dispatch=True` (issue #122): without
   it cvxopf zeroes CVXPY's density threshold for AC and the solve runs 3-4x
   slower on a needlessly dense Jacobian.
