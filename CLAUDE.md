@@ -232,6 +232,13 @@ API key to start sessions; tests use a fake client).
   `ppedit serve ... --no-browser` command: a page cannot start a process. `window.close()` is refused for tabs with back history
   (e.g. headless test browsers), which then show the stopped page.
 
+- Session token (decision #59, issue #117, `token` of `create_app`,
+  `token_cookie` in `server.py`, `--token` in `cli.py`): `ppedit serve`
+  always requires `?token=` or the cookie set for it, so tests that start
+  the CLI server must pass the token; `create_app()` without `token` (the
+  test fixtures) stays open. `serverCommand()` in `app.js` adds `--token`
+  from `/api/meta`, and `ping()` reports a 403 as `{forbidden: true}`.
+
 - Work-in-progress indicator (decision #54, `#busy`, `busyStart`/`busyEnd` in
   `app.js`): every `api()` call counts unless it passes `{ background: true }`;
   pass it for any new polling so the indicator does not stay up. Rendering

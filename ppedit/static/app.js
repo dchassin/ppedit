@@ -3161,13 +3161,14 @@ function closeWindow(title) {
 // server answering with another `instance` than /api/meta gave was restarted:
 // the page reloads from it, since the case it shows is no longer the server's.
 const PING_INTERVAL = 5000, PING_TIMEOUT = 10000, DOWN_POLL = 2000;
-const conn = { down: false, timer: null, checking: false, poll: null, since: 0 };
+const conn = { down: false, timer: null, checking: false, poll: null, since: 0, forbidden: false };
 
 async function ping() {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), PING_TIMEOUT);
   try {
     const res = await fetch("/api/ping", { signal: ctl.signal, cache: "no-store" });
+    if (res.status === 403) return { forbidden: true };  // a server with another session token (#117)
     return res.ok ? await res.json() : null;
   } catch (_) { return null; }
   finally { clearTimeout(t); }
@@ -3179,7 +3180,7 @@ async function watchServer() {
   let p;
   try { p = await ping(); } finally { conn.checking = false; }
   if (S.exited || conn.down) return;
-  if (!p) serverDown();
+  if (!p || p.forbidden) serverDown();
   else if (p.instance !== S.meta.instance) serverBack(p);
 }
 
@@ -3191,13 +3192,15 @@ function serverDown() {
   showServerDialog();
   let busy = false;
   conn.poll = setInterval(async () => {  // wait for the server to come back
-    const status = $("#server-down .status");
-    if (status) status.textContent = waitingText();
+    const status = () => { const el = $("#server-down .status"); if (el) el.textContent = waitingText(); };
+    status();
     if (busy || S.exited) return;
     busy = true;
     const p = await ping();
     busy = false;
-    if (p && conn.down && !S.exited) serverBack(p);
+    conn.forbidden = !!(p && p.forbidden);
+    status();
+    if (p && !p.forbidden && conn.down && !S.exited) serverBack(p);
   }, DOWN_POLL);
 }
 
@@ -3219,18 +3222,21 @@ function serverBack(p) {
 }
 
 // The command that starts the server again for this page: same file, port and
-// host, and --no-browser because this page reconnects by itself
+// host, the same session token, and --no-browser because this page reconnects by itself
 function serverCommand() {
   const q = a => /^[\w@%+=:,./\\-]+$/.test(a) ? a : `"${a.replace(/"/g, '\\"')}"`;
   const args = ["ppedit", "serve"];
   if (S.state && S.state.path) args.push(q(S.state.path));
   if (location.port && location.port !== "8050") args.push("--port", location.port);
   if (!["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)) args.push("--host", location.hostname);
+  if (S.meta && S.meta.token) args.push("--token", S.meta.token);  // the same token, so this page's cookie still works (#117)
   args.push("--no-browser");
   return args.join(" ");
 }
 
-const waitingText = () => `Waiting for the server to answer… (${Math.round((Date.now() - conn.since) / 1000)} s)`;
+const waitingText = () => conn.forbidden
+  ? `A ppedit server answers at ${location.host} but refuses this page's session token: it was started with another token. Open the URL it printed, or stop it and run the restart command.`
+  : `Waiting for the server to answer… (${Math.round((Date.now() - conn.since) / 1000)} s)`;
 const exitButton = () => h("button", { onclick: () => closeWindow("ppedit server not responding") }, "Exit browser window");
 
 function showServerDialog() {

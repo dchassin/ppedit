@@ -32,14 +32,23 @@ def test_bad_input(capsys):
     assert "ERROR [ppedit]" in capsys.readouterr().err
 
 def test_serve_exit(capsys):
-    import json,socket,threading,time,urllib.request # pylint: disable=import-outside-toplevel
+    import json,socket,threading,time,urllib.error,urllib.request # pylint: disable=import-outside-toplevel
     with socket.socket() as sock:
         sock.bind(("127.0.0.1",0))
         port = sock.getsockname()[1]
     out = {}
-    thread = threading.Thread(target=lambda: out.update(code=main(["serve","--no-browser","-p",str(port)])))
+    thread = threading.Thread(target=lambda: out.update(code=main(["serve","--no-browser","-p",str(port),"--token","t0k"])))
     thread.start()
-    req = urllib.request.Request(f"http://localhost:{port}/api/exit",data=b"{}",method="POST",
+    for _ in range(50):
+        try:
+            urllib.request.urlopen(f"http://localhost:{port}/api/ping",timeout=2) # pylint: disable=consider-using-with
+            assert False,"served without the session token"
+        except urllib.error.HTTPError as err:
+            assert err.code == 403
+            break
+        except OSError:
+            time.sleep(0.1)
+    req = urllib.request.Request(f"http://localhost:{port}/api/exit?token=t0k",data=b"{}",method="POST",
         headers={"Content-Type":"application/json","X-PPEdit":"1"})
     for _ in range(50):
         try:
@@ -51,8 +60,12 @@ def test_serve_exit(capsys):
     thread.join(5)
     assert not thread.is_alive() and out["code"] == 0
     printed = capsys.readouterr().out
-    assert f"URL.... http://localhost:{port}/" in printed
+    assert f"URL.... http://localhost:{port}/?token=t0k" in printed
     assert "thanks for using ppedit!" in printed
+
+def test_serve_token_checked(capsys):
+    assert main(["serve","--no-browser","--token","no spaces"]) == 1
+    assert "--token must be" in capsys.readouterr().err
 
 def test_verbose(tmp_path,caplog):
     import logging # pylint: disable=import-outside-toplevel
