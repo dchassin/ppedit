@@ -2251,7 +2251,7 @@ def {name}():
             if not cvx:
                 raise CaseError("multistep OPF needs a CVXOPF-* solver")
             if not self.series:
-                raise CaseError("multistep OPF needs a time series (import one on the Series tab)")
+                raise CaseError("multistep OPF needs a time series (import one on the Multistep tab)")
             series = self._series_input()
         cvx_options = None
         if cvx:

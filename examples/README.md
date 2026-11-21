@@ -104,7 +104,7 @@ NREL areas, including `wecc240_2018.py`.
 `wecc240_generation.csv.gz` is a panel of generator `Pmax` by hour for
 2020 (UTC, 8,784 hours) for the generator rows of `wecc240_2020.py`: a
 `timestamp` column and one column per generator row counted from 1. Read
-it on the Series tab with *Import ▾ › Panel…* (table gen, value Pmax,
+it on the Multistep tab with *Import ▾ › Panel…* (table gen, value Pmax,
 columns are row numbers); with the case's `real_load` and `reactive_load`
 series (August 2020) it combines by time into the 744 hours of August. It
 is built from the WECC 240 node files of eudoxys/generation (`data/wecc`,

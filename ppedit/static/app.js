@@ -5,7 +5,7 @@ const S = {
   meta: null,          // columns, tables, builtin cases
   state: null,         // editor state from the server
   view: "network",
-  table: "bus",        // table the Tables tab opens (the one shown last)
+  table: "bus",        // table the Case tab opens (the one shown last)
   precision: null,     // decimal places by unit (set from loadPrecision below)
   selected: { bus: new Set(), gen: new Set(), branch: new Set(), gencost: new Set(), dcline: new Set(), dclinecost: new Set(), areas: new Set() },
   filter: "",
@@ -13,7 +13,7 @@ const S = {
   tableSort: {},       // case table -> {col, dir} (see tableOrder)
   claude: null,        // Claude sessions from /api/claude
   step: 0,             // step of a multistep solution shown (issue #124, stepView)
-  seriesName: null,    // series shown on the Series tab ("" = all combined; currentSeries)
+  seriesName: null,    // series shown on the Multistep tab ("" = all combined; currentSeries)
   issueOpen: null,     // message of the solver warning whose detail is open (Issues tab)
   pos: {},             // bus_i -> {x, y}
   zoom: { k: 1, x: 0, y: 0 },
@@ -290,7 +290,7 @@ function renderChrome() {
   $("#series-count").textContent = c.series.length ? (comb && comb.steps ? comb.steps : "!") : "";
   $$("#opf-menu [data-multistep]").forEach(b => {
     b.disabled = !comb || !!comb.error;
-    b.title = !comb ? "Import a time series on the Series tab first"
+    b.title = !comb ? "Import a time series on the Multistep tab first"
       : comb.error ? `The series cannot be combined: ${comb.error}`
       : `Solve the ${comb.steps} steps of the ${c.series.length > 1 ? `${c.series.length} combined series` : "time series"} as one OPF`;
   });
@@ -313,14 +313,17 @@ function renderChrome() {
   $("#claude-dot").title = busy ? "Claude is working" : "";
   document.title = `${st.dirty ? "• " : ""}${c.name} — ppedit`;
   const isTable = S.meta.tables.includes(S.view);
-  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "tables")));
+  $$("#tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view || (isTable && b.dataset.view === "case")));
   $$("#table-tabs > button").forEach(b => b.classList.toggle("active", b.dataset.view === S.view));
 }
 
-// The Tables tab opens the table shown last (S.table); the table tabs below
+// The Case tab opens the table shown last (S.table); the table tabs below
 // it pick the table. Table names stay view names (?view=bus, Issues links).
+// "tables" and "series" are former tab names, kept so ?view=tables and
+// ?view=series still work.
 function show(view) {
-  if (view === "tables") view = S.table;
+  if (view === "series") view = "multistep";
+  if (view === "case" || view === "tables") view = S.table;
   if (S.meta.tables.includes(view)) S.table = view;
   S.view = view;
   renderChrome();
@@ -333,7 +336,7 @@ function renderView() {
   if (isTable) { $("#view-table").classList.add("active"); renderTable(S.view); }
   else if (S.view === "network") { $("#view-network").classList.add("active"); renderNetwork(); }
   else if (S.view === "results") { $("#view-results").classList.add("active"); renderResults(); }
-  else if (S.view === "series") { $("#view-series").classList.add("active"); renderSeries(); }
+  else if (S.view === "multistep") { $("#view-series").classList.add("active"); renderSeries(); }
   else if (S.view === "claude") { $("#view-claude").classList.add("active"); renderClaude(); }
   else if (S.view === "settings") { $("#view-settings").classList.add("active"); renderSettings(); }
   else { $("#view-issues").classList.add("active"); renderIssues(); }
@@ -410,7 +413,7 @@ function renderCvxopfSettings() {
 
 // ---------------------------------------------------------------- series
 
-// Series tab (issue #124): the case time series (state.case.series) of bus
+// Multistep tab (issue #124): the case time series (state.case.series) of bus
 // Pd/Qd, generator and DC line Pmin/Pmax by step, used by the Run OPF ▾
 // multistep solvers. Read from a data file (one row per step), shown read only.
 const SERIES_SHOW = 500;  // most steps listed
@@ -456,7 +459,7 @@ function renderSeries() {
     "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
     "for generator row N, dcline.Pmin.N and dcline.Pmax.N for DC line row N (rows counted from 1). Values not in the file keep ",
     "their case values at every step. Import ▾ › Panel… reads instead a file with one column per table row number or geohash cell, ",
-    "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
+    "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep OPF solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
     "A case holds several series (one per import, named after the file unless named in the dialog); multistep OPF combines them: by time when all have a time column, ",
     "else step by step (same number of steps). A value given by several series is their sum (it replaces the case value). The series are saved with .py and .json cases (not .glm).");
   if (!all.length) {
@@ -2923,7 +2926,7 @@ function stepPicker(r) {
     h("button", { title: "Previous step", disabled: r.step === 0, onclick: () => setStep(r.step - 1) }, "◀"),
     sel,
     h("button", { title: "Next step", disabled: r.step === n - 1, onclick: () => setStep(r.step + 1) }, "▶"),
-    h("span", { class: "hint" }, `of ${n}, ${m.delta} h each; the diagram and table solution columns show this step (loads drawn on the diagram are the case values; see the Series tab)`));
+    h("span", { class: "hint" }, `of ${n}, ${m.delta} h each; the diagram and table solution columns show this step (loads drawn on the diagram are the case values; see the Multistep tab)`));
 }
 function stepTable(r) {
   const rows = r.steps.map((s, i) => {
@@ -3572,7 +3575,7 @@ function buildSolverMenus() {
   $("#opf-menu").replaceChildren(...[["AC OPF", false], ["DC OPF", true]].flatMap(([title, dc]) => {
     const rows = opf.filter(x => x.dc === dc);
     return rows.length ? [h("div", { class: "sep" }, title), ...rows.map(x => item("opf", { ...x, label: x.label.replace(/^(AC|DC): /, "") }))] : [];
-  }), ...(multi.length ? [h("div", { class: "sep" }, "Multistep (CVXOPF, Series tab)"), ...multi] : []));
+  }), ...(multi.length ? [h("div", { class: "sep" }, "Multistep OPF"), ...multi] : []));
 }
 
 // About dialog: package metadata from /api/meta `about` (ppedit.server.about),
@@ -3729,7 +3732,8 @@ async function init() {
   if (["pf", "opf"].includes(qs.get("solve"))) {
     try { await act("/api/solve", solveRequest(qs.get("solve"), qs.get("algorithm"))); } catch (err) { toast(err.message, true); }
   }
-  if (qs.get("view") && $(`#tabs [data-view="${qs.get("view")}"], #table-tabs [data-view="${qs.get("view")}"]`)) show(qs.get("view"));
+  const view = ({ tables: "case", series: "multistep" })[qs.get("view")] || qs.get("view");
+  if (view && $(`#tabs [data-view="${view}"], #table-tabs [data-view="${view}"]`)) show(view);
 }
 
 busyRefresh();  // page load counts as pending work from the start

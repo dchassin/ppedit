@@ -170,9 +170,9 @@ In the editor:
     contain it. A single match is selected for editing in the side panel
     and centered in the diagram; several matches open a list to choose from
     (mouse, or arrow keys and Enter; Escape closes it).
-  - **Tables**: a second row of tabs below the main tabs picks the table
+  - **Case**: a second row of tabs below the main tabs picks the table
     (**Buses / Generators / Branches / Gen costs / DC lines / DC line
-    costs / Areas**); the Tables tab reopens the table shown last.
+    costs / Areas**); the Case tab reopens the table shown last.
     Spreadsheet-style editing; Enter or Tab commits, Escape
     cancels. Renumbering a bus updates the generators, branches, DC lines
     and area price reference buses that use it; deleting a bus asks before
@@ -185,7 +185,7 @@ In the editor:
     rows as one; the format comes from the file extension: `.csv`,
     `.tsv`, `.json` (each optionally compressed as `.gz`, `.bz2`, `.xz`,
     `.zip`), `.parquet` and `.feather` (need `pyarrow`), `.xlsx` (needs
-    `openpyxl`). **Import…** (here and on the Series tab) also reads the
+    `openpyxl`). **Import…** (here and on the Multistep tab) also reads the
     other formats pandas reads, when their engine is installed: `.jsonl`
     and `.ndjson`, `.xml`, `.html` (first table; `lxml`), `.fwf`
     (fixed-width text), `.xlsm`, `.xls`, `.xlsb` and `.ods`
@@ -237,7 +237,7 @@ In the editor:
     `Case.solve(kind,algorithm,options)` takes the same choices (`ppedit.case.solvers()`
     lists them). A DC OPF solution has flat voltages (1 pu), no reactive
     power and no losses.
-  - **Series**: time series of case values for multistep OPF (issue
+  - **Multistep**: time series of case values for multistep OPF (issue
     #124). A case holds several named series: each import adds one,
     named after the file unless the dialog names it (an existing name is
     replaced, or for a panel added to). The *Series* picker shows one
@@ -270,7 +270,7 @@ In the editor:
     elements it covers. The step length (hours) is set beside it; **Export ▾**
     and **Remove series** are undoable like other edits. The series is
     saved in `.py` and `.json` cases (not `.glm`). With cvxopf installed,
-    **Run OPF ▾ › Multistep** solves every step as one cvxopf problem with
+    **Run OPF ▾ › Multistep OPF** solves every step as one cvxopf problem with
     the chosen network model; the Results tab then has a step picker, the
     horizon cost, a table of steps, and **Apply step N to case**, and the
     diagram and solution columns show the chosen step (the diagram draws
