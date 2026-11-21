@@ -239,6 +239,13 @@ API key to start sessions; tests use a fake client).
   `ppedit serve ... --no-browser` command: a page cannot start a process. `window.close()` is refused for tabs with back history
   (e.g. headless test browsers), which then show the stopped page.
 
+- Session token (decision #59, issue #117, `token` of `create_app`,
+  `token_cookie` in `server.py`, `--token` in `cli.py`): `ppedit serve`
+  always requires `?token=` or the cookie set for it, so tests that start
+  the CLI server must pass the token; `create_app()` without `token` (the
+  test fixtures) stays open. `serverCommand()` in `app.js` adds `--token`
+  from `/api/meta`, and `ping()` reports a 403 as `{forbidden: true}`.
+
 - Work-in-progress indicator (decision #54, `#busy`, `busyStart`/`busyEnd` in
   `app.js`): every `api()` call counts unless it passes `{ background: true }`;
   pass it for any new polling so the indicator does not stay up. Rendering
@@ -272,7 +279,7 @@ API key to start sessions; tests use a fake client).
   `Case.import_rows` drops columns with their names (`ignored`).
   `S.tableSort` column indexes past `COLUMNS[table]` refer to them.
 
-- Time series and multistep OPF (decision #59, issue #124): `Case.series`
+- Time series and multistep OPF (decision #60, issue #124): `Case.series`
   (`set_series`, `_series_rekey` keeps columns valid on edits, `at_step`,
   `_series_input`), `read_series`/`dump_series` in `_tableio.py`,
   `/api/series*` routes, `renderSeries` and `stepView`/`setStep` in
@@ -287,7 +294,7 @@ API key to start sessions; tests use a fake client).
   `at_step`, `_series_input`; a column in several series is summed);
   state `series_combined` carries its summary
   or error, and `currentSeries()`/`S.seriesName` pick the one shown.
-  Panels (decision #60,
+  Panels (decision #61,
   `Case.set_series_panel`, `geohash` in `case.py`, `panel` of
   `/api/series/import`, `openPanelDialog` in `app.js`) locate elements by
   the first geodata row of their bus and match geohash cells by prefix of a

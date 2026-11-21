@@ -12,6 +12,16 @@ server does not grant, so other web pages cannot change the case or write
 files. Requests whose `Host` is not a loopback name are refused unless the
 app was created with `allow_remote=True`.
 
+When the app is created with a `token` (`ppedit serve` always makes one),
+every request must also carry it: as the `token` query parameter of the
+URL (`http://localhost:8050/?token=...`, what `ppedit serve` prints and
+opens) or as the session cookie the server sets in exchange for it
+(`ppedit_<hash>`, `HttpOnly`, `SameSite=Strict`, named after a hash of the
+token so servers on other ports keep their own cookies). A page `GET`
+with the token in the URL is redirected to the same URL without it, so
+the token does not stay in the address bar. Requests without a valid
+token get status 403.
+
 Every successful call returns the editor state: `case` (see
 `ppedit.Case.to_dict`), `path`, `format`, `dirty`, `issues`, `can_undo`,
 `can_redo`, `result` (last solution or `null`), `cascade` (whether the
@@ -32,8 +42,10 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     solvers (`ppedit.case.solvers`: the PF algorithms,
     the installed OPF solvers and the cvxopf solve option choices), version,
     `about` (package metadata shown when the page's "ppedit" title is
-    clicked; see `about`), and `instance` (a token that changes each time
-    the server starts)
+    clicked; see `about`), `instance` (a token that changes each time
+    the server starts), and `token` (the session token, or `null`; the
+    page shows it in the restart command so a restarted server accepts
+    its cookie)
   - `GET  /api/state`: current state
   - `GET  /api/ping`: `{"instance", "revision"}`, answered without waiting
     for the editor lock; the page polls it to notice that the server stopped
@@ -155,6 +167,8 @@ Caveats
 import base64
 import binascii
 import copy
+import hashlib
+import hmac
 import importlib.metadata
 import logging
 import os
@@ -166,7 +180,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from flask import Flask, jsonify, request, send_from_directory, Response
+from flask import Flask, jsonify, request, send_from_directory, Response, redirect
 
 from ppedit.case import Case, CaseError, COLUMNS, RESULT_COLUMNS, TABLES, FORMATS, INPUT_FORMATS, \
     builtin_cases, solvers, writable_format
@@ -583,8 +597,25 @@ class Editor:
             "loads_off": [[bus,pd,qd] for bus,(pd,qd) in sorted(self.loads_off.items())],
         }
 
+def token_cookie(token:str) -> str:
+    """Name of the session cookie for `token`
+
+    Arguments
+    ---------
+
+      - `token`: session token given to `create_app`
+
+    Returns
+    -------
+
+      - `str`: `ppedit_` and the first 12 hex digits of the SHA-256 of the
+        token; browsers share `localhost` cookies across ports, so each
+        server (token) needs its own cookie name
+    """
+    return "ppedit_" + hashlib.sha256(token.encode()).hexdigest()[:12]
+
 def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
-        shutdown=None,claude_client=None) -> Flask:
+        shutdown=None,claude_client=None,token:str|None=None) -> Flask:
     """Create the editor application
 
     Arguments
@@ -601,6 +632,13 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
         server's `shutdown`); default raises `SIGINT` in the server
         process, or exits it if `SIGINT` is ignored
 
+      - `claude_client`: Messages API client for the Claude sessions
+        (default: `urllib`; tests pass a fake)
+
+      - `token`: session token every request must carry (`?token=` in the
+        URL, or the cookie set in exchange for it; see the module
+        docstring); default `None` accepts requests without one
+
     Returns
     -------
 
@@ -614,16 +652,41 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
     app.config["SHUTDOWN"] = shutdown or _shutdown
     instance = secrets.token_hex(8) # tells the page a restarted server from the one it loaded from
 
+    cookie = token_cookie(token) if token is not None else None
+
+    def _set_token(res):
+        res.set_cookie(cookie,token,httponly=True,samesite="Strict",path="/")
+        return res
+
     @app.before_request
     def _guard():
         host = (request.host or "").rsplit(":",1)[0] if not (request.host or "").startswith("[") \
             else request.host.split("]")[0]+"]"
         if not allow_remote and host not in _LOOPBACK:
             return jsonify(error="remote access is disabled"),403
+        if token is not None:
+            given = request.args.get("token")
+            if given is not None and hmac.compare_digest(given.encode(),token.encode()):
+                if request.method == "GET" and not request.path.startswith("/api/"):
+                    query = urllib.parse.urlencode([(k,v) for k,v in request.args.items(multi=True) if k != "token"])
+                    return _set_token(redirect(request.path + ("?"+query if query else ""),code=303))
+            elif not hmac.compare_digest(request.cookies.get(cookie,"").encode(),token.encode()):
+                message = "missing or invalid session token: open the URL that ppedit serve printed"
+                if request.path.startswith("/api/"):
+                    return jsonify(error=message),403
+                return Response(message+"\n",status=403,mimetype="text/plain")
         if request.method == "POST":
             if request.headers.get("X-PPEdit") != "1" or not request.is_json:
                 return jsonify(error="missing X-PPEdit header or JSON body"),403
         return None
+
+    @app.after_request
+    def _remember_token(res):
+        # a request authorized by ?token= (scripts, API calls) also gets the cookie
+        if token is not None and not any(c.startswith(cookie+"=") for c in res.headers.getlist("Set-Cookie")) \
+                and hmac.compare_digest(request.args.get("token","").encode(),token.encode()):
+            _set_token(res)
+        return res
 
     @app.errorhandler(CaseError)
     def _case_error(err):
@@ -657,7 +720,7 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             builtin=builtin_cases(),
             formats=list(FORMATS.values()),input_formats=list(INPUT_FORMATS.values()),
             table_formats=table_formats(),table_read_formats=table_read_formats(),solvers=solvers(),version=__version__,about=about(),
-            instance=instance)
+            instance=instance,token=token)
 
     @app.get("/api/ping")
     def ping():

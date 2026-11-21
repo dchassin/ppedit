@@ -3,7 +3,7 @@
 Syntax
 ------
 
-    ppedit serve [FILE] [-g CSV] [-p PORT] [--host HOST] [--no-browser] [-d] [-v] [-w]
+    ppedit serve [FILE] [-g CSV] [-p PORT] [--host HOST] [--no-browser] [--token TOKEN] [-d] [-v] [-w]
     ppedit convert INPUT OUTPUT [-g CSV] [-d] [-v] [-w]
     ppedit check FILE [-d] [-v] [-w]
     ppedit --version
@@ -37,6 +37,14 @@ Optional arguments
   - `--host HOST`: interface to listen on (default `127.0.0.1`)
 
   - `--no-browser`: do not open a browser window
+
+  - `--token TOKEN`: session token the editor URL must carry (letters,
+    digits, `-`, `_`, `.`); default a new random token each time the server
+    starts. `serve` prints and opens `http://localhost:PORT/?token=TOKEN`;
+    the browser then keeps the token in a cookie, and requests without it
+    are refused, so other users and programs that can reach the port cannot
+    use the editor. Give a fixed token to restart a server without
+    reopening the page (the page's **Restart server** command does)
 
   - `-v|--verbose`: enable `INFO:` messages on stderr (files loaded and
     saved, and with `serve` each HTTP request; request lines are shown
@@ -162,7 +170,9 @@ What is not promised
 --------------------
 
   - One case per server, held in memory, for one user on the local machine.
-    There is no authentication: do not expose the server on a shared network.
+    Requests must carry the session token `serve` prints (`--token`), but
+    traffic is plain HTTP, so the token is visible to anyone who can watch
+    the network: do not expose the server on a shared network.
 
   - Only the solver-layer GLM objects (`bus`, `gen`, `branch`, `gencost`,
     `dcline`) are edited; other `module pypower` objects (`load`,

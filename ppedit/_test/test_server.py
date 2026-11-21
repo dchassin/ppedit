@@ -63,6 +63,44 @@ def test_remote_host_refused(client):
     res = client.get("/api/state",headers={"Host":"evil.example.com"})
     assert res.status_code == 403
 
+def test_session_token():
+    """With a token, requests need ?token= or the cookie set in exchange for it (#117)"""
+    from ppedit import Case,create_app # pylint: disable=import-outside-toplevel
+    from ppedit.server import token_cookie # pylint: disable=import-outside-toplevel
+    app = create_app(Case.builtin("case9"),token="s3cret")
+    client = app.test_client()
+    assert client.get("/").status_code == 403
+    assert client.get("/api/state").status_code == 403
+    assert client.get("/api/ping").status_code == 403
+    assert client.get("/static/app.js").status_code == 403
+    assert client.post("/api/new",json={},headers={"X-PPEdit":"1"}).status_code == 403
+    assert client.get("/?token=wrong").status_code == 403
+    # the page URL: redirected without the token, other parameters kept, cookie set
+    res = client.get("/?solve=pf&token=s3cret&view=network")
+    assert res.status_code == 303 and res.headers["Location"] == "/?solve=pf&view=network"
+    cookie = res.headers["Set-Cookie"]
+    assert cookie.startswith(token_cookie("s3cret")+"=s3cret;")
+    assert "HttpOnly" in cookie and "SameSite=Strict" in cookie
+    assert client.get("/").status_code == 200
+    assert client.get("/api/state").status_code == 200
+    assert client.get("/api/meta").get_json()["token"] == "s3cret"
+    assert client.post("/api/new",json={},headers={"X-PPEdit":"1"}).status_code == 200
+    assert client.post("/api/new",json={}).status_code == 403 # the header is still required
+    # a wrong cookie (another server's token) is refused
+    other = app.test_client()
+    other.set_cookie(token_cookie("s3cret"),"other")
+    assert other.get("/api/state").status_code == 403
+    # API calls may carry the token in the query string instead
+    fresh = app.test_client()
+    res = fresh.get("/api/ping?token=s3cret")
+    assert res.status_code == 200 and token_cookie("s3cret") in res.headers["Set-Cookie"]
+    assert fresh.get("/api/ping").status_code == 200
+    assert token_cookie("a") != token_cookie("b")
+
+def test_no_token_by_default(client):
+    assert client.get("/api/meta").get_json()["token"] is None
+    assert client.get("/").status_code == 200
+
 def test_edit_undo_redo(post):
     status,st = post("/api/cell",{"table":"bus","row":4,"column":"Pd","value":"95"})
     assert status == 200 and st["case"]["tables"]["bus"][4][2] == 95 and st["dirty"]
