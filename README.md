@@ -235,7 +235,8 @@ In the editor:
     per step and one column per table row number (from 1; for buses the
     row, not the bus number) or geohash cell, all giving one value chosen
     in its dialog (e.g. bus `Pd`); the dialog's *File format* limits the
-    file chooser to one of the readable formats (or any of them). A
+    file chooser to one of the readable formats (or any of them; `csv`
+    and `tsv` also list each compressed form, e.g. `csv.gz`). A
     geohash cell's value is shared among
     the elements located in it by bus geodata (generators by their bus, DC
     lines by their from bus): in proportion to their case values (equally

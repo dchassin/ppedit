@@ -460,16 +460,25 @@ function openPanelDialog() {
   const split = sel("panel-split", [["proportional", "In proportion to case values"], ["equal", "Equally"], ["copy", "Whole value to each"]], prev.split || "proportional");
   const merge = h("input", { type: "checkbox", id: "panel-merge", checked: !!ser, disabled: !ser });
   // file format: limits the file chooser to one format (and its compressed forms)
-  const bases = readFormats().filter(x => x.split(".").length === 2);
-  const format = sel("panel-format", [["", "Any supported format"], ...bases.map(x => [x, `${x.slice(1)}${TABLE_FORMAT_NAMES[x] ? ` (${TABLE_FORMAT_NAMES[x]})` : ""}`])],
-    bases.includes(prev.format) ? prev.format : "");
+  // csv and tsv also list each compressed form (csv.gz, tsv.zip, ...) as a choice of its own
+  const ZIP = { ".gz": "gzip", ".bz2": "bzip2", ".xz": "xz", ".zip": "zip", ".zst": "zstd" };
+  const listed = readFormats().filter(x => x.split(".").length === 2 || /^\.(csv|tsv)\./.test(x));
+  const named = x => {
+    const [base, zip] = [x.replace(/(\.[^.]+)$/, m => ZIP[m] && x.split(".").length > 2 ? "" : m), x.match(/\.[^.]+$/)[0]];
+    const name = TABLE_FORMAT_NAMES[base] || "";
+    return `${x.slice(1)}${name || base !== x ? ` (${[name, base !== x ? `${ZIP[zip]} compressed` : ""].filter(Boolean).join(", ")})` : ""}`;
+  };
+  const format = sel("panel-format", [["", "Any supported format"], ...listed.map(x => [x, named(x)])],
+    listed.includes(prev.format) ? prev.format : "");
   const label = (text, el, hint) => h("label", { class: "panel-row" }, h("span", {}, text), el, hint ? h("span", { class: "hint" }, hint) : null);
   const go = h("button", { class: "primary", onclick: () => {
     S.seriesPanel = S.panelChoice = { table: table.value, column: column.value, keys: keys.value, split: split.value, merge: merge.checked };
     S.panelChoice.format = format.value;
     d.close();
     const input = $("#series-input");
-    input.accept = (format.value ? readFormats().filter(x => x === format.value || x.startsWith(format.value + "."))
+    // a base format admits its compressed forms too; a compressed choice only itself
+    input.accept = (format.value ? readFormats().filter(x => x === format.value
+      || (format.value.split(".").length === 2 && x.startsWith(format.value + ".")))
       : readFormats()).join(",");
     input.click();
   } }, "Choose file…");
