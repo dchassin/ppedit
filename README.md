@@ -43,7 +43,10 @@ coinor-libipopt-dev`; macOS: `brew install ipopt`):
     ppedit convert wecc240.raw wecc240.glm   # PSS/E input (read only)
     ppedit check case14.glm
 
-The editor opens at http://localhost:8050/. Start from **New ▸** to load
+The editor opens at http://localhost:8050/?token=..., where the token is
+new each time the server starts (or set with `--token`); the browser keeps
+it in a cookie, and requests without it are refused, so other users and
+programs on the machine cannot use the editor. Start from **New ▸** to load
 any PYPOWER built-in case (`case9`, `case14`, ..., `case300`), or **Open ▾**
 to upload a **Local file…** or type a URL under **From URL** (e.g. a GitHub
 link to a `.glm` or `.py` case); the ppedit server downloads it. **Save as ▸** downloads `.py`, `.json` or `.glm`.
@@ -58,8 +61,8 @@ browser tab when the browser allows it.
 If the server stops (Ctrl-C, a closed terminal, an error) or stops
 answering, the page says so within a few seconds, waits for it, and
 continues when it answers again. **Restart server** shows the
-`ppedit serve ... --no-browser` command to run (the page reconnects, so no
-new window opens); **Exit browser window** closes the tab.
+`ppedit serve ... --token ... --no-browser` command to run (with the same
+token, so the page reconnects and no new window opens); **Exit browser window** closes the tab.
 Unsaved changes are held by the server, so they are lost when it stops.
 
 In the editor:
@@ -299,8 +302,8 @@ dropped, and the editor lists them when the file is opened. PSS/E has no
 costs, so add `gencost` rows before running OPF. **Save** does not write
 `.raw`: use **Save as** with `.py`, `.json` or `.glm`.
 
-The server listens on `127.0.0.1` only and has no authentication; it is a
-single-user desktop tool.
+The server listens on `127.0.0.1` only and refuses requests without its
+session token; it is a single-user desktop tool, served over plain HTTP.
 
 # Maintenance
 

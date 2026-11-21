@@ -14,7 +14,8 @@ Examples
     ppedit convert case14.py case14.glm --verbose
 
 `check` outputs `case14.glm: no issues found`; `serve` prints the editor URL
-and opens it in a browser; `--version` prints `ppedit` and the installed
+(with its session token, e.g. `http://localhost:8050/?token=...`) and opens
+it in a browser; `--version` prints `ppedit` and the installed
 version (e.g. `ppedit 0.3.3`); `--verbose` adds `INFO:` messages on stderr
 (files loaded and saved, and with `serve` each HTTP request, which only
 `--verbose` shows).
@@ -22,6 +23,7 @@ version (e.g. `ppedit 0.3.3`); `--verbose` adds `INFO:` messages on stderr
 
 import os
 import sys
+import secrets
 import argparse
 import logging
 import threading
@@ -56,6 +58,7 @@ def main(argv:list[str]|None=None) -> int:
     parser.add_argument("-p","--port",type=int,default=8050,help="server port (default 8050)")
     parser.add_argument("--host",default="127.0.0.1",help="interface to listen on (default 127.0.0.1)")
     parser.add_argument("--no-browser",action="store_true",help="do not open a browser")
+    parser.add_argument("--token",help="session token the editor URL must carry (serve; default: a new random token each start)")
     parser.add_argument("-d","--debug",action="store_true",help="enable debug logging and traceback on exceptions")
     parser.add_argument("-v","--verbose",action="store_true",help="enable INFO messages (progress and server requests)")
     parser.add_argument("-w","--warning",action="store_true",help="enable warning messages from python")
@@ -109,11 +112,14 @@ def main(argv:list[str]|None=None) -> int:
         if args.geodata:
             case = case or Case(name="untitled")
             case.load_geodata(args.geodata)
+        token = args.token if args.token is not None else secrets.token_urlsafe(16)
+        if not token or not token.isascii() or not all(c.isalnum() or c in "-_." for c in token):
+            raise ValueError("--token must be letters, digits, '-', '_' or '.'")
         server = None
         app = create_app(case,path,allow_remote=args.host not in ("127.0.0.1","localhost","::1"),
-            shutdown=lambda: server.shutdown())
+            shutdown=lambda: server.shutdown(),token=token)
         server = make_server(args.host,args.port,app,threaded=True)
-        url = f"http://{'localhost' if args.host in ('127.0.0.1','0.0.0.0') else args.host}:{args.port}/"
+        url = f"http://{'localhost' if args.host in ('127.0.0.1','0.0.0.0') else args.host}:{args.port}/?token={token}"
         print(f"")
         print(f"ppedit: create or edit power system models in your browser")
         print(f"")
