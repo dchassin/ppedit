@@ -459,7 +459,7 @@ function renderSeries() {
     "and one column per value named table.column.key — bus.Pd.N and bus.Qd.N for bus number N, gen.Pmin.N and gen.Pmax.N ",
     "for generator row N, dcline.Pmin.N and dcline.Pmax.N for DC line row N (rows counted from 1). Values not in the file keep ",
     "their case values at every step. Import ▾ › Panel… reads instead a file with one column per table row number or geohash cell, ",
-    "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
+    "all for one value chosen in its dialog (e.g. bus Pd). Run OPF ▾ › Multistep OPF solves all steps as one cvxopf problem; the Results tab then shows one step at a time. ",
     "A case holds several series (one per import, named after the file unless named in the dialog); multistep OPF combines them: by time when all have a time column, ",
     "else step by step (same number of steps). A value given by several series is their sum (it replaces the case value). The series are saved with .py and .json cases (not .glm).");
   if (!all.length) {
@@ -3575,7 +3575,7 @@ function buildSolverMenus() {
   $("#opf-menu").replaceChildren(...[["AC OPF", false], ["DC OPF", true]].flatMap(([title, dc]) => {
     const rows = opf.filter(x => x.dc === dc);
     return rows.length ? [h("div", { class: "sep" }, title), ...rows.map(x => item("opf", { ...x, label: x.label.replace(/^(AC|DC): /, "") }))] : [];
-  }), ...(multi.length ? [h("div", { class: "sep" }, "Multistep (CVXOPF, Multistep tab)"), ...multi] : []));
+  }), ...(multi.length ? [h("div", { class: "sep" }, "Multistep OPF"), ...multi] : []));
 }
 
 // About dialog: package metadata from /api/meta `about` (ppedit.server.about),

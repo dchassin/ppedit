@@ -270,7 +270,7 @@ In the editor:
     elements it covers. The step length (hours) is set beside it; **Export ▾**
     and **Remove series** are undoable like other edits. The series is
     saved in `.py` and `.json` cases (not `.glm`). With cvxopf installed,
-    **Run OPF ▾ › Multistep** solves every step as one cvxopf problem with
+    **Run OPF ▾ › Multistep OPF** solves every step as one cvxopf problem with
     the chosen network model; the Results tab then has a step picker, the
     horizon cost, a table of steps, and **Apply step N to case**, and the
     diagram and solution columns show the chosen step (the diagram draws
