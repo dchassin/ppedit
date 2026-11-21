@@ -308,3 +308,22 @@ def test_server_panel(post):
     assert st["case"]["series"]["columns"] == ["bus.Pd.5","bus.Pd.7"]
     status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("5\n1\n"),"panel":{"table":"bus"}})
     assert status == 400 and "table and column" in st["error"]
+
+def test_server_dropna(post):
+    """dropna drops missing values from series, panel and table imports"""
+    text = "time,bus.Pd.5,bus.Pd.7\nh1,90,100\nh2,,140\nh3,120,\n"
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64(text)})
+    assert status == 400 and "not a finite number" in st["error"]
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64(text),"dropna":"rows"})
+    assert status == 200 and st["case"]["series"]["index"] == ["h1"]
+    assert st["imported"]["dropped"] == {"rows":2,"columns":[]}
+    status,st = post("/api/series/import",{"filename":"p.csv","data":_b64("time,5,7\na,1,\nb,2,\n"),
+        "panel":{"table":"bus","column":"Pd","merge":False},"dropna":"columns"})
+    assert status == 200 and st["case"]["series"]["columns"] == ["bus.Pd.5"]
+    assert st["imported"]["dropped"] == {"rows":0,"columns":["7"]}
+    status,st = post("/api/series/import",{"filename":"s.csv","data":_b64(text),"dropna":"bad"})
+    assert status == 400 and "dropna must be one of" in st["error"]
+    status,st = post("/api/table/import",{"table":"bus","filename":"b.csv",
+        "data":_b64("bus_i,type,Pd\n100,1,5\n,,\n"),"dropna":"empty-rows"})
+    assert status == 200 and st["imported"]["added"] == 1
+    assert st["imported"]["dropped"] == {"rows":1,"columns":[]}

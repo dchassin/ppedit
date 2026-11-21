@@ -77,6 +77,28 @@ function loadCvxopf() {
   catch (_) { return { ...CVXOPF_DEFAULTS }; }
 }
 S.cvxopf = loadCvxopf();
+// Missing values on import (dropna of /api/table/import and /api/series/import):
+// "" keeps them; saved in localStorage (ppedit.dropna) and sent with every import
+const DROPNA_CHOICES = [["", "Keep them"], ["rows", "Drop rows (steps) with any missing value"],
+  ["columns", "Drop columns with any missing value"], ["empty-rows", "Drop only empty rows (steps)"],
+  ["empty-columns", "Drop only empty columns"]];
+S.dropna = (() => { try { return localStorage.getItem("ppedit.dropna") || ""; } catch (_) { return ""; } })();
+function setDropna(value) {
+  S.dropna = value;
+  try { localStorage.setItem("ppedit.dropna", value); } catch (_) { /* storage unavailable */ }
+}
+function dropnaSelect(id) {
+  return h("select", { id, "aria-label": "Missing values when importing", onchange: e => { setDropna(e.target.value); if (S.view === "settings") renderSettings(); } },
+    DROPNA_CHOICES.map(([v, t]) => h("option", { value: v, selected: v === S.dropna }, t)));
+}
+// "; dropped 2 row(s) and column(s) a, b with missing values" or ""
+function droppedText(d) {
+  if (!d || (!d.rows && !d.columns.length)) return "";
+  const parts = [];
+  if (d.rows) parts.push(`${d.rows} row(s)`);
+  if (d.columns.length) parts.push(`column(s) ${d.columns.slice(0, 5).join(", ")}${d.columns.length > 5 ? ", …" : ""}`);
+  return `; dropped ${parts.join(" and ")} with missing values`;
+}
 // "max_iter=500, tol=1e-8, mu_strategy=adaptive" -> {max_iter: 500, tol: 1e-8, mu_strategy: "adaptive"};
 // numbers and true/false are converted, other values stay text; throws on a malformed item
 function parseSolverOptions(text) {
@@ -334,6 +356,11 @@ function renderSettings() {
   $("#precision-settings").replaceChildren(...rows,
     h("div", { class: "hint" }, "Decimal places shown in the case tables; blank shows full precision. A value of exactly 0 shows as 0. Editing a cell shows its full value."),
     h("div", {}, h("button", { onclick: () => { S.precision = { ...PRECISION_DEFAULTS }; save(); renderSettings(); } }, "Reset to defaults")));
+  $("#import-settings").replaceChildren(
+    h("label", {}, h("span", {}, "Missing values"), dropnaSelect("dropna-setting")),
+    h("div", { class: "hint" }, "Applied when table rows, a series file or a panel are read (Import…), before the data is checked. "
+      + "“Any missing value” drops a row or column with at least one empty or NaN cell; “empty” drops only those with no value at all. "
+      + "In series files the time column is never dropped and a missing time does not count."));
   renderCvxopfSettings();
 }
 
@@ -426,10 +453,12 @@ function renderSeries() {
 async function importSeries(file) {
   const data = await fileBase64(file), panel = S.seriesPanel;
   S.seriesPanel = null;
-  const st = await act("/api/series/import", panel ? { filename: file.name, data, panel } : { filename: file.name, data });
+  const req = { filename: file.name, data, dropna: S.dropna };
+  if (panel) req.panel = panel;
+  const st = await act("/api/series/import", req);
   const im = st.imported;
-  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name} (Ctrl+Z to undo)`);
-  const extra = (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
+  if (!panel) return toast(`Read ${im.steps} step(s) of ${im.columns} value(s) from ${file.name}${droppedText(im.dropped)} (Ctrl+Z to undo)`);
+  const extra = droppedText(im.dropped) + (im.ignored.length ? `; ${im.ignored.length} cell(s) with no ${panel.table} ignored (${im.ignored.slice(0, 5).join(", ")}${im.ignored.length > 5 ? ", …" : ""})` : "")
     + (im.unlocated ? `; ${im.unlocated} ${panel.table} row(s) without geodata left out` : "");
   toast(`Read ${panel.table} ${panel.column} for ${im.steps} step(s) from ${im.keys} column(s) of ${file.name}; the series has ${im.columns} value(s)${extra} (Ctrl+Z to undo)`);
 }
@@ -488,6 +517,7 @@ function openPanelDialog() {
     label("Table", table), label("Value", column), label("Columns are", keys),
     label("Share a geohash cell", split, "among the elements located in it (by bus geodata)"),
     label("File format", format, "the formats the server can read; the file chooser shows only the one chosen"),
+    label("Missing values", dropnaSelect("panel-dropna"), "dropped when the file is read (also on the Settings tab)"),
     label("Add to the current series", merge, ser ? `same number of steps (${ser.values.length}); replaces this value for the elements in the panel` : "no series yet"),
     h("div", { class: "close-row" }, h("button", { onclick: () => d.close() }, "Cancel"), go));
   d.showModal();
@@ -752,10 +782,10 @@ async function importRows(file) {
   const table = S.view;
   const rows = [...S.selected[table]].sort((a, b) => a - b);
   const data = await fileBase64(file);
-  const st = await act("/api/table/import", { table, filename: file.name, data, rows });
+  const st = await act("/api/table/import", { table, filename: file.name, data, rows, dropna: S.dropna });
   const r = st.imported, what = TABLE_TITLES[table];
   // solution columns written by export (decision #56) are not case data
-  const ign = r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "";
+  const ign = (r.ignored && r.ignored.length ? `; solution column(s) ${r.ignored.join(", ")} ignored` : "") + droppedText(r.dropped);
   if (r.added) {
     toast(`Appended ${r.added} ${what} row(s) from ${file.name}${ign} (Ctrl+Z to undo)`);
     flashRow(S.state.case.tables[table].length - 1);

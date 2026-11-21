@@ -193,6 +193,10 @@ In the editor:
     (`pyarrow`), `.h5`/`.hdf5` (`tables`; one data set), Stata `.dta`, SAS
     `.sas7bdat` and `.xpt`, and SPSS `.sav` (`pyreadstat`); these are not
     exported. Pickle files are refused, since loading one can run code.
+    *Settings › Data import › Missing values* (also in the panel dialog)
+    drops missing (empty or NaN) cells when a file is read, for table,
+    series and panel imports: rows (steps) or columns with any missing
+    value, or only empty ones; a series time column is never dropped.
     Columns are named as in the table header. With no rows
     selected, import appends the file's rows (missing columns take their
     defaults) and export writes every row; with rows selected, import

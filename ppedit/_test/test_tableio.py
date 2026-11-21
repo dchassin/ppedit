@@ -271,3 +271,46 @@ def test_series_from_read_only_format():
     def write(_,path):
         pd.DataFrame({"time":["a","b"],"bus.Pd.5":[90,95]}).to_excel(path,index=False,engine="odf")
     assert read_series("s.ods",_via_file(".ods",write)) == (["a","b"],["bus.Pd.5"],[[90],[95]])
+
+# ----- dropna -----
+
+_NA = b"a,b,c\n1,,3\n,,\n4,,6\n7,8,9\n"
+
+@pytest.mark.parametrize("mode,columns,rows,dropped",[
+    (None,["a","b","c"],[[1,None,3],[None,None,None],[4,None,6],[7,8,9]],None),
+    ("rows",["a","b","c"],[[7,8,9]],{"rows":3,"columns":[]}),
+    ("empty-rows",["a","b","c"],[[1,None,3],[4,None,6],[7,8,9]],{"rows":1,"columns":[]}),
+    ("empty-columns",["a","b","c"],[[1,None,3],[None,None,None],[4,None,6],[7,8,9]],{"rows":0,"columns":[]}),
+])
+def test_read_dropna(mode,columns,rows,dropped):
+    """Missing values are dropped by row or column, any or all"""
+    report = {}
+    got = read_rows("x.csv",_NA,mode,report)
+    assert got == (columns,rows)
+    assert report.get("dropped") == dropped
+
+def test_read_dropna_empty_column():
+    """An all-empty column is dropped by empty-columns, a partly empty one is kept"""
+    report = {}
+    assert read_rows("x.csv",b"a,b,c\n1,,\n2,,5\n","empty-columns",report) == (["a","c"],[[1,None],[2,5]])
+    assert report["dropped"] == {"rows":0,"columns":["b"]}
+
+def test_read_dropna_bad():
+    """An unknown dropna is refused, and so is dropping everything"""
+    with pytest.raises(CaseError,match="dropna must be one of"):
+        read_rows("x.csv",_NA,"some")
+    with pytest.raises(CaseError,match="every column has a missing value"):
+        read_rows("x.csv",_NA,"columns")
+    with pytest.raises(CaseError,match="every row has a missing value"):
+        read_rows("x.csv",b"a,b\n1,\n,2\n","rows")
+    with pytest.raises(CaseError,match="every value column has no value"):
+        read_series("s.csv",b"time,a\nt1,\n","empty-columns")
+
+def test_series_dropna_keeps_labels():
+    """The label column is never dropped and a missing label does not drop a step"""
+    data = b"a,time,b\n1,t1,\n2,,5\n,t3,\n"
+    report = {}
+    assert read_series("s.csv",data,"rows",report) == ([""],["a","b"],[[2,5]])
+    assert report["dropped"] == {"rows":2,"columns":[]}
+    assert read_series("s.csv",data,"empty-rows") == (["t1",""],["a","b"],[[1,None],[2,5]])
+    assert read_series("s.csv",b"time,a\n,\n1,2\n","empty-rows") == (["1"],["a"],[[2]])

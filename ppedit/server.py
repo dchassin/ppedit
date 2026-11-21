@@ -54,19 +54,21 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     `loads_off` lists the loads switched off as `[bus, Pd, Qd]`
   - `POST /api/rows`: `{"table", "values"?, "after"?}` add a row
   - `POST /api/rows/delete`: `{"table", "rows": [...], "cascade"?}`
-  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?}`
+  - `POST /api/table/import`: `{"table", "filename", "data", "rows"?, "dropna"?}`
     read table data from a file (`data`: its contents in base64; the
     format comes from the `filename` extension, see
     `ppedit._tableio.table_format`) and append the rows, or replace the
     rows listed in `rows` (see `ppedit.Case.import_rows`); the state has
-    `imported` (`{"added"|"replaced": n, "cascade"}`)
+    `imported` (`{"added"|"replaced": n, "cascade"}`). `dropna` drops
+    missing values when the file is read (see `ppedit._tableio.read_rows`),
+    and `imported` then has `dropped` (`{"rows", "columns"}`)
   - `GET  /api/table/export?table=...&format=csv&rows=1,2`: download the
     rows of a table (`rows`: comma-separated row indexes, default all) as
     a data file in the format of the extension `format` (e.g. `csv`,
     `csv.gz`, `parquet`, `xlsx`), named `<case>_<table>.<format>`; while a
     successful solution exists, the extended (result) columns the page
     shows follow the table columns (`Editor.extended`)
-  - `POST /api/series/import`: `{"filename", "data", "delta"?}` read a time
+  - `POST /api/series/import`: `{"filename", "data", "delta"?, "dropna"?}` read a time
     series of case values from a file (`data`: its contents in base64; see
     `ppedit._tableio.read_series`) and replace the case series with it
     (`ppedit.Case.set_series`; `delta`, hours per step, defaults to that of
@@ -77,7 +79,10 @@ open case was read, see `ppedit.Case.source`, or `null`), and `loads_off`
     (`ppedit.Case.set_series_panel`; `keys` `auto`|`row`|`geohash`,
     `split` `proportional`|`equal`|`copy`, `merge` default true), and
     `imported` adds that method's report (`keys`, `ignored`, `unlocated`;
-    `columns` is then the series total)
+    `columns` is then the series total). `dropna` (`rows`, `columns`,
+    `empty-rows`, `empty-columns`; see `ppedit._tableio.read_rows`) drops
+    missing values when the file is read, the label column aside, and
+    `imported` then has `dropped` (`{"rows", "columns"}`)
   - `POST /api/series`: `{"delta"}` set the hours per step, or `{"clear":
     true}` remove the series (both undoable)
   - `GET  /api/series/export?format=csv`: download the series as a data
@@ -729,13 +734,14 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             content = base64.b64decode(data["data"],validate=True)
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
-        columns,rows = read_rows(str(data["filename"]),content)
+        dropped = {}
+        columns,rows = read_rows(str(data["filename"]),content,data.get("dropna") or None,dropped)
         replace = data.get("rows")
         with editor.lock:
             result = editor.edit(lambda: editor.case.import_rows(data["table"],columns,rows,
                 None if not replace else [int(x) for x in replace]))
             out = editor.state(result["cascade"])
-            out["imported"] = result
+            out["imported"] = {**result,**dropped}
             return jsonify(out)
 
     @app.get("/api/table/export")
@@ -804,7 +810,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
             content = base64.b64decode(data["data"],validate=True)
         except (binascii.Error,TypeError) as err:
             raise CaseError("data must be the file contents in base64") from err
-        index,columns,rows = read_series(str(data["filename"]),content)
+        dropped = {}
+        index,columns,rows = read_series(str(data["filename"]),content,data.get("dropna") or None,dropped)
         panel = data.get("panel")
         with editor.lock:
             old = editor.case.series
@@ -821,7 +828,8 @@ def create_app(case:Case|None=None,path:str|None=None,allow_remote:bool=False,
                 report = {}
             series = editor.case.series
             out = editor.state()
-            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"]),**report}
+            out["imported"] = {"steps":len(series["values"]),"columns":len(series["columns"]),
+                **report,**dropped}
             return jsonify(out)
 
     @app.post("/api/series")

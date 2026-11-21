@@ -233,7 +233,44 @@ def _value(value):
         return None
     return value
 
-def read_rows(filename:str,data:bytes) -> tuple[list[str],list[list]]:
+DROPNA = ("rows","columns","empty-rows","empty-columns")
+"""`dropna` choices of `read_rows` and `read_series`: drop the rows (or
+columns) with any missing value, or only those with no value at all"""
+
+def _dropna(columns:list[str],rows:list[list],dropna:str|None,keep:tuple=(),
+        report:dict|None=None) -> tuple[list[str],list[list]]:
+    """Drop rows or columns with missing (`None`) cells as `dropna` says
+    (see `DROPNA`; `None` or empty keeps everything); columns `keep`
+    (indexes) are never dropped nor looked at. Fills `report` with
+    `dropped`: `{"rows": count, "columns": [names]}`"""
+    if not dropna:
+        return columns,rows
+    if dropna not in DROPNA:
+        raise CaseError(f"dropna must be one of {', '.join(DROPNA)}, not '{dropna}'")
+    test = all if dropna.startswith("empty-") else any
+    look = [j for j in range(len(columns)) if j not in keep]
+    gone_rows,gone_cols = 0,[]
+    if dropna.endswith("rows"):
+        out = [r for r in rows if not (look and test(r[j] is None for j in look))]
+        gone_rows,rows = len(rows) - len(out),out
+    else:
+        drop = {j for j in look if rows and test(r[j] is None for r in rows)}
+        gone_cols = [columns[j] for j in sorted(drop)]
+        columns = [c for j,c in enumerate(columns) if j not in drop]
+        rows = [[v for j,v in enumerate(r) if j not in drop] for r in rows]
+    if gone_rows and not rows:
+        raise CaseError(f"every row has {'no' if test is all else 'a missing'} value, so dropping "
+            f"them (dropna '{dropna}') leaves nothing to import")
+    if gone_cols and len(gone_cols) == len(look):
+        raise CaseError(f"every {'value ' if keep else ''}column has "
+            f"{'no' if test is all else 'a missing'} value, so dropping them (dropna '{dropna}') "
+            "leaves nothing to import")
+    if report is not None:
+        report["dropped"] = {"rows":gone_rows,"columns":gone_cols}
+    return columns,rows
+
+def read_rows(filename:str,data:bytes,dropna:str|None=None,
+        report:dict|None=None) -> tuple[list[str],list[list]]:
     """Read table data from file contents
 
     Arguments
@@ -242,6 +279,14 @@ def read_rows(filename:str,data:bytes) -> tuple[list[str],list[list]]:
       - `filename`: file name, whose extension sets the format
 
       - `data`: file contents
+
+      - `dropna`: drop missing values when read (`DROPNA`): `rows` drops
+        each row with a missing cell, `columns` each column with one,
+        `empty-rows` and `empty-columns` only rows or columns with no
+        value at all; `None` (default) keeps them
+
+      - `report`: a dict to fill with `dropped` (`{"rows": count,
+        "columns": [names]}`) when `dropna` is given
 
     Returns
     -------
@@ -252,7 +297,8 @@ def read_rows(filename:str,data:bytes) -> tuple[list[str],list[list]]:
     Exceptions
     ----------
 
-      - `CaseError`: unsupported format, or the file cannot be read
+      - `CaseError`: unsupported format, the file cannot be read, an
+        unknown `dropna`, or `dropna` dropping every row or column
     """
     fmt,compression = table_format(filename)
     try:
@@ -263,7 +309,7 @@ def read_rows(filename:str,data:bytes) -> tuple[list[str],list[list]]:
         raise CaseError(f"cannot read '{filename}': {err}") from err
     columns = [str(c).strip() for c in frame.columns]
     rows = [[_value(v) for v in row] for row in frame.astype(object).itertuples(index=False,name=None)]
-    return columns,rows
+    return _dropna(columns,rows,dropna,report=report)
 
 def dump_rows(table:str,rows:list[list],filename:str,
         extended:tuple[list[dict],list[list]]|None=None) -> bytes:
@@ -333,8 +379,14 @@ def dump_rows(table:str,rows:list[list],filename:str,
 SERIES_LABELS = ("time","timestamp","datetime","date","step","index")
 """Names of the step label column of a time series file (any case)"""
 
-def read_series(filename:str,data:bytes) -> tuple[list[str]|None,list[str],list[list]]:
+def read_series(filename:str,data:bytes,dropna:str|None=None,
+        report:dict|None=None) -> tuple[list[str]|None,list[str],list[list]]:
     """Read a time series from file contents (see the module docstring)
+
+    `dropna` and `report` are as in `read_rows`, applied to the value
+    columns only: the label column is never dropped, and a missing label
+    does not make a step missing (`rows` drops steps, `columns` drops
+    value columns).
 
     Returns
     -------
@@ -355,10 +407,16 @@ def read_series(filename:str,data:bytes) -> tuple[list[str]|None,list[str],list[
         raise CaseError(f"'{filename}' has {len(label)} step label columns "
             f"({', '.join(columns[j] for j in label)}); keep one")
     if not label:
+        columns,rows = _dropna(columns,rows,dropna,report=report)
         return None,columns,rows
-    j = label[0]
-    index = ["" if row[j] is None else str(row[j]) for row in rows]
-    return index,columns[:j]+columns[j+1:],[row[:j]+row[j+1:] for row in rows]
+    j = label[0]  # move the label column first, then keep it out of dropna
+    columns = [columns[j]] + columns[:j] + columns[j+1:]
+    rows = [[row[j]] + row[:j] + row[j+1:] for row in rows]
+    columns,rows = _dropna(columns,rows,dropna,(0,),report)
+    # a numeric label column with a blank cell is read as floats: 1.0 -> "1"
+    index = ["" if row[0] is None else str(int(row[0]))
+        if isinstance(row[0],float) and row[0].is_integer() else str(row[0]) for row in rows]
+    return index,columns[1:],[row[1:] for row in rows]
 
 def dump_series(series:dict,filename:str) -> bytes:
     """Write a time series (`Case.series`) to file contents: a `time` column
