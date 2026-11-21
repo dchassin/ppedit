@@ -274,6 +274,7 @@ def test_case9_dcline_solves(algorithm):
         assert d["solved"] and row[9] - 1e-4 <= d["Pf"] <= row[10] + 1e-4
         assert d["Pt"] == pytest.approx((1-row[16])*d["Pf"],abs=1e-4)  # loss0 is not modeled
     assert any("loss0 = 1 MW is not modeled" in m["message"] for m in res["messages"])
+    assert not any("hvdc_from_dcline" in m["message"] for m in res["messages"])  # reported by ppedit
 
 def test_case9_dcline_bounds():
     """SOCP relaxes AC, and CVXOPF-AC (without loss0 and DC line Q limits) relaxes PYPOWER's AC OPF"""
@@ -284,3 +285,25 @@ def test_case9_dcline_bounds():
     assert pips["success"] and ac["success"] and socp["success"]
     assert socp["objective"] <= ac["objective"] + 1e-3
     assert 0.95*pips["objective"] <= ac["objective"] <= pips["objective"] + 1e-3
+
+def test_dcline_import_errors():
+    """DC lines cvxopf cannot import are reported with ppedit's row numbers"""
+    case = _case9_dcline()
+    case.tables["dcline"][3][9] = -10  # 5 -> 9 two-way, with loss1 0.05
+    res = case.solve("opf","CVXOPF-DC")
+    assert not res["success"]
+    assert any("DC line 4" in m["message"] and "two-way" in m["message"] for m in res["messages"])
+
+def test_old_cvxopf_refused(monkeypatch):
+    """A cvxopf whose DC line import runs lines backwards is refused for cases with DC lines"""
+    import cvxopf # pylint: disable=import-outside-toplevel
+    real = cvxopf.hvdc_from_dcline
+    def backwards(table,costs=None):
+        links = real(table,costs)
+        for link in links:
+            link.p_min_mw,link.p_max_mw = -link.p_max_mw,-link.p_min_mw
+        return links
+    monkeypatch.setattr(cvxopf,"hvdc_from_dcline",backwards)
+    res = _case9_dcline().solve("opf","CVXOPF-AC")
+    assert not res["success"] and any("PR 32" in m["message"] for m in res["messages"])
+    assert Case.builtin("case9").solve("opf","CVXOPF-DC")["success"]  # no DC lines: unaffected

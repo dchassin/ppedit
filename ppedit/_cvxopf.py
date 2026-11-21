@@ -18,15 +18,17 @@ How the case is passed:
   - Reactive power cost rows (`gencost` with twice as many rows as `gen`)
     are dropped: cvxopf has no reactive power costs.
 
-  - In-service DC lines become `cvxopf.HVDCLink` objects with
-    `p_min_mw = -Pmax` and `p_max_mw = -Pmin`: an HVDCLink bounds the
-    power injected at its from bus, while PYPOWER's `Pf` is the power
-    taken from it. (`cvxopf.hvdc_from_dcline` uses `Pmin..Pmax` as given,
-    which runs PYPOWER DC lines in the reverse direction.) `loss1` is the
-    proportional loss; `loss0`, reactive power limits and the terminal
-    voltage set points `Vf`, `Vt` are not modeled by cvxopf. `dclinecost`
-    must be polynomial (model 2) of degree 2 or less; cvxopf applies it to
-    `|Pf|`. The copper-plate model (`singlenode_dc`) ignores DC lines.
+  - In-service DC lines become `cvxopf.HVDCLink` objects made by
+    `cvxopf.hvdc_from_dcline` (cvxopf PR 32): an HVDCLink bounds the power
+    injected at its from bus, `p_in = -Pf`, so `p_min_mw = -Pmax` and
+    `p_max_mw = -Pmin`. `loss1` is the proportional loss; `loss0`,
+    reactive power limits and the terminal voltage set points `Vf`, `Vt`
+    are not modeled by cvxopf. `dclinecost` must be polynomial (model 2)
+    of degree 2 or less, applied to `|Pf|` with its sign converted for
+    reverse lines; cvxopf refuses costs it cannot represent and reverse or
+    two-way lines (`Pmin < 0`) with losses. An older cvxopf, whose import
+    runs PYPOWER DC lines backwards, is refused for cases with DC lines.
+    The copper-plate model (`singlenode_dc`) ignores DC lines.
 
 Sparse derivatives (issue #122): every formulation is built with
 `automatic_sparse_dispatch=True`, so CVXPY keeps its density threshold
@@ -182,29 +184,40 @@ def _capture_output(log,enabled):
 
 def _hvdc_links(ppc,note):
     """Return the cvxopf `HVDCLink` list for the in-service DC lines and
-    their row numbers in `ppc["dcline"]`"""
-    from cvxopf import HVDCLink # pylint: disable=import-outside-toplevel
-    links,rows = [],[]
+    their row numbers in `ppc["dcline"]` (`cvxopf.hvdc_from_dcline`, cvxopf
+    PR 32); `ValueError` for a DC line or cost cvxopf cannot import, or a
+    cvxopf whose import runs DC lines backwards"""
+    from cvxopf import hvdc_from_dcline # pylint: disable=import-outside-toplevel
+    dcline = np.asarray(ppc["dcline"],dtype=float)
     costs = ppc.get("dclinecost")
-    for n,d in enumerate(ppc["dcline"]):
-        if d[2] == 0:
-            continue
-        cost = (0.0,0.0,0.0)
-        if costs is not None and n < len(costs):
-            c = costs[n]
-            if int(c[0]) != 2 or int(c[3]) > 3:
-                raise ValueError(f"DC line {n+1}: cvxopf needs a polynomial (model 2) "
-                    "dclinecost of degree 2 or less")
-            coeffs = [float(x) for x in reversed(c[4:4+int(c[3])])] + [0.0,0.0,0.0]
-            cost = tuple(coeffs[:3])
-        if d[15] != 0:
-            note(f"DC line {n+1}: loss0 = {d[15]:g} MW is not modeled by cvxopf",
+    costs = None if costs is None or len(costs) == 0 else np.asarray(costs,dtype=float)
+    if costs is not None and len(costs) != len(dcline):
+        raise ValueError(f"dclinecost has {len(costs)} rows for {len(dcline)} DC lines")
+    rows = [n for n,d in enumerate(dcline) if d[2] > 0]
+    if not rows:
+        return [],[]
+    with warnings.catch_warnings():
+        # ppedit reports the omitted converter terms itself, with details
+        warnings.filterwarnings("ignore",message="hvdc_from_dcline omitted",category=UserWarning)
+        warnings.filterwarnings("ignore",message="hvdc_from_dcline: one or more",category=UserWarning)
+        probe = hvdc_from_dcline(np.array([[1,2,1,0,0,0,0,0,0,1,2,0,0,0,0,0,0]],dtype=float))
+        if probe[0].p_max_mw > 0:
+            raise ValueError("this cvxopf runs PYPOWER DC lines backwards (its hvdc_from_dcline "
+                "predates cvxopf PR 32); install a cvxopf with the DC-line import fix")
+        try:
+            links = hvdc_from_dcline(dcline,costs)
+        except ValueError as err:
+            # cvxopf numbers DC line rows from 0; ppedit from 1
+            raise ValueError(re.sub(r"(dcline|dclinecost) row (\d+)",
+                lambda m: f"{'DC line' if m[1] == 'dcline' else 'dclinecost row'} {int(m[2])+1}",
+                str(err))) from err
+    for link,n in zip(links,rows):
+        link.device_id = f"dcline-{n+1}"
+    for n in rows:
+        if dcline[n][15] != 0:
+            note(f"DC line {n+1}: loss0 = {dcline[n][15]:g} MW is not modeled by cvxopf",
                 _detail("dcline_loss0",[_row("Pt = Pf - loss1 Pf (cvxopf) instead of "
-                "Pt = Pf - (loss0 + loss1 Pf)",f"dcline {n+1}","dcline",n,f"loss0 = {d[15]:g} MW")]))
-        links.append(HVDCLink(from_bus=int(d[0]),to_bus=int(d[1]),
-            p_min_mw=-float(d[10]),p_max_mw=-float(d[9]),
-            loss_percent=100*float(d[16]),cost_coeffs=cost,device_id=f"dcline-{n+1}"))
-        rows.append(n)
+                "Pt = Pf - (loss0 + loss1 Pf)",f"dcline {n+1}","dcline",n,f"loss0 = {dcline[n][15]:g} MW")]))
     if links:
         note("DC lines: cvxopf models unity power factor terminals (no Qf, Qt) "
             "and does not hold Vf, Vt",_detail("dcline_terminals",
@@ -490,7 +503,7 @@ def _step_cost(ppc,g,d,gkeep):
             cost += float(np.sum(totcost(np.asarray(costs)[:len(d)][on],np.abs(d[on,3]))))
     return cost
 
-def _series_frames(series,ppc,live,rows,formulation):
+def _series_frames(series,live,rows,formulation):
     """Return the `build_opf_multistep` keyword arguments for the per-step
     case values in `series` (see `runopf`)"""
     import pandas as pd # pylint: disable=import-outside-toplevel
@@ -628,7 +641,7 @@ def runopf(ppc:dict,formulation:str,log,options:dict|None=None,series:dict|None=
         if series:
             build = build_opf_multistep(case,formulation=formulation,hvdc=links or None,
                 options=build_options,automatic_sparse_dispatch=True, # issue #122
-                **_series_frames(series,ppc,live,rows,formulation))
+                **_series_frames(series,live,rows,formulation))
             if series.get("gen_limited"):
                 _gen_limits(build,series,gen,gkeep,float(ppc["baseMVA"]))
         else:

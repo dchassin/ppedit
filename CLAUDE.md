@@ -85,10 +85,14 @@ API key to start sessions; tests use a fake client).
   IPOPT library; CI installs it), not pypower: results are converted to
   the `runopf` layout so `Case.solve` and `printpf` read them unchanged
   (the report is printed without "f", as a PF, since cvxopf has no
-  multipliers; `lam_P`/`mu_*` are `None`). DC lines are built as
-  `HVDCLink` with `p_in = -Pf` because `cvxopf.hvdc_from_dcline` runs
-  PYPOWER DC lines backwards (as of cvxopf b6edcc7, 2026-11-12); switch
-  to it once that is fixed upstream. cvxopf solve options (decision #48)
+  multipliers; `lam_P`/`mu_*` are `None`). DC lines are built by
+  `cvxopf.hvdc_from_dcline` as fixed by cvxopf PR 32 (`p_in = -Pf`, signed
+  `dclinecost` converted, reverse or two-way lossy lines refused);
+  `_hvdc_links` probes it and refuses an older cvxopf (whose import runs
+  DC lines backwards) for cases with in-service DC lines, silences its
+  omission warning (ppedit's own notes give the details) and renumbers
+  its row numbers from 1. CI installs cvxopf at the PR 32 head commit
+  (8c40598) until PR 32 is merged; then install the main branch again. cvxopf solve options (decision #48)
   come from the Settings tab (`ppedit.cvxopf` in `localStorage`,
   `cvxopfOptions()` in `app.js`) as `options` of `/api/solve`;
   `_cvxopf.RECOMMENDED` is the per-model preparation profile from the
