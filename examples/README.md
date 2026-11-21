@@ -100,3 +100,31 @@ WILLAMET and WCASCADE. Balancing authorities with no bus of their own in the
 240-bus case (AVA, CHPD, DOPD, EPE, GCPD, PGE, SCL, TEPC, TIDC, TPWR and the
 generation-only ones) have no area. The other example files still have the
 NREL areas, including `wecc240_2018.py`.
+
+`wecc240_generation.csv.gz` is a panel of generator `Pmax` by hour, 2018 to
+2022 (UTC, 43,824 hours), for the generator rows of `wecc240_2018.py` (the
+same rows as `wecc240_2011.py` and `wecc240_map.py`): a `timestamp` column
+and one column per generator row counted from 1. Read it on the Series tab
+with *Import ▾ › Panel…* (table gen, value Pmax, columns are row numbers)
+and a *From*/*To* range of at most 8,784 hours (a series holds at most one
+leap year), e.g. 2020-01-01 to 2020-12-31. It is built from the WECC 240
+node files of eudoxys/generation (`data/wecc`) by
+
+    python3 examples/build_wecc240_generation.py GENERATION/data/wecc [--wecc240 WECC240/wecc240/data]
+
+Each node's `Pmax` is the operating capacity of the dispatchable categories
+(all but solar and wind, storage included) plus the actual solar and wind
+net generation, shared among the node's generators in proportion to their
+case `Pmax`. A generator is at the node with its bus's geohash; a US
+generator elsewhere goes to the node its county's generation went to
+(wecc240 `county_node_map.csv`), which places 13 California generators
+(Los Angeles, Imperial, San Bernardino and San Diego counties). The 9
+generators in Mexico and British Columbia have no column and keep their
+case `Pmax`.
+
+The node data places generation by county, not where the 240-bus model
+aggregates it (e.g. 9.9 GW at H ALLEN in the case against 0.1 GW in its
+node's data, 0.5 GW at OLIVE against 13.5 GW), so the generation moves
+across the network and, with the branch ratings of `wecc240_2018.py`, a
+multistep DC OPF (lossy network flow) of 1 July 2020 is infeasible; it
+solves with the copper-plate model or without branch ratings.
