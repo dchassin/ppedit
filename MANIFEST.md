@@ -62,6 +62,7 @@ Update this file in the same PR that adds, moves, or deletes a file.
 | `ppedit/_test/test_*.py` | tests | all fast, no network |
 | `ppedit/_test/data/README.md` | test data provenance | |
 | `ppedit/_test/test_examples.py` | checks `examples/pypower/` | each `.glm` matches its `.py` |
+| `ppedit/_test/data/case9_dcline.py` | PYPOWER `t_case9_dcline` from cvxopf's test cases (4 DC lines, PWL costs) | curated, written by ppedit from cvxopf; used by `test_cvxopf.py` |
 | `ppedit/_test/data/case3.glm` | 3-bus GLM test model | curated, hand-written |
 | `ppedit/_test/data/psse_v33.raw` | 4-bus PSS/E revision 33 test case (loads, shunts, 2- and 3-winding transformers, DC line) | curated, hand-written; used by `test_psse.py` |
 | `ppedit/_test/data/psse_v35.raw` | 3-bus PSS/E revision 35 test case (system-wide data, `@!` headers, switching devices) | curated, hand-written; used by `test_psse.py` |
